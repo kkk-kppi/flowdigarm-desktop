@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+
+<html data-immersive-translate-page-theme="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>流程图编辑器 - 原型</title>
+<script src="https://modao.cc/agent-py/static/source/js/tailwindcss.js"></script>
+<script src="https://modao.cc/agent-py/static/source/js/iconify-icon.min.js"></script>
+<style>
+        body {
+            background-color: #f0f0f0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        /* 桌面窗口容器 */
+        .desktop-window {
+            width: 1280px;
+            height: 800px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid #d1d5db;
+        }
+
+        /* 标尺与网格 */
+        .canvas-grid {
+            background-image: radial-gradient(#d1d5db 1px, transparent 1px);
+            background-size: 20px 20px;
+            background-color: white;
+        }
+
+        .ruler-h {
+            background: white;
+            border-bottom: 1px solid #d1d5db;
+            height: 20px;
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            background-image: linear-gradient(90deg, #999 1px, transparent 1px), linear-gradient(90deg, #ccc 1px, transparent 1px);
+            background-size: 100px 10px, 10px 5px;
+            background-position: 0 10px, 0 15px;
+            background-repeat: repeat-x;
+        }
+
+        .ruler-v {
+            background: white;
+            border-right: 1px solid #d1d5db;
+            width: 20px;
+            position: sticky;
+            left: 0;
+            z-index: 40;
+            background-image: linear-gradient(0deg, #999 1px, transparent 1px), linear-gradient(0deg, #ccc 1px, transparent 1px);
+            background-size: 10px 100px, 5px 10px;
+            background-position: 10px 0, 15px 0;
+            background-repeat: repeat-y;
+        }
+
+        .ruler-corner {
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-right: 1px solid #d1d5db;
+            border-bottom: 1px solid #d1d5db;
+            position: sticky;
+            left: 0;
+            top: 0;
+            z-index: 50;
+        }
+
+        /* 选中状态的控制点 */
+        .control-point {
+            width: 8px;
+            height: 8px;
+            background: white;
+            border: 1px solid #3b82f6;
+            position: absolute;
+        }
+
+        /* 下拉菜单 */
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            top: 28px;
+            left: 0;
+            background: white;
+            border: 1px solid #d1d5db;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+            min-width: 160px;
+            padding: 4px 0;
+        }
+
+        .menu-item:hover .dropdown-menu {
+            display: block;
+        }
+
+        /* 参考线 */
+        .guideline-h {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 1px;
+            border-top: 1px dashed rgba(66, 133, 244, 0.6);
+            z-index: 30;
+            cursor: ns-resize;
+        }
+        .guideline-v {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            border-left: 1px dashed rgba(66, 133, 244, 0.6);
+            z-index: 30;
+            cursor: ew-resize;
+        }
+        .guideline-handle {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: #4285f4;
+            border-radius: 50%;
+        }
+
+        /* 开关按钮 */
+        .toggle-switch {
+            width: 32px;
+            height: 16px;
+            background: #ccc;
+            border-radius: 8px;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .toggle-switch.active {
+            background: #3b82f6;
+        }
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.2s;
+        }
+        .toggle-switch.active::after {
+            transform: translateX(16px);
+        }
+
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #bbb;
+        }
+
+        .transition-all-300 {
+            transition: all 0.3s ease;
+        }
+
+        /* 紧凑工具栏按钮样式 */
+        .toolbar-btn {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 3px;
+            cursor: pointer;
+            color: #444;
+        }
+        .toolbar-btn:hover {
+            background-color: #e5e5e5;
+        }
+        .toolbar-btn.active {
+            background-color: #d1d5db;
+            color: #000;
+        }
+        .toolbar-btn.orange-active {
+            background-color: #ffedd5;
+            color: #f97316;
+            border: 1px solid #fdba74;
+        }
+        .v-divider {
+            width: 1px;
+            height: 20px;
+            background-color: #ccc;
+            margin: 0 4px;
+        }
+    </style>
+<style data-id="immersive-translate-input-injected-css"></style></head>
+<body class="">
+<div class="desktop-window">
+<!-- 1. 标题栏 (28px) -->
+<div class="h-[28px] bg-[#2C2C2C] flex items-center justify-between px-3 flex-none select-none">
+<div class="flex items-center gap-2">
+<iconify-icon class="text-white text-sm" icon="mdi:vector-rectangle"></iconify-icon>
+<span class="text-white text-[14px]">流程图编辑器 - 未命名文件.flowdiagram</span>
+</div>
+<div class="flex items-center gap-0">
+<div class="w-10 h-[28px] flex items-center justify-center hover:bg-white/10 text-white text-xs cursor-default">_</div>
+<div class="w-10 h-[28px] flex items-center justify-center hover:bg-white/10 text-white text-xs cursor-default">□</div>
+<div class="w-10 h-[28px] flex items-center justify-center hover:bg-red-600 text-white text-xs cursor-default">×</div>
+</div>
+</div>
+<!-- 2. 菜单栏 (28px) -->
+<div class="h-[28px] bg-[#E8E8E8] border-b border-[#d1d5db] flex items-center px-2 flex-none select-none relative">
+<div class="relative menu-item">
+<div class="px-3 py-1 text-[14px] hover:bg-[#D0D0D0] cursor-default flex items-center gap-1">文件</div>
+<div class="dropdown-menu">
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default flex justify-between"><span>新建</span><span class="text-gray-400">Ctrl+N</span></div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default flex justify-between"><span>打开...</span><span class="text-gray-400">Ctrl+O</span></div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default flex justify-between"><span>保存</span><span class="text-gray-400">Ctrl+S</span></div>
+<div class="border-t my-1"></div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">导出为图片</div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">页面设置...</div>
+</div>
+</div>
+<div class="relative menu-item">
+<div class="px-3 py-1 text-[14px] hover:bg-[#D0D0D0] cursor-default flex items-center gap-1">编辑</div>
+<div class="dropdown-menu">
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default flex justify-between"><span>撤销</span><span class="text-gray-400">Ctrl+Z</span></div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default flex justify-between"><span>重做</span><span class="text-gray-400">Ctrl+Y</span></div>
+<div class="border-t my-1"></div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default flex justify-between"><span>剪切</span><span class="text-gray-400">Ctrl+X</span></div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default flex justify-between"><span>复制</span><span class="text-gray-400">Ctrl+C</span></div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default flex justify-between"><span>粘贴</span><span class="text-gray-400">Ctrl+V</span></div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default flex justify-between"><span>全选</span><span class="text-gray-400">Ctrl+A</span></div>
+</div>
+</div>
+<div class="relative menu-item">
+<div class="px-3 py-1 text-[14px] hover:bg-[#D0D0D0] cursor-default flex items-center gap-1">视图</div>
+<div class="dropdown-menu">
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default flex justify-between"><span>放大</span><span class="text-gray-400">Ctrl++</span></div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default flex justify-between"><span>缩小</span><span class="text-gray-400">Ctrl+-</span></div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">适应屏幕</div>
+<div class="border-t my-1"></div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default flex justify-between"><span>标尺</span></div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default flex justify-between"><span>网格</span><iconify-icon class="text-xs" icon="mdi:check"></iconify-icon></div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default flex justify-between"><span>参考线</span></div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default flex justify-between"><span>分页符</span></div>
+</div>
+</div>
+<div class="relative menu-item">
+<div class="px-3 py-1 text-[14px] hover:bg-[#D0D0D0] cursor-default flex items-center gap-1">插入</div>
+<div class="dropdown-menu">
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">矩形</div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">圆形</div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">菱形</div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">文本框</div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">连接线</div>
+<div class="border-t my-1"></div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">外部图片...</div>
+</div>
+</div>
+<div class="relative menu-item">
+<div class="px-3 py-1 text-[14px] hover:bg-[#D0D0D0] cursor-default flex items-center gap-1">格式</div>
+<div class="dropdown-menu">
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">字体设置...</div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">对齐方式</div>
+<div class="border-t my-1"></div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">置于顶层</div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">置于底层</div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">组合</div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">取消组合</div>
+</div>
+</div>
+<div class="relative menu-item">
+<div class="px-3 py-1 text-[14px] hover:bg-[#D0D0D0] cursor-default flex items-center gap-1">工具</div>
+<div class="dropdown-menu">
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">自动对齐</div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">自动连线</div>
+<div class="border-t my-1"></div>
+<div class="relative group/align">
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default flex justify-between items-center">
+<span>对齐</span>
+<iconify-icon icon="mdi:chevron-right"></iconify-icon>
+</div>
+<div class="hidden group-hover/align:block absolute left-full top-[-5px] bg-white border border-[#d1d5db] shadow-md min-w-[160px] py-1 z-[110]">
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default" title="以第一个选择图元为基准">水平对齐</div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default" title="以第一个选择图元为基准">垂直对齐</div>
+</div>
+</div>
+<div class="relative group/dist">
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default flex justify-between items-center">
+<span>分布</span>
+<iconify-icon icon="mdi:chevron-right"></iconify-icon>
+</div>
+<div class="hidden group-hover/dist:block absolute left-full top-[-5px] bg-white border border-[#d1d5db] shadow-md min-w-[160px] py-1 z-[110]">
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">水平等距排列</div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">垂直等距排列</div>
+</div>
+</div>
+<div class="border-t my-1"></div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default" onclick="openFindReplace()">查找替换</div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">图层管理</div>
+<div class="border-t my-1"></div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">首选项...</div>
+</div>
+</div>
+<div class="relative menu-item">
+<div class="px-3 py-1 text-[14px] hover:bg-[#D0D0D0] cursor-default flex items-center gap-1">帮助</div>
+<div class="dropdown-menu">
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">帮助中心</div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">快捷键列表</div>
+<div class="border-t my-1"></div>
+<div class="px-4 py-1.5 hover:bg-blue-600 hover:text-white text-sm cursor-default">关于 流程图编辑器</div>
+</div>
+</div>
+</div>
+<!-- Ribbon Tabs (32px) -->
+<!-- 修改1: 紧凑工具栏 (48px) -->
+<div class="h-[48px] bg-[#F0F0F0] border-b border-[#d1d5db] flex items-center px-3 flex-none select-none gap-1">
+<!-- 分组1 - 操作 -->
+<div class="flex items-center gap-0.5">
+<div class="toolbar-btn"><iconify-icon class="text-lg" icon="mdi:undo"></iconify-icon></div>
+<div class="toolbar-btn"><iconify-icon class="text-lg" icon="mdi:redo"></iconify-icon></div>
+</div>
+<div class="v-divider"></div>
+<!-- 分组2 - 粘贴板 -->
+<div class="flex items-center gap-0.5">
+<div class="toolbar-btn"><iconify-icon class="text-lg" icon="mdi:content-copy"></iconify-icon></div>
+<div class="toolbar-btn"><iconify-icon class="text-lg" icon="mdi:content-cut"></iconify-icon></div>
+<div class="toolbar-btn"><iconify-icon class="text-lg" icon="mdi:content-paste"></iconify-icon></div>
+<div class="toolbar-btn" id="toolbar-paint" onclick="toggleFormatPainter()"><iconify-icon class="text-lg" icon="mdi:format-paint"></iconify-icon></div>
+</div>
+<div class="v-divider"></div>
+<!-- 分组3 - 字体 -->
+<div class="flex items-center gap-1">
+<select class="h-6 w-[100px] text-[12px] border border-gray-300 rounded bg-white outline-none">
+<option>微软雅黑</option>
+<option>宋体</option>
+<option>黑体</option>
+<option>Arial</option>
+<option>Times New Roman</option>
+</select>
+<select class="h-6 w-[55px] text-[12px] border border-gray-300 rounded bg-white outline-none">
+<option>8</option><option>9</option><option>10</option><option>11</option>
+<option selected="">12</option><option>14</option><option>16</option><option>18</option>
+<option>20</option><option>24</option><option>28</option><option>36</option>
+<option>48</option><option>72</option>
+</select>
+<div class="flex items-center gap-0.5">
+<div class="toolbar-btn" onclick="this.classList.toggle('active')"><iconify-icon class="text-lg" icon="mdi:format-bold"></iconify-icon></div>
+<div class="toolbar-btn" onclick="this.classList.toggle('active')"><iconify-icon class="text-lg" icon="mdi:format-italic"></iconify-icon></div>
+<div class="toolbar-btn" onclick="this.classList.toggle('active')"><iconify-icon class="text-lg" icon="mdi:format-underline"></iconify-icon></div>
+<div class="toolbar-btn" onclick="this.classList.toggle('active')"><iconify-icon class="text-lg" icon="mdi:format-strikethrough"></iconify-icon></div>
+</div>
+<div class="v-divider"></div>
+<div class="flex items-center gap-1.5 ml-1">
+<div class="relative group">
+<div class="w-5 h-5 bg-black border border-gray-400 rounded cursor-pointer" title="字体颜色"></div>
+</div>
+<div class="relative group">
+<div class="w-5 h-5 bg-white border border-gray-400 rounded cursor-pointer" title="字体背景色"></div>
+</div>
+</div>
+</div>
+<div class="v-divider"></div>
+<!-- 分组4 - 段落对齐 -->
+<div class="flex items-center gap-0.5">
+<div class="toolbar-btn" onclick="toggleActive(this, 'align-v')"><iconify-icon class="text-lg" icon="mdi:align-vertical-top"></iconify-icon></div>
+<div class="toolbar-btn active" onclick="toggleActive(this, 'align-v')"><iconify-icon class="text-lg" icon="mdi:align-vertical-center"></iconify-icon></div>
+<div class="toolbar-btn" onclick="toggleActive(this, 'align-v')"><iconify-icon class="text-lg" icon="mdi:align-vertical-bottom"></iconify-icon></div>
+<div class="v-divider !mx-1"></div>
+<div class="toolbar-btn" onclick="toggleActive(this, 'align-h')"><iconify-icon class="text-lg" icon="mdi:format-align-left"></iconify-icon></div>
+<div class="toolbar-btn active" onclick="toggleActive(this, 'align-h')"><iconify-icon class="text-lg" icon="mdi:format-align-center"></iconify-icon></div>
+<div class="toolbar-btn" onclick="toggleActive(this, 'align-h')"><iconify-icon class="text-lg" icon="mdi:format-align-right"></iconify-icon></div>
+</div>
+</div>
+<!-- 中间主体区域 -->
+<div class="flex-1 flex overflow-hidden">
+<!-- 3. 左侧图元库 (220px) -->
+<div class="w-[220px] bg-[#F5F5F5] border-r border-[#d1d5db] flex flex-col flex-none select-none">
+<div class="p-2 border-b border-[#d1d5db] flex items-center justify-between">
+<span class="text-[14px] font-bold">图元</span>
+<iconify-icon class="cursor-pointer" icon="mdi:chevron-up"></iconify-icon>
+</div>
+<div class="p-2">
+<div class="relative">
+<input class="w-full h-7 pl-7 pr-2 text-xs border border-[#ccc] rounded outline-none focus:border-blue-500" placeholder="搜索图元..." type="text"/>
+<iconify-icon class="absolute left-2 top-1.5 text-gray-400" icon="mdi:magnify"></iconify-icon>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto">
+<!-- 基本形状 -->
+<div class="border-b border-[#e5e7eb]">
+<div class="px-2 py-1.5 bg-[#ebebeb] flex items-center gap-1 cursor-pointer" onclick="toggleSection('section-basic')">
+<iconify-icon class="text-sm" icon="mdi:chevron-down" id="arrow-basic"></iconify-icon>
+<span class="text-[12px] font-semibold">基本形状</span>
+</div>
+<div class="p-2 grid grid-cols-3 gap-2" id="section-basic">
+<div class="flex flex-col items-center gap-1 p-1 border border-transparent hover:border-blue-400 hover:bg-blue-50 cursor-pointer rounded">
+<div class="w-8 h-8 border border-black bg-white"></div>
+<span class="text-[10px]">矩形</span>
+</div>
+<div class="flex flex-col items-center gap-1 p-1 border border-transparent hover:border-blue-400 hover:bg-blue-50 cursor-pointer rounded">
+<div class="w-8 h-8 border border-black rounded-md bg-white"></div>
+<span class="text-[10px]">圆角矩形</span>
+</div>
+<div class="flex flex-col items-center gap-1 p-1 border border-transparent hover:border-blue-400 hover:bg-blue-50 cursor-pointer rounded">
+<div class="w-8 h-8 border border-black rounded-full bg-white"></div>
+<span class="text-[10px]">圆形</span>
+</div>
+<div class="flex flex-col items-center gap-1 p-1 border border-transparent hover:border-blue-400 hover:bg-blue-50 cursor-pointer rounded">
+<div class="w-8 h-8 border border-black rounded-[50%_/_30%] bg-white"></div>
+<span class="text-[10px]">椭圆</span>
+</div>
+<div class="flex flex-col items-center gap-1 p-1 border border-transparent hover:border-blue-400 hover:bg-blue-50 cursor-pointer rounded">
+<iconify-icon class="text-[32px]" icon="mdi:triangle-outline"></iconify-icon>
+<span class="text-[10px]">三角形</span>
+</div>
+<div class="flex flex-col items-center gap-1 p-1 border border-transparent hover:border-blue-400 hover:bg-blue-50 cursor-pointer rounded">
+<div class="w-8 h-8 border border-black rotate-45 scale-75 bg-white"></div>
+<span class="text-[10px]">菱形</span>
+</div>
+</div>
+</div>
+<!-- 流程图 -->
+<div class="border-b border-[#e5e7eb]">
+<div class="px-2 py-1.5 bg-[#ebebeb] flex items-center gap-1 cursor-pointer" onclick="toggleSection('section-flow')">
+<iconify-icon class="text-sm" icon="mdi:chevron-down" id="arrow-flow"></iconify-icon>
+<span class="text-[12px] font-semibold">流程图</span>
+</div>
+<div class="p-2 grid grid-cols-3 gap-2" id="section-flow">
+<div class="flex flex-col items-center gap-1 p-1 border border-transparent hover:border-blue-400 hover:bg-blue-50 cursor-pointer rounded">
+<div class="w-8 h-6 border border-black bg-white mt-1"></div>
+<span class="text-[10px]">流程</span>
+</div>
+<div class="flex flex-col items-center gap-1 p-1 border border-transparent hover:border-blue-400 hover:bg-blue-50 cursor-pointer rounded">
+<div class="w-8 h-8 border border-black rotate-45 scale-75 bg-white"></div>
+<span class="text-[10px]">判定</span>
+</div>
+<div class="flex flex-col items-center gap-1 p-1 border border-transparent hover:border-blue-400 hover:bg-blue-50 cursor-pointer rounded">
+<div class="w-8 h-5 border border-black rounded-full bg-white mt-1.5"></div>
+<span class="text-[10px]">终止</span>
+</div>
+<div class="flex flex-col items-center gap-1 p-1 border border-transparent hover:border-blue-400 hover:bg-blue-50 cursor-pointer rounded">
+<div class="w-8 h-6 border-y border-x-[3px] border-black bg-white mt-1"></div>
+<span class="text-[10px]">子流程</span>
+</div>
+<div class="flex flex-col items-center gap-1 p-1 border border-transparent hover:border-blue-400 hover:bg-blue-50 cursor-pointer rounded">
+<iconify-icon class="text-[32px]" icon="mdi:file-document-outline"></iconify-icon>
+<span class="text-[10px]">文档</span>
+</div>
+<div class="flex flex-col items-center gap-1 p-1 border border-transparent hover:border-blue-400 hover:bg-blue-50 cursor-pointer rounded">
+<iconify-icon class="text-[32px]" icon="mdi:database-outline"></iconify-icon>
+<span class="text-[10px]">数据流</span>
+</div>
+</div>
+</div>
+</div>
+<div class="p-2 border-t border-[#d1d5db]">
+<button class="w-full py-1 text-[12px] text-gray-600 border border-dashed border-gray-400 hover:bg-gray-100 flex items-center justify-center gap-1">
+<iconify-icon icon="mdi:plus"></iconify-icon>
+                        更多形状...
+                    </button>
+</div>
+</div>
+<!-- 4. 画布区域 -->
+<div class="flex-1 relative overflow-hidden bg-[#f5f5f5] flex flex-col transition-all duration-300" id="canvas-container">
+<!-- 页面标签栏 (32px) -->
+<div class="h-[32px] bg-[#E8E8E8] border-b border-[#d1d5db] flex items-center px-2 flex-none select-none justify-between">
+<div class="flex items-center h-full" id="page-tabs-container">
+<div class="page-tab px-3 h-full flex items-center text-[12px] gap-2 border-t border-[#d1d5db] border-x cursor-pointer bg-white font-medium border-[#d1d5db]"><span>页面 1</span></div><div class="px-2 hover:bg-gray-200 h-full flex items-center cursor-pointer" onclick="addPage()">
+<iconify-icon class="text-gray-600" icon="mdi:plus"></iconify-icon>
+</div>
+</div>
+</div>
+<div class="flex-1 flex overflow-hidden">
+<!-- 绘图主区 -->
+<div class="flex-1 relative canvas-grid overflow-auto" id="main-canvas">
+<div class="ruler-corner" style="float: left;"></div>
+<div class="ruler-h" style="width: 5000px;"></div>
+<div class="ruler-v" style="height: 5000px; clear: left;"></div>
+<!-- 修改3: 模拟参考线 -->
+<div id="guidelines-container">
+<div class="guideline-h" id="guideline-h" style="top: 150px;">
+<div class="guideline-handle left-0 -translate-x-1/2 top-[-4px] cursor-ns-resize"></div>
+<div class="guideline-handle right-0 translate-x-1/2 top-[-4px] cursor-ns-resize"></div>
+</div>
+<div class="guideline-v" id="guideline-v" style="left: 200px;">
+<div class="guideline-handle top-0 -translate-y-1/2 left-[-4px] cursor-ew-resize"></div>
+<div class="guideline-handle bottom-0 translate-y-1/2 left-[-4px] cursor-ew-resize"></div>
+</div>
+</div>
+<!-- 分页符示例 -->
+<div class="absolute border-r border-dashed border-gray-300 pointer-events-none" id="page-break" style="left: 800px; top: 0; bottom: 0; height: 1000px; display: none;"></div>
+<svg class="absolute inset-0 w-[1200px] h-[1000px] pointer-events-none">
+<!-- 连线 -->
+<g fill="none" stroke="#666" stroke-width="1.5">
+<path d="M 140 160 L 140 220" marker-end="url(#arrowhead)"></path>
+<path d="M 140 280 L 140 340" marker-end="url(#arrowhead)"></path>
+<path d="M 140 400 L 140 460" marker-end="url(#arrowhead)"></path>
+<path d="M 180 370 L 260 370 L 260 500 L 180 500" marker-end="url(#arrowhead)" stroke-dasharray="4"></path>
+</g>
+<defs>
+<marker id="arrowhead" markerheight="7" markerwidth="10" orientation="auto" refx="9" refy="3.5">
+<polygon fill="#666" points="0 0, 10 3.5, 0 7"></polygon>
+</marker>
+</defs>
+</svg>
+<!-- 图元项 -->
+<div class="absolute w-[80px] h-[40px] bg-green-500 border border-green-700 rounded-full flex items-center justify-center text-white text-xs shadow-sm cursor-move" style="left: 100px; top: 120px;">
+                            开始
+                        </div>
+<div class="absolute w-[120px] h-[60px] bg-blue-100 border-2 border-dashed border-blue-500 flex items-center justify-center text-blue-900 text-xs shadow-md cursor-move" style="left: 80px; top: 220px;">
+<!-- 悬浮菜单 -->
+<div class="absolute -top-10 left-1/2 -translate-x-1/2 flex items-center bg-gray-800 text-white rounded shadow-lg px-1 py-0.5 gap-1 z-[60]">
+<div class="w-6 h-6 flex items-center justify-center hover:bg-gray-700 cursor-pointer rounded" title="复制">
+<iconify-icon class="text-sm" icon="mdi:content-copy"></iconify-icon>
+</div>
+<div class="w-6 h-6 flex items-center justify-center hover:bg-gray-700 cursor-pointer rounded" title="粘贴">
+<iconify-icon class="text-sm" icon="mdi:content-paste"></iconify-icon>
+</div>
+<div class="w-px h-3 bg-gray-600 mx-0.5"></div>
+<div class="w-6 h-6 flex items-center justify-center hover:bg-gray-700 cursor-pointer rounded" title="加粗">
+<iconify-icon class="text-sm" icon="mdi:format-bold"></iconify-icon>
+</div>
+<div class="w-6 h-6 flex items-center justify-center hover:bg-gray-700 cursor-pointer rounded" title="斜体">
+<iconify-icon class="text-sm" icon="mdi:format-italic"></iconify-icon>
+</div>
+<div class="w-6 h-6 flex items-center justify-center hover:bg-gray-700 cursor-pointer rounded" title="下划线">
+<iconify-icon class="text-sm" icon="mdi:format-underline"></iconify-icon>
+</div>
+<div class="w-px h-3 bg-gray-600 mx-0.5"></div>
+<div class="w-6 h-6 flex items-center justify-center hover:bg-gray-700 cursor-pointer rounded" title="字体颜色">
+<div class="w-3 h-3 bg-white rounded-full"></div>
+</div>
+<div class="w-6 h-6 flex items-center justify-center hover:bg-gray-700 cursor-pointer rounded" title="字体背景色">
+<div class="w-3 h-3 bg-blue-400 rounded-sm"></div>
+</div>
+</div>
+                            填写申请信息
+                            <div class="control-point top-[-4px] left-[-4px]"></div>
+<div class="control-point top-[-4px] left-[calc(50%-4px)]"></div>
+<div class="control-point top-[-4px] right-[-4px]"></div>
+<div class="control-point top-[calc(50%-4px)] left-[-4px]"></div>
+<div class="control-point top-[calc(50%-4px)] right-[-4px]"></div>
+<div class="control-point bottom-[-4px] left-[-4px]"></div>
+<div class="control-point bottom-[-4px] left-[calc(50%-4px)]"></div>
+<div class="control-point bottom-[-4px] right-[-4px]"></div>
+</div>
+<div class="absolute w-[80px] h-[60px] cursor-move" style="left: 100px; top: 340px;">
+<div class="w-full h-full bg-yellow-50 border border-orange-400 rotate-45 flex items-center justify-center">
+<span class="rotate-[-45deg] text-[10px] font-medium text-orange-900">审核通过？</span>
+</div>
+</div>
+<div class="absolute w-[80px] h-[40px] bg-red-500 border border-red-700 rounded-full flex items-center justify-center text-white text-xs shadow-sm cursor-move" style="left: 100px; top: 460px;">
+                            结束
+                        </div>
+</div>
+</div>
+</div>
+<!-- 5. 右侧属性面板 (280px) -->
+<div class="w-[280px] bg-[#F5F5F5] border-l border-[#d1d5db] flex flex-col flex-none transition-all duration-300 relative select-none" id="right-panel">
+<!-- 折叠按钮 -->
+<button class="absolute left-[-12px] top-1/2 -translate-y-1/2 w-[12px] h-[48px] bg-[#E8E8E8] border border-[#d1d5db] flex items-center justify-center text-[10px] hover:bg-white z-50 rounded-l-md" onclick="toggleRightPanel()">
+<iconify-icon icon="mdi:chevron-right" id="collapse-icon"></iconify-icon>
+</button>
+<div class="h-9 border-b border-[#d1d5db] flex items-center justify-between px-3 bg-white">
+<span class="text-[14px] font-bold" id="panel-main-title">属性</span>
+<iconify-icon class="cursor-pointer text-gray-400 hover:text-black" icon="mdi:close" onclick="toggleRightPanel()"></iconify-icon>
+</div>
+<!-- 标签页 -->
+<div class="flex border-b border-[#d1d5db] bg-[#E8E8E8] overflow-x-auto" id="panel-tabs-bar">
+<div class="min-w-[70px] py-2 text-center text-[12px] cursor-pointer bg-white border-b-2 border-blue-500 font-medium" id="tab-props" onclick="switchTab('props')">属性</div>
+<div class="min-w-[70px] py-2 text-center text-[12px] cursor-pointer hover:bg-gray-200" id="tab-page" onclick="switchTab('page')">页面设置</div>
+</div>
+<div class="flex-1 overflow-y-auto p-4 space-y-4" id="panel-content">
+<!-- 属性标签页内容 -->
+<div class="space-y-4" id="content-props">
+<div class="space-y-2">
+<div class="flex items-center justify-between cursor-pointer" onclick="toggleAccordion('acc-info')">
+<span class="text-[12px] font-bold uppercase text-gray-500">节点信息</span>
+<iconify-icon icon="mdi:chevron-down"></iconify-icon>
+</div>
+<div class="space-y-2" id="acc-info">
+<div class="flex items-center gap-2">
+<span class="text-[12px] w-12 text-gray-600">类型</span>
+<input class="flex-1 h-7 px-2 text-[12px] bg-gray-100 border border-gray-300 rounded outline-none" readonly="" type="text" value="流程"/>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-[12px] w-12 text-gray-600">名称</span>
+<input class="flex-1 h-7 px-2 text-[12px] border border-gray-300 rounded outline-none focus:border-blue-500" type="text" value="填写申请信息"/>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-[12px] w-12 text-gray-600">ID</span>
+<span class="text-[11px] text-gray-400">node_827419</span>
+</div>
+</div>
+</div>
+<hr class="border-gray-300"/>
+<div class="space-y-2">
+<div class="flex items-center justify-between cursor-pointer" onclick="toggleAccordion('acc-geo')">
+<span class="text-[12px] font-bold uppercase text-gray-500">几何</span>
+<iconify-icon icon="mdi:chevron-down"></iconify-icon>
+</div>
+<div class="grid grid-cols-2 gap-x-4 gap-y-2" id="acc-geo">
+<div class="flex items-center gap-1">
+<span class="text-[11px] text-gray-500 w-4">X</span>
+<input class="w-full h-7 px-2 text-[12px] border border-gray-300 rounded" type="number" value="80"/>
+</div>
+<div class="flex items-center gap-1">
+<span class="text-[11px] text-gray-500 w-4">Y</span>
+<input class="w-full h-7 px-2 text-[12px] border border-gray-300 rounded" type="number" value="220"/>
+</div>
+<div class="flex items-center gap-1">
+<span class="text-[11px] text-gray-500 w-4">宽</span>
+<input class="w-full h-7 px-2 text-[12px] border border-gray-300 rounded" type="number" value="120"/>
+</div>
+<div class="flex items-center gap-1">
+<span class="text-[11px] text-gray-500 w-4">高</span>
+<input class="w-full h-7 px-2 text-[12px] border border-gray-300 rounded" type="number" value="60"/>
+</div>
+</div>
+</div>
+<hr class="border-gray-300"/>
+<div class="space-y-2">
+<div class="flex items-center justify-between cursor-pointer" onclick="toggleAccordion('acc-style')">
+<span class="text-[12px] font-bold uppercase text-gray-500">样式</span>
+<iconify-icon icon="mdi:chevron-down"></iconify-icon>
+</div>
+<div class="space-y-3" id="acc-style">
+<div class="flex items-center justify-between">
+<span class="text-[12px] text-gray-600">填充色</span>
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded border border-gray-400 bg-blue-100 cursor-pointer shadow-inner"></div>
+<span class="text-[11px] text-gray-400">#EBF5FF</span>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-[12px] text-gray-600">边框色</span>
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded border border-gray-400 bg-blue-500 cursor-pointer shadow-inner"></div>
+<span class="text-[11px] text-gray-400">#3B82F6</span>
+</div>
+</div>
+</div>
+</div>
+<hr class="border-gray-300"/>
+<!-- 修改2: 文本区域补充控件 -->
+<div class="space-y-2">
+<div class="flex items-center justify-between cursor-pointer" onclick="toggleAccordion('acc-text')">
+<span class="text-[12px] font-bold uppercase text-gray-500">文本</span>
+<iconify-icon icon="mdi:chevron-down"></iconify-icon>
+</div>
+<div class="space-y-3" id="acc-text">
+<textarea class="w-full h-16 p-2 text-[12px] border border-gray-300 rounded outline-none focus:border-blue-500 resize-none">填写申请信息</textarea>
+<div class="grid grid-cols-2 gap-2">
+<div class="flex items-center gap-1.5 border border-gray-300 rounded bg-white px-2 h-7 overflow-hidden">
+<iconify-icon class="text-gray-400" icon="mdi:format-font"></iconify-icon>
+<select class="flex-1 text-[11px] outline-none bg-transparent">
+<option>微软雅黑</option>
+<option>宋体</option>
+<option>黑体</option>
+<option>Arial</option>
+<option>Times New Roman</option>
+</select>
+</div>
+<div class="flex items-center gap-1.5 border border-gray-300 rounded bg-white px-2 h-7 overflow-hidden">
+<iconify-icon class="text-gray-400" icon="mdi:format-size"></iconify-icon>
+<select class="flex-1 text-[11px] outline-none bg-transparent">
+<option>8</option><option>9</option><option>10</option><option>11</option><option selected="">12</option>
+<option>14</option><option>16</option><option>18</option><option>20</option><option>24</option>
+<option>28</option><option>36</option><option>48</option><option>72</option>
+</select>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex border border-gray-300 rounded overflow-hidden">
+<button class="w-7 h-7 flex items-center justify-center bg-gray-50 hover:bg-gray-200 border-r border-gray-300" title="加粗"><iconify-icon icon="mdi:format-bold"></iconify-icon></button>
+<button class="w-7 h-7 flex items-center justify-center bg-white hover:bg-gray-100 border-r border-gray-300" title="斜体"><iconify-icon icon="mdi:format-italic"></iconify-icon></button>
+<button class="w-7 h-7 flex items-center justify-center bg-white hover:bg-gray-100 border-r border-gray-300" title="下划线"><iconify-icon icon="mdi:format-underline"></iconify-icon></button>
+<button class="w-7 h-7 flex items-center justify-center bg-white hover:bg-gray-100" title="删除线"><iconify-icon icon="mdi:format-strikethrough"></iconify-icon></button>
+</div>
+<div class="flex gap-1">
+<button class="w-7 h-7 border border-gray-300 rounded bg-white hover:bg-gray-100 flex items-center justify-center" title="字体颜色">
+<div class="flex flex-col items-center">
+<iconify-icon class="text-xs" icon="mdi:format-color-text"></iconify-icon>
+<div class="w-3 h-0.5 bg-black"></div>
+</div>
+</button>
+<button class="w-7 h-7 border border-gray-300 rounded bg-white hover:bg-gray-100 flex items-center justify-center" title="背景颜色">
+<div class="flex flex-col items-center">
+<iconify-icon class="text-xs" icon="mdi:format-color-fill"></iconify-icon>
+<div class="w-3 h-0.5 bg-yellow-400"></div>
+</div>
+</button>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-2">
+<div class="flex border border-gray-300 rounded overflow-hidden">
+<button class="flex-1 h-7 flex items-center justify-center bg-gray-50 hover:bg-gray-200 border-r border-gray-300" title="左对齐"><iconify-icon icon="mdi:format-align-left"></iconify-icon></button>
+<button class="flex-1 h-7 flex items-center justify-center bg-white hover:bg-gray-100 border-r border-gray-300" title="居中"><iconify-icon icon="mdi:format-align-center"></iconify-icon></button>
+<button class="flex-1 h-7 flex items-center justify-center bg-white hover:bg-gray-100" title="右对齐"><iconify-icon icon="mdi:format-align-right"></iconify-icon></button>
+</div>
+<div class="flex border border-gray-300 rounded overflow-hidden">
+<button class="flex-1 h-7 flex items-center justify-center bg-white hover:bg-gray-100 border-r border-gray-300" title="顶端对齐"><iconify-icon icon="mdi:align-vertical-top"></iconify-icon></button>
+<button class="flex-1 h-7 flex items-center justify-center bg-gray-50 hover:bg-gray-200 border-r border-gray-300" title="垂直居中"><iconify-icon icon="mdi:align-vertical-center"></iconify-icon></button>
+<button class="flex-1 h-7 flex items-center justify-center bg-white hover:bg-gray-100" title="底端对齐"><iconify-icon icon="mdi:align-vertical-bottom"></iconify-icon></button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- 页面设置标签页内容 (默认隐藏) -->
+<div class="space-y-4 hidden" id="content-page">
+<div class="space-y-3">
+<div class="text-[12px] font-bold uppercase text-gray-500">页面属性</div>
+<div class="flex items-center gap-2">
+<span class="text-[12px] w-20 text-gray-600">纸张大小</span>
+<select class="flex-1 h-7 px-2 text-[12px] border border-gray-300 rounded">
+<option>A3</option><option selected="">A4</option><option>A5</option><option>Letter</option>
+</select>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-[12px] w-20 text-gray-600">方向</span>
+<div class="flex-1 flex border border-gray-300 rounded overflow-hidden h-7">
+<button class="flex-1 text-[11px] bg-blue-500 text-white">纵向</button>
+<button class="flex-1 text-[11px] bg-white hover:bg-gray-100">横向</button>
+</div>
+</div>
+</div>
+<hr class="border-gray-200"/>
+<div class="space-y-3">
+<div class="text-[12px] font-bold uppercase text-gray-500">连线配置</div>
+<div class="flex items-center gap-2">
+<span class="text-[12px] w-20 text-gray-600">连线类型</span>
+<select class="flex-1 h-7 px-2 text-[12px] border border-gray-300 rounded">
+<option>直线</option>
+<option selected="">直角</option>
+<option>曲线</option>
+</select>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-[12px] w-20 text-gray-600">默认箭头</span>
+<div class="flex-1 flex border border-gray-300 rounded overflow-hidden h-7">
+<button class="flex-1 flex items-center justify-center bg-white hover:bg-gray-100 border-r border-gray-300" title="无"><iconify-icon icon="mdi:minus"></iconify-icon></button>
+<button class="flex-1 flex items-center justify-center bg-blue-500 text-white border-r border-gray-300" title="单向"><iconify-icon icon="mdi:arrow-right"></iconify-icon></button>
+<button class="flex-1 flex items-center justify-center bg-white hover:bg-gray-100" title="双向"><iconify-icon icon="mdi:arrow-left-right"></iconify-icon></button>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-[12px] text-gray-600">自动连线标签</span>
+<div class="toggle-switch active" onclick="this.classList.toggle('active')"></div>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-[12px] text-gray-600">连线跳线</span>
+<div class="toggle-switch" onclick="this.classList.toggle('active')"></div>
+</div>
+</div>
+</div>
+<!-- 查找替换标签页内容 (默认隐藏) -->
+<div class="hidden space-y-4" id="content-search">
+<div class="flex items-center justify-between border-b border-gray-200 pb-2 mb-2">
+<span class="text-[12px] font-bold text-gray-500 uppercase">查找与替换</span>
+<button class="text-blue-600 text-[11px] hover:underline" onclick="exitSearchMode()">返回属性</button>
+</div>
+<div class="space-y-3">
+<div class="flex flex-col gap-1">
+<span class="text-[12px] text-gray-600">查找内容</span>
+<div class="flex gap-1">
+<input class="flex-1 h-7 px-2 text-[12px] border border-gray-300 rounded" placeholder="输入搜索词..." type="text"/>
+<button class="px-2 h-7 bg-blue-600 text-white rounded text-[11px]">查找</button>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<span class="text-[12px] text-gray-600">替换为</span>
+<div class="flex gap-1">
+<input class="flex-1 h-7 px-2 text-[12px] border border-gray-300 rounded" type="text"/>
+<button class="px-2 h-7 bg-gray-200 border border-gray-300 rounded text-[11px] hover:bg-gray-300">全部</button>
+</div>
+</div>
+</div>
+</div>
+<!-- 修改4: 右侧属性面板增加"视图"部分 -->
+<div class="space-y-4" id="content-view">
+</div>
+</div>
+</div>
+</div>
+<!-- 修改5: 底部状态栏 (24px) -->
+<div class="h-[24px] bg-[#E8E8E8] border-t border-[#d1d5db] flex items-center justify-between px-3 flex-none select-none text-[12px] text-gray-600">
+<div class="flex items-center gap-4">
+<span>已选择 1 个图元</span>
+<span class="text-gray-400">|</span>
+<span>X: 120  Y: 85</span>
+</div>
+<div class="flex items-center gap-4">
+<!-- 页面增删 -->
+<div class="flex items-center gap-2 mr-2">
+<span class="">页 1/1</span>
+</div>
+<!-- 缩放控制 -->
+<div class="flex items-center gap-1 mr-2">
+<div class="relative group">
+<button class="px-2 h-[18px] flex items-center gap-1 hover:bg-gray-300 rounded text-[11px] transition-colors duration-200">
+<span>100%</span>
+<iconify-icon class="text-[10px] text-gray-500 group-hover:text-gray-700" icon="mdi:chevron-down"></iconify-icon>
+</button>
+<div class="absolute bottom-6 right-0 w-24 bg-white border border-gray-300 shadow-xl rounded py-1 hidden group-hover:block z-[60]">
+<div class="px-3 py-1 hover:bg-blue-500 hover:text-white cursor-default text-[11px]">50%</div>
+<div class="px-3 py-1 hover:bg-blue-500 hover:text-white cursor-default text-[11px]">75%</div>
+<div class="px-3 py-1 hover:bg-blue-500 hover:text-white cursor-default bg-blue-50 text-blue-600 font-medium text-[11px]">100%</div>
+<div class="px-3 py-1 hover:bg-blue-500 hover:text-white cursor-default text-[11px]">125%</div>
+<div class="px-3 py-1 hover:bg-blue-500 hover:text-white cursor-default text-[11px]">150%</div>
+<div class="px-3 py-1 hover:bg-blue-500 hover:text-white cursor-default text-[11px]">200%</div>
+<div class="border-t border-gray-100 my-1"></div>
+<div class="px-3 py-1 hover:bg-blue-500 hover:text-white cursor-default flex justify-between items-center text-[11px]">
+<span>适应屏幕</span>
+<iconify-icon class="text-xs" icon="mdi:fit-to-screen-outline"></iconify-icon>
+</div>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<div class="flex items-center gap-1 cursor-pointer bg-blue-500/10 text-blue-600 px-1.5 rounded hover:bg-blue-500/20" id="btn-grid-status" onclick="toggleStatus('btn-grid-status')">
+<iconify-icon icon="mdi:grid"></iconify-icon>
+<span>网格</span>
+</div>
+<div class="flex items-center gap-1 cursor-pointer hover:bg-gray-300 px-1.5 rounded" id="btn-snap-status" onclick="toggleStatus('btn-snap-status')">
+<iconify-icon icon="mdi:magnet"></iconify-icon>
+<span>对齐</span>
+</div>
+</div>
+<div class="flex items-center gap-1">
+<div class="w-2 h-2 rounded-full bg-green-500"></div>
+<span>已保存</span>
+</div>
+</div>
+</div>
+</div>
+<script>
+        // 图元库折叠展开
+        function toggleSection(id) {
+            const section = document.getElementById(id);
+            const arrow = document.getElementById('arrow-' + id.split('-')[1]);
+            if (section.classList.contains('hidden')) {
+                section.classList.remove('hidden');
+                arrow.setAttribute('icon', 'mdi:chevron-down');
+            } else {
+                section.classList.add('hidden');
+                arrow.setAttribute('icon', 'mdi:chevron-right');
+            }
+        }
+
+        // 属性面板页签切换
+        function switchTab(tab) {
+            const tabs = ['props', 'page', 'view'];
+            tabs.forEach(t => {
+                const tabEl = document.getElementById('tab-' + t);
+                const contentEl = document.getElementById('content-' + t);
+                if (t === tab) {
+                    tabEl.classList.add('bg-white', 'border-b-2', 'border-blue-500', 'font-medium');
+                    tabEl.classList.remove('hover:bg-gray-200');
+                    contentEl.classList.remove('hidden');
+                } else {
+                    tabEl.classList.remove('bg-white', 'border-b-2', 'border-blue-500', 'font-medium');
+                    tabEl.classList.add('hover:bg-gray-200');
+                    contentEl.classList.add('hidden');
+                }
+            });
+            // 切换标签时确保搜索内容隐藏，且恢复标题和Tab栏
+            document.getElementById('content-search').classList.add('hidden');
+            document.getElementById('panel-main-title').innerText = '属性';
+            document.getElementById('panel-tabs-bar').classList.remove('hidden');
+        }
+
+        function openFindReplace() {
+            // 切换到搜索模式
+            document.getElementById('panel-main-title').innerText = '查找替换';
+            document.getElementById('panel-tabs-bar').classList.add('hidden');
+            
+            // 隐藏所有常规 Tab 内容
+            const sections = ['props', 'page', 'view'];
+            sections.forEach(s => {
+                document.getElementById('content-' + s).classList.add('hidden');
+                document.getElementById('tab-' + s).classList.remove('bg-white', 'border-b-2', 'border-blue-500', 'font-medium');
+                document.getElementById('tab-' + s).classList.add('hover:bg-gray-200');
+            });
+            
+            // 显示搜索内容
+            document.getElementById('content-search').classList.remove('hidden');
+            
+            if (isRightPanelCollapsed) {
+                toggleRightPanel();
+            }
+        }
+
+        function exitSearchMode() {
+            switchTab('props');
+        }
+
+        // 属性面板折叠
+        let isRightPanelCollapsed = false;
+        function toggleRightPanel() {
+            const panel = document.getElementById('right-panel');
+            const icon = document.getElementById('collapse-icon');
+            if (isRightPanelCollapsed) {
+                panel.style.width = '280px';
+                icon.setAttribute('icon', 'mdi:chevron-right');
+                isRightPanelCollapsed = false;
+            } else {
+                panel.style.width = '0px';
+                icon.setAttribute('icon', 'mdi:chevron-left');
+                isRightPanelCollapsed = true;
+            }
+        }
+
+        // 手风琴折叠
+        function toggleAccordion(id) {
+            const el = document.getElementById(id);
+            const header = el.previousElementSibling;
+            const arrow = header.querySelector('iconify-icon');
+            if (el.classList.contains('hidden')) {
+                el.classList.remove('hidden');
+                arrow.setAttribute('icon', 'mdi:chevron-down');
+            } else {
+                el.classList.add('hidden');
+                arrow.setAttribute('icon', 'mdi:chevron-right');
+            }
+        }
+
+        // 状态栏开关
+        function toggleStatus(id) {
+            const el = document.getElementById(id);
+            if (el.classList.contains('text-blue-600')) {
+                el.classList.remove('bg-blue-500/10', 'text-blue-600');
+                el.classList.add('hover:bg-gray-300');
+                if(id === 'btn-grid-status') toggleViewElement('grid', false);
+            } else {
+                el.classList.add('bg-blue-500/10', 'text-blue-600');
+                el.classList.remove('hover:bg-gray-300');
+                if(id === 'btn-grid-status') toggleViewElement('grid', true);
+            }
+        }
+
+        // 紧凑工具栏对齐状态切换
+        function toggleActive(btn, group) {
+            const parent = btn.parentElement;
+            parent.querySelectorAll('.toolbar-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        // 格式刷状态切换
+        let formatPainterState = 0; // 0: off, 1: once, 2: continuous
+        function toggleFormatPainter() {
+            const btn = document.getElementById('toolbar-paint');
+            formatPainterState = (formatPainterState + 1) % 3;
+            btn.classList.remove('active', 'orange-active');
+            if (formatPainterState === 1) {
+                btn.classList.add('active');
+            } else if (formatPainterState === 2) {
+                btn.classList.add('orange-active');
+            }
+        }
+
+        // 视图元素控制
+        function toggleViewElement(type, forceState = null) {
+            const toggle = document.getElementById(`view-${type}-toggle`);
+            let isActive = forceState !== null ? !forceState : toggle.classList.contains('active');
+            
+            if (isActive) {
+                toggle.classList.remove('active');
+                if (type === 'ruler') {
+                    document.querySelector('.ruler-corner').style.display = 'none';
+                    document.getElementById('ruler-h-container').style.display = 'none';
+                    document.getElementById('ruler-v-container').style.display = 'none';
+                } else if (type === 'grid') {
+                    document.getElementById('main-canvas').style.backgroundImage = 'none';
+                    document.getElementById('btn-grid-status').classList.remove('bg-blue-500/10', 'text-blue-600');
+                } else if (type === 'guideline') {
+                    document.getElementById('guidelines-container').style.display = 'none';
+                } else if (type === 'pagebreak') {
+                    document.getElementById('page-break').style.display = 'none';
+                }
+            } else {
+                toggle.classList.add('active');
+                if (type === 'ruler') {
+                    document.querySelector('.ruler-corner').style.display = 'block';
+                    document.getElementById('ruler-h-container').style.display = 'block';
+                    document.getElementById('ruler-v-container').style.display = 'block';
+                } else if (type === 'grid') {
+                    document.getElementById('main-canvas').style.backgroundImage = 'radial-gradient(#d1d5db 1px, transparent 1px)';
+                    document.getElementById('btn-grid-status').classList.add('bg-blue-500/10', 'text-blue-600');
+                } else if (type === 'guideline') {
+                    document.getElementById('guidelines-container').style.display = 'block';
+                } else if (type === 'pagebreak') {
+                    document.getElementById('page-break').style.display = 'block';
+                }
+            }
+        }
+
+        // 参考线拖拽
+        function setupGuideline(id, axis) {
+            const el = document.getElementById(id);
+            let isDragging = false;
+            
+            el.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                const canvas = document.getElementById('main-canvas');
+                const rect = canvas.getBoundingClientRect();
+                if (axis === 'y') {
+                    let top = e.clientY - rect.top + canvas.scrollTop;
+                    el.style.top = top + 'px';
+                } else {
+                    let left = e.clientX - rect.left + canvas.scrollLeft;
+                    el.style.left = left + 'px';
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+        }
+        setupGuideline('guideline-h', 'y');
+        setupGuideline('guideline-v', 'x');
+
+        // 页面管理逻辑
+        let pages = [{ id: 1, name: '页面 1' }];
+        let activePageIndex = 0;
+
+        function renderPages() {
+            const container = document.getElementById('page-tabs-container');
+            const addButton = container.querySelector('div[onclick="addPage()"]');
+            
+            // 清除旧标签
+            const oldTabs = container.querySelectorAll('.page-tab');
+            oldTabs.forEach(tab => tab.remove());
+
+            pages.forEach((page, index) => {
+                const tab = document.createElement('div');
+                tab.className = `page-tab px-3 h-full flex items-center text-[12px] gap-2 border-t border-[#d1d5db] border-x cursor-pointer ${index === activePageIndex ? 'bg-white font-medium border-[#d1d5db]' : 'hover:bg-gray-200 text-gray-600 border-transparent'}`;
+                tab.onclick = () => switchPage(index);
+                
+                const span = document.createElement('span');
+                span.textContent = page.name;
+                
+                const closeIcon = document.createElement('iconify-icon');
+                closeIcon.className = 'text-gray-400 hover:text-black cursor-pointer text-xs';
+                closeIcon.setAttribute('icon', 'mdi:close');
+                closeIcon.onclick = (e) => removePage(index, e);
+
+                tab.appendChild(span);
+                if (pages.length > 1) {
+                    tab.appendChild(closeIcon);
+                }
+                
+                container.insertBefore(tab, addButton);
+            });
+        }
+
+        function addPage() {
+            const newId = pages.length > 0 ? Math.max(...pages.map(p => p.id)) + 1 : 1;
+            pages.push({ id: newId, name: '页面 ' + newId });
+            activePageIndex = pages.length - 1;
+            renderPages();
+        }
+
+        function switchPage(index) {
+            activePageIndex = index;
+            renderPages();
+        }
+
+        function removePage(index, event) {
+            event.stopPropagation();
+            if (pages.length <= 1) return;
+            
+            pages.splice(index, 1);
+            if (activePageIndex >= pages.length) {
+                activePageIndex = pages.length - 1;
+            } else if (activePageIndex > index) {
+                activePageIndex--;
+            }
+            renderPages();
+        }
+
+        // 初始渲染
+        renderPages();
+
+        // 模拟拖拽逻辑（仅视觉反馈）
+        const draggables = document.querySelectorAll('.cursor-move');
+        draggables.forEach(el => {
+            el.addEventListener('mousedown', () => {
+                el.classList.add('ring-2', 'ring-blue-400');
+                setTimeout(() => {
+                    el.classList.remove('ring-2', 'ring-blue-400');
+                }, 500);
+            });
+        });
+    </script>
+</body></html>

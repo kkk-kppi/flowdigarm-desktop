@@ -1,0 +1,22 @@
+# 依赖与构建产物
+node_modules/
+dist/
+dist-ssr/
+src-tauri/target/
+src-tauri/gen/
+
+# 代理工具（不属于应用交付物）
+.opencode/
+
+# SDD 过程文件（进度台账除外，保留在仓库外）
+.superpowers/
+
+# 测试与覆盖率
+coverage/
+playwright-report/
+test-results/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+*.log
