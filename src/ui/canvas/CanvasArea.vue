@@ -28,7 +28,7 @@
 import { onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue'
 import type { DiagramPage } from '@/domain/diagram'
 import { ViewportController } from '@/application/viewport/viewport-controller'
-import type { ViewportState } from '@/infrastructure/x6/viewport-transform'
+import type { ViewportState } from '@/application/viewport/viewport-transform'
 import { GraphAdapter } from '@/infrastructure/x6/graph-adapter'
 import { useAppStore } from '@/stores/app-store'
 import RulerCorner from './RulerCorner.vue'
@@ -56,10 +56,9 @@ onMounted(() => {
     return
   }
   adapter = new GraphAdapter(container, {
-    // X6 手势回流：写回控制器（同步会再经订阅回到 adapter.syncViewport，值相同自然收敛）
+    // X6 手势回流：整体写回控制器，单次通知（同步会再经订阅回到 adapter.syncViewport，值相同自然收敛）
     onViewportChanged: (state) => {
-      viewportController.setZoom(state.zoom)
-      viewportController.setPan(state.panX, state.panY)
+      viewportController.setViewport(state)
     },
   })
   adapter.renderPage(props.page)

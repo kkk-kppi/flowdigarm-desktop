@@ -21,7 +21,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { ptToUnit, unitToPt, type Unit } from '@/domain/measurement'
 import { computeRulerScale } from '@/infrastructure/x6/ruler-scale'
-import { ViewportTransform, type ViewportState } from '@/infrastructure/x6/viewport-transform'
+import { ViewportTransform, type ViewportState } from '@/application/viewport/viewport-transform'
 
 const props = defineProps<{
   orientation: 'horizontal' | 'vertical'
@@ -141,15 +141,15 @@ watch([majorTicks, canvasWidth, canvasHeight], () => {
   user-select: none;
 }
 
+/* 宽度由父级 left/right 定位决定（避免 width:100% 与 inset 冲突），此处只定厚度 */
 .ruler-horizontal {
-  width: 100%;
   height: var(--ruler-size);
   border-bottom: 1px solid var(--color-border);
 }
 
+/* 高度由父级 top/bottom 定位决定（避免 height:100% 与 inset 冲突），此处只定厚度 */
 .ruler-vertical {
   width: var(--ruler-size);
-  height: 100%;
   border-right: 1px solid var(--color-border);
 }
 

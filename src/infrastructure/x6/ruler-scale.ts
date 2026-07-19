@@ -2,7 +2,7 @@
 // 标尺刻度自适应：主刻度取 1/2/5×10ⁿ（当前单位制）中换算后首个 ≥ 60 CSS px 者；
 // 次刻度为主刻度的 1/5。换算系数 96/72 只允许来自 viewport-transform。
 import { unitToPt, type Unit } from '@/domain/measurement'
-import { PT_TO_CSS_PX } from './viewport-transform'
+import { PT_TO_CSS_PX } from '@/application/viewport/viewport-transform'
 
 export interface RulerScale {
   /** 主刻度步长（当前单位，如 2cm、20mm、0.5in） */

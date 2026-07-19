@@ -1,6 +1,6 @@
 // tests/unit/editor/viewport/viewport-transform.test.ts
 // 视口数学唯一真源：screenPx = panPx + documentPt × 96/72 × zoom。
-import { PT_TO_CSS_PX, ViewportTransform } from '@/infrastructure/x6/viewport-transform'
+import { PT_TO_CSS_PX, ViewportTransform } from '@/application/viewport/viewport-transform'
 
 describe('ViewportTransform', () => {
   it('换算系数 PT_TO_CSS_PX 等于 96/72', () => {

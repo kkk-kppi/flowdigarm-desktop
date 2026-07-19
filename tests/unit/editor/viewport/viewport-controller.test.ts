@@ -16,6 +16,17 @@ describe('ViewportController', () => {
     })
   })
 
+  it('构造函数将 initial.zoom 钳制在 0.1–4（0/NaN/负数不会传播为 NaN pan）', () => {
+    expect(new ViewportController({ zoom: 0 }).state.zoom).toBe(MIN_ZOOM)
+    expect(new ViewportController({ zoom: -2 }).state.zoom).toBe(MIN_ZOOM)
+    expect(new ViewportController({ zoom: Number.NaN }).state.zoom).toBe(MIN_ZOOM)
+    expect(new ViewportController({ zoom: 10 }).state.zoom).toBe(MAX_ZOOM)
+    const controller = new ViewportController({ zoom: 0 })
+    controller.setZoom(2, { x: 100, y: 50 })
+    expect(Number.isFinite(controller.state.panX)).toBe(true)
+    expect(Number.isFinite(controller.state.panY)).toBe(true)
+  })
+
   it('setZoom 将缩放钳制在 0.1–4', () => {
     const controller = new ViewportController()
     controller.setZoom(10)
@@ -62,6 +73,26 @@ describe('ViewportController', () => {
     expect(controller.state).toMatchObject({ panX: 5, panY: 25 })
     controller.setPan(100, 200)
     expect(controller.state).toMatchObject({ panX: 100, panY: 200 })
+  })
+
+  it('setViewport 一次性设置 zoom/pan 子集，单次调用只通知一次', () => {
+    const controller = new ViewportController()
+    const states: number[] = []
+    controller.subscribe((state) => states.push(state.zoom))
+    controller.setViewport({ zoom: 2, panX: 10, panY: 20 })
+    expect(states).toHaveLength(1)
+    expect(controller.state).toEqual({ zoom: 2, panX: 10, panY: 20 })
+    controller.setViewport({ panX: 30 })
+    expect(states).toHaveLength(2)
+    expect(controller.state).toEqual({ zoom: 2, panX: 30, panY: 20 })
+  })
+
+  it('setViewport 的 zoom 同样经钳制', () => {
+    const controller = new ViewportController()
+    controller.setViewport({ zoom: 10 })
+    expect(controller.state.zoom).toBe(MAX_ZOOM)
+    controller.setViewport({ zoom: 0 })
+    expect(controller.state.zoom).toBe(MIN_ZOOM)
   })
 
   it('fitToPage：A4（595.276×841.89pt）在 1000×700 视口、padding 20 下居中', () => {

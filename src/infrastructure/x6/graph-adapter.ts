@@ -7,7 +7,7 @@
 // 定位到视口 (panX, panY)（自动扩展 padding，与 screenPx = pan + pt×96/72×zoom 一致），
 // 读取取 SVG 相对容器的偏移。jsdom 无法完整渲染 X6，本文件保持薄胶合，逻辑下沉到
 // viewport-transform / ruler-scale / cell-mapper 等纯函数。
-import { Graph, type Node } from '@antv/x6'
+import { Graph, type Edge, type Node } from '@antv/x6'
 import { Keyboard } from '@antv/x6-plugin-keyboard'
 import { Scroller } from '@antv/x6-plugin-scroller'
 import { Selection } from '@antv/x6-plugin-selection'
@@ -17,7 +17,7 @@ import type { DiagramPage } from '@/domain/diagram'
 import { MAX_ZOOM, MIN_ZOOM } from '@/application/viewport/viewport-controller'
 import { pageToCells, type CellMetadata } from './cell-mapper'
 import { SelectionBridge } from './selection-bridge'
-import { PT_TO_CSS_PX, type ViewportState } from './viewport-transform'
+import { PT_TO_CSS_PX, type ViewportState } from '@/application/viewport/viewport-transform'
 
 export interface GraphAdapterEvents {
   onSelectionChanged?: (ids: string[]) => void
@@ -179,7 +179,7 @@ export class GraphAdapter {
       zIndex: meta.zIndex,
       label: meta.label,
       ...connectorOptionsOf(meta),
-      attrs: expandStyle(meta.style) as Node.Metadata['attrs'],
+      attrs: expandStyle(meta.style) as Edge.Metadata['attrs'],
     })
   }
 
@@ -239,6 +239,10 @@ export class GraphAdapter {
         panning = false
       }
     }
+    // 窗口失焦时 keyup 可能丢失，重置 Space 按下标记避免卡滞
+    const onWindowBlur = () => {
+      spaceHeld = false
+    }
     const onMouseDown = (event: MouseEvent) => {
       const isMiddleButton = event.button === 1
       const isSpaceLeftButton = spaceHeld && event.button === 0
@@ -270,14 +274,17 @@ export class GraphAdapter {
     }
 
     this.container.addEventListener('mousedown', onMouseDown, true)
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('keyup', onKeyUp)
+    // 键盘事件挂在画布容器上（随焦点生效），避免全局监听干扰其他输入场景
+    this.container.addEventListener('keydown', onKeyDown)
+    this.container.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onWindowBlur)
     window.addEventListener('mousemove', onMouseMove)
     window.addEventListener('mouseup', onMouseUp)
     this.unsubscribes.push(() => {
       this.container.removeEventListener('mousedown', onMouseDown, true)
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('keyup', onKeyUp)
+      this.container.removeEventListener('keydown', onKeyDown)
+      this.container.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onWindowBlur)
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mouseup', onMouseUp)
     })

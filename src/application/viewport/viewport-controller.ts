@@ -1,7 +1,7 @@
 // src/application/viewport/viewport-controller.ts
 // 视口控制器：缩放/平移/适应（窗口/页面/内容/选择）只改视口状态，
 // 不修改文档、不产生撤销记录（视图操作不进入撤销历史）。
-import { PT_TO_CSS_PX, type ViewportState } from '@/infrastructure/x6/viewport-transform'
+import { PT_TO_CSS_PX, type ViewportState } from './viewport-transform'
 
 export const MIN_ZOOM = 0.1
 export const MAX_ZOOM = 4
@@ -23,6 +23,9 @@ interface BBox extends Size {
 type ViewportListener = (state: ViewportState) => void
 
 function clampZoom(zoom: number): number {
+  if (Number.isNaN(zoom)) {
+    return MIN_ZOOM
+  }
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom))
 }
 
@@ -32,6 +35,8 @@ export class ViewportController {
 
   constructor(initial?: Partial<ViewportState>) {
     this.current = { ...DEFAULT_STATE, ...initial }
+    // 初始 zoom 同样走 setZoom 的钳制，杜绝 0/NaN/负数导致后续 pan 计算产生 NaN
+    this.current.zoom = clampZoom(this.current.zoom)
   }
 
   get state(): ViewportState {
@@ -72,6 +77,20 @@ export class ViewportController {
   setPan(panX: number, panY: number): void {
     this.current.panX = panX
     this.current.panY = panY
+    this.emit()
+  }
+
+  /** 一次性设置 zoom/pan 子集并单次通知（zoom 经钳制），供手势回流整体写回。 */
+  setViewport(next: Partial<ViewportState>): void {
+    if (next.zoom !== undefined) {
+      this.current.zoom = clampZoom(next.zoom)
+    }
+    if (next.panX !== undefined) {
+      this.current.panX = next.panX
+    }
+    if (next.panY !== undefined) {
+      this.current.panY = next.panY
+    }
     this.emit()
   }
 

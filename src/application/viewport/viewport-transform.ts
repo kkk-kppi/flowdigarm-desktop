@@ -1,4 +1,4 @@
-// src/infrastructure/x6/viewport-transform.ts
+// src/application/viewport/viewport-transform.ts
 // pt ↔ CSS px 视口数学唯一真源：screenPx = panPx + documentPt × 96/72 × zoom。
 // 全局只允许本文件定义 96/72 换算系数；devicePixelRatio 不得进入文档/命中/撤销逻辑。
 
