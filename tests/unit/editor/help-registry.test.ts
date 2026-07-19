@@ -28,4 +28,27 @@ describe('功能帮助注册表', () => {
     expect(getFeatureHelp('undo')?.id).toBe('undo')
     expect(getFeatureHelp('不存在')).toBeUndefined()
   })
+
+  it('画布与视图条目（rulers/grid/zoom/fit-view）均可取出且 8 字段非空', () => {
+    const requiredFields = [
+      'id',
+      'title',
+      'purpose',
+      'operation',
+      'scope',
+      'undoBoundary',
+      'limits',
+      'docAnchor',
+    ] as const
+    for (const id of ['rulers', 'grid', 'zoom', 'fit-view']) {
+      const entry = getFeatureHelp(id)
+      expect(entry, `条目 ${id} 应已注册`).toBeTruthy()
+      for (const field of requiredFields) {
+        expect(entry?.[field], `条目 ${id} 字段 ${field}`).toBeTruthy()
+      }
+      // 视图操作的撤销边界必须写明不进入撤销历史
+      expect(entry?.undoBoundary).toContain('不进入撤销历史')
+      expect(entry?.docAnchor).toBe('user-guide#画布与视图')
+    }
+  })
 })
