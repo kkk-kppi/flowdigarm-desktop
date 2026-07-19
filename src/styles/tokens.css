@@ -1,0 +1,17 @@
+/* 设计令牌：全局颜色与各栏尺寸变量（尺寸值为产品规格，勿随意改动）。 */
+:root {
+  --color-bg: #f4f5f7;
+  --color-panel: #ffffff;
+  --color-border: #d8dbe2;
+  --color-primary: #2f6fed;
+  --color-text: #1f2329;
+  --color-text-secondary: #6b7280;
+
+  --titlebar-h: 28px;
+  --menubar-h: 28px;
+  --toolbar-h: 48px;
+  --pagetabs-h: 32px;
+  --statusbar-h: 24px;
+  --library-w: 220px;
+  --inspector-w: 280px;
+}

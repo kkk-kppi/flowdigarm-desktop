@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "主窗口默认能力：核心运行时 + 打开外部链接所需的最小权限。文件对话框与文件系统权限在对应功能任务落地时按需补充。",
+  "windows": ["main"],
+  "permissions": ["core:default", "opener:allow-open-url"]
+}
