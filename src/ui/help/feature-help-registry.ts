@@ -23,7 +23,7 @@ export interface FeatureHelpEntry {
   docAnchor: string
 }
 
-const firstEntries: readonly FeatureHelpEntry[] = [
+const entries: readonly FeatureHelpEntry[] = [
   {
     id: 'undo',
     title: '撤销',
@@ -88,11 +88,55 @@ const firstEntries: readonly FeatureHelpEntry[] = [
     limits: '适应后的缩放同样钳制在 10%–400%；无选中图元时"适应选择"不可用，空页面时"适应内容"退化为适应页面。',
     docAnchor: 'user-guide#画布与视图',
   },
+  {
+    id: 'page-tabs',
+    title: '页面标签',
+    purpose: '在页面标签栏管理文档的多页：新建、切换、重命名与删除页面。',
+    operation:
+      '单击页签切换页面；双击页签进入行内重命名（回车/失焦提交、Esc 取消）；页数大于 1 时点击页签上的 × 并在内联确认中删除；末尾 + 按钮新建页面。',
+    scope: '作用于当前文档的页面列表与活动页；每页拥有独立的撤销栈与视口状态。',
+    undoBoundary:
+      '新建/删除/重命名各为一条撤销记录；切换页不产生命令，不进入撤销历史。',
+    limits: '至少保留一个页面；被引用为背景页的页面不能删除；页面名称不能为空。',
+    docAnchor: 'user-guide#文件',
+  },
+  {
+    id: 'page-setup',
+    title: '页面设置',
+    purpose: '集中编辑当前页的页面属性（纸张/方向/单位/背景）与连线配置（类型/箭头/标签/跳线）。',
+    operation:
+      '在右侧"页面设置"标签页中编辑，点击"应用"一次生效；"重置"恢复显示为页面当前值；"自动调整大小"按内容外接矩形加边距重设页面尺寸。',
+    scope: '仅作用于当前页的页面设置字段；不修改任何图元几何（单位切换只改显示，pt 值不变）。',
+    undoBoundary: '一次应用一条记录：点击"应用"把全部修改打包为一条页面设置记录；无变化时不产生记录。',
+    limits: '背景页只能引用背景类型的页面且不允许循环引用；页面无图元时"自动调整大小"不可用。',
+    docAnchor: 'user-guide#文件',
+  },
+  {
+    id: 'page-breaks',
+    title: '分页符',
+    purpose: '以低对比虚线显示真实打印分块边界，帮助排版时避开打印拼接位置。',
+    operation: '通过"视图"菜单的"分页符"开关显示或隐藏；默认隐藏。',
+    scope: '作用于当前画布的分页符叠层，仅为视觉辅助，不修改文档。',
+    undoBoundary: '视图开关不进入撤销历史：显示或隐藏分页符不产生可撤销记录。',
+    limits: '分块按 A4 打印纸减四边 5mm 打印机边距的可打印区域计算；页面不大于单张可打印区域时不显示分页线。',
+    docAnchor: 'user-guide#画布与视图',
+  },
+  {
+    id: 'background-page',
+    title: '背景页',
+    purpose: '让多个前景页共享统一的底图（如页眉、边框、模板），集中维护公共内容。',
+    operation:
+      '将页面设为背景类型后，在前景页的"页面设置→背景页"下拉中选择引用；编辑背景内容需切换到该背景页。',
+    scope: '渲染、打印与导出按先背景页后前景页绘制；一个前景页最多引用一个背景页（直接引用）。',
+    undoBoundary: '设置或取消背景页引用随页面设置一次应用一条记录。',
+    limits: '背景页内容不可在前景页直接选择；背景页引用不允许形成循环；被引用的背景页不能删除。',
+    docAnchor: 'user-guide#文件',
+  },
 ]
 
 /** 全部已注册的功能帮助条目，按 id 索引。 */
 export const featureHelpRegistry: ReadonlyMap<string, FeatureHelpEntry> = new Map(
-  firstEntries.map((entry) => [entry.id, entry]),
+  entries.map((entry) => [entry.id, entry]),
 )
 
 /** 按 id 查询帮助条目；未注册时返回 undefined。 */

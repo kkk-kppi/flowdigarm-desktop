@@ -51,4 +51,40 @@ describe('功能帮助注册表', () => {
       expect(entry?.docAnchor).toBe('user-guide#画布与视图')
     }
   })
+
+  it('页面管理条目（page-setup/page-breaks/background-page/page-tabs）均已注册且 8 字段非空', () => {
+    const requiredFields = [
+      'id',
+      'title',
+      'purpose',
+      'operation',
+      'scope',
+      'undoBoundary',
+      'limits',
+      'docAnchor',
+    ] as const
+    for (const id of ['page-setup', 'page-breaks', 'background-page', 'page-tabs']) {
+      const entry = getFeatureHelp(id)
+      expect(entry, `条目 ${id} 应已注册`).toBeTruthy()
+      for (const field of requiredFields) {
+        expect(entry?.[field], `条目 ${id} 字段 ${field}`).toBeTruthy()
+      }
+    }
+  })
+
+  it('page-setup 撤销边界写明「一次应用一条记录」', () => {
+    expect(getFeatureHelp('page-setup')?.undoBoundary).toContain('一次应用一条记录')
+  })
+
+  it('page-breaks 撤销边界写明视图开关不进入撤销历史', () => {
+    expect(getFeatureHelp('page-breaks')?.undoBoundary).toContain('不进入撤销历史')
+  })
+
+  it('page-tabs 撤销边界写明切换页不产生命令', () => {
+    expect(getFeatureHelp('page-tabs')?.undoBoundary).toContain('不产生命令')
+  })
+
+  it('background-page 限制条件写明背景页内容不可在前景页选择', () => {
+    expect(getFeatureHelp('background-page')?.limits).toContain('不可在前景页直接选择')
+  })
 })

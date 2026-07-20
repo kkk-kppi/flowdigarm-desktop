@@ -29,6 +29,18 @@ export interface GraphAdapterEvents {
 
 type Unsubscribe = () => void
 
+/** 背景页 cells 的 zIndex 整体偏移量（压到前景之下；领域 zIndex 为非负小值）。 */
+const BACKGROUND_Z_OFFSET = 1000
+
+/** 背景页 cells 的 data 标记：interacting 与 Selection filter 据此禁止交互/选择。 */
+const BACKGROUND_DATA = { background: true } as const
+
+/** 判断 cell 是否为背景页图元（不可选、不可交互）。 */
+function isBackgroundCell(cell: { getData(): unknown }): boolean {
+  const data = cell.getData() as { background?: boolean } | undefined
+  return data?.background === true
+}
+
 /** 将 cell-mapper 的扁平 attrs 路径键（body/fill 等）展开为 X6 嵌套 attrs。 */
 function expandStyle(style: Record<string, unknown>): Record<string, unknown> {
   const attrs: Record<string, unknown> = {}
@@ -63,6 +75,8 @@ export class GraphAdapter {
       container,
       autoResize: true,
       grid: { visible: false, type: 'dot', size: 10 },
+      // 背景页图元禁止一切交互（移动/连接/选择框等）
+      interacting: (cellView) => !isBackgroundCell(cellView.cell),
       mousewheel: {
         enabled: true,
         modifiers: ['ctrl', 'meta'],
@@ -74,6 +88,7 @@ export class GraphAdapter {
     })
 
     // 选择：框选、多选、节点选择框（X6 选择仅作视觉与交互，领域真源由后续 store 持有）
+    // filter 排除背景页图元：背景内容在前景页不可选
     this.graph.use(
       new Selection({
         enabled: true,
@@ -81,6 +96,7 @@ export class GraphAdapter {
         rubberband: true,
         movable: true,
         showNodeSelectionBox: true,
+        filter: (cell) => !isBackgroundCell(cell),
       }),
     )
     this.graph.use(new Snapline({ enabled: true }))
@@ -98,15 +114,21 @@ export class GraphAdapter {
     this.bindSelectionReflow()
   }
 
-  /** 清空并按 cell-mapper 元数据重建整页。 */
-  renderPage(page: DiagramPage): void {
+  /**
+   * 清空并按 cell-mapper 元数据重建整页。
+   * 传入 backgroundPage 时先渲染背景页 cells（zIndex 整体偏移到前景之下、
+   * data 标记 background → 不可交互、不可选），再渲染前景页 cells；
+   * 单参调用 = 无背景页（既有行为）。
+   */
+  renderPage(page: DiagramPage, backgroundPage?: DiagramPage): void {
     this.graph.clearCells()
-    for (const meta of pageToCells(page)) {
-      if (meta.kind === 'node') {
-        this.addNode(meta)
-      } else {
-        this.addEdge(meta)
+    if (backgroundPage) {
+      for (const meta of pageToCells(backgroundPage)) {
+        this.addCell({ ...meta, zIndex: meta.zIndex - BACKGROUND_Z_OFFSET }, true)
       }
+    }
+    for (const meta of pageToCells(page)) {
+      this.addCell(meta, false)
     }
   }
 
@@ -154,7 +176,15 @@ export class GraphAdapter {
     this.graph.dispose()
   }
 
-  private addNode(meta: CellMetadata): void {
+  private addCell(meta: CellMetadata, background: boolean): void {
+    if (meta.kind === 'node') {
+      this.addNode(meta, background)
+    } else {
+      this.addEdge(meta, background)
+    }
+  }
+
+  private addNode(meta: CellMetadata, background: boolean): void {
     this.graph.addNode({
       id: meta.id,
       shape: meta.shape,
@@ -166,10 +196,11 @@ export class GraphAdapter {
       zIndex: meta.zIndex,
       label: meta.label,
       attrs: expandStyle(meta.style) as Node.Metadata['attrs'],
+      data: background ? { ...BACKGROUND_DATA } : undefined,
     })
   }
 
-  private addEdge(meta: CellMetadata): void {
+  private addEdge(meta: CellMetadata, background: boolean): void {
     this.graph.addEdge({
       id: meta.id,
       shape: meta.shape,
@@ -180,6 +211,7 @@ export class GraphAdapter {
       label: meta.label,
       ...connectorOptionsOf(meta),
       attrs: expandStyle(meta.style) as Edge.Metadata['attrs'],
+      data: background ? { ...BACKGROUND_DATA } : undefined,
     })
   }
 
