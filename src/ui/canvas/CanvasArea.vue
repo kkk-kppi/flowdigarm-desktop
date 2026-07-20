@@ -45,6 +45,7 @@ import {
 import type { ViewportController } from '@/application/viewport/viewport-controller'
 import { ViewportTransform, type ViewportState } from '@/application/viewport/viewport-transform'
 import { resolveBackgroundPage } from '@/application/pages/background-page-resolver'
+import { computeRestoredSelection } from '@/application/selection/restore-selection'
 import { GraphAdapter, type EdgeEndpointRef } from '@/infrastructure/x6/graph-adapter'
 import { shapeRegistry } from '@/application/shapes/shape-registry'
 import '@/application/shapes/common-shapes' // 模块副作用：注册内置形状
@@ -91,9 +92,13 @@ function renderActivePage(): void {
   if (!adapter || !page) {
     return
   }
+  // 渲染前快照领域选择：renderPage 的 clearCells 经 X6 事件链同步清空 store，
+  // 渲染后再读 store 已为空（恢复变死代码）；已删除图元由快照过滤丢弃
+  const restored = computeRestoredSelection([...selectionStore.selectedIds], page)
   adapter.renderPage(page, backgroundPage.value)
-  // 重建后恢复领域选择（已删除图元由 syncSelection 自动过滤）
-  adapter.syncSelection(selectionStore.selectedIds)
+  // 重建后恢复选择：store 与 X6 双侧一致（store 在渲染事件链中已被清空，须自快照恢复）
+  selectionStore.setSelection(restored)
+  adapter.syncSelection(restored)
 }
 
 /** 绑定当前页视口控制器：应用其持久状态并重订阅后续变更。 */
@@ -174,9 +179,12 @@ function onWindowKeyDown(event: KeyboardEvent): void {
   const key = event.key.toLowerCase()
   if (key === 'c') {
     documentStore.copySelection()
+    event.preventDefault()
   } else if (key === 'x') {
     documentStore.cutSelection()
+    event.preventDefault()
   } else if (key === 'v') {
+    event.preventDefault()
     if (documentStore.clipboard) {
       documentStore.pasteClipboard()
     } else {

@@ -39,7 +39,7 @@ describe('CreateCellsCommand', () => {
     expect(page.edges[1].zIndex).toBe(8)
   })
 
-  it('节点自带 zIndex 时尊重原值，且不消耗递增序号', () => {
+  it('节点自带 zIndex 时尊重原值，并推进批内运行最大（后续递增不撞号）', () => {
     const command = new CreateCellsCommand({
       pageId: 'page-1',
       nodes: [
@@ -49,7 +49,25 @@ describe('CreateCellsCommand', () => {
     })
     const page = command.apply(单页文档()).pages[0]
     expect(page.nodes.find((n) => n.id === 'node-带')?.zIndex).toBe(99)
-    expect(page.nodes.find((n) => n.id === 'node-不带')?.zIndex).toBe(6)
+    // 显式 99 推进运行最大：后续递增至 100，不与批内/页面既有 zIndex 冲突
+    expect(page.nodes.find((n) => n.id === 'node-不带')?.zIndex).toBe(100)
+  })
+
+  it('批内显式 zIndex 6（页面最大 5）后，无 zIndex 图元分配 7：批内不重复', () => {
+    const command = new CreateCellsCommand({
+      pageId: 'page-1',
+      nodes: [
+        { ...createTestNode({ id: 'node-显式' }), zIndex: 6 },
+        { ...createTestNode({ id: 'node-递增' }), zIndex: undefined },
+      ],
+      edges: [{ ...createTestEdge({ id: 'edge-递增' }), zIndex: undefined }],
+    })
+    const page = command.apply(单页文档()).pages[0]
+    expect(page.nodes.find((n) => n.id === 'node-显式')?.zIndex).toBe(6)
+    expect(page.nodes.find((n) => n.id === 'node-递增')?.zIndex).toBe(7)
+    expect(page.edges.find((e) => e.id === 'edge-递增')?.zIndex).toBe(8)
+    const all = [...page.nodes.map((n) => n.zIndex), ...page.edges.map((e) => e.zIndex)]
+    expect(new Set(all).size).toBe(all.length)
   })
 
   it('空页面首个图元 zIndex 从 0 开始', () => {

@@ -1,6 +1,7 @@
 // src/application/commands/rotate-cells.ts
 // 旋转图元命令：一次旋转手势（pointer down→up）的全部节点合并为一条记录。
 // 角度写入前规范化到 0≤a<360（370→10、-10→350）。
+// 构造时深拷贝入参，命令自含快照（调用方后续修改不影响 before/after）。
 import type { DiagramDocument } from '@/domain/diagram'
 import type { EditorCommand } from './editor-command'
 
@@ -19,8 +20,11 @@ export function normalizeAngle(angle: number): number {
 export class RotateCellsCommand implements EditorCommand {
   readonly id = crypto.randomUUID()
   readonly label = '旋转图元'
+  private readonly moves: CellRotate[]
 
-  constructor(private readonly moves: CellRotate[]) {}
+  constructor(moves: CellRotate[]) {
+    this.moves = structuredClone(moves)
+  }
 
   apply(document: DiagramDocument): DiagramDocument {
     return this.rotateAll(document, 'after')

@@ -102,6 +102,29 @@ describe('ResizeCellsCommand', () => {
     const doc = 双节点文档()
     expect(new ResizeCellsCommand([]).apply(doc)).toBe(doc)
   })
+
+  it('构造时深拷贝入参：调用方后续修改 moves 及嵌套 before/after 不影响命令', () => {
+    const moves = [
+      {
+        pageId: 'page-1',
+        nodeId: 'node-1',
+        before: { x: 10, y: 20, width: 80, height: 40 },
+        after: { x: 10, y: 20, width: 160, height: 80 },
+      },
+    ]
+    const command = new ResizeCellsCommand(moves)
+    moves[0].before.x = -999
+    moves[0].after.width = 9999
+    moves.push({
+      pageId: 'page-1',
+      nodeId: 'node-2',
+      before: { x: 0, y: 0, width: 1, height: 1 },
+      after: { x: 0, y: 0, width: 2, height: 2 },
+    })
+    const page = command.apply(双节点文档()).pages[0]
+    expect(page.nodes[0]).toMatchObject({ x: 10, y: 20, width: 160, height: 80 })
+    expect(page.nodes[1]).toMatchObject({ x: 200, y: 100, width: 120, height: 72 })
+  })
 })
 
 describe('RotateCellsCommand', () => {
@@ -147,5 +170,15 @@ describe('RotateCellsCommand', () => {
     ])
     expect(() => command.apply(doc)).toThrow('命令目标不存在。')
     expect(new RotateCellsCommand([]).apply(doc)).toBe(doc)
+  })
+
+  it('构造时深拷贝入参：调用方后续修改 moves 不影响命令', () => {
+    const moves = [{ pageId: 'page-1', nodeId: 'node-1', before: 30, after: 45 }]
+    const command = new RotateCellsCommand(moves)
+    moves[0].after = 999
+    moves.push({ pageId: 'page-1', nodeId: 'node-2', before: 0, after: 180 })
+    const page = command.apply(双节点文档()).pages[0]
+    expect(page.nodes[0].angle).toBe(45)
+    expect(page.nodes[1].angle).toBe(0)
   })
 })

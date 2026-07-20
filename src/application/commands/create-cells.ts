@@ -1,7 +1,8 @@
 // src/application/commands/create-cells.ts
 // 创建图元命令：一次拖入/粘贴的全部节点与边合并为一条命令（撤销边界：一次创建一条记录）。
-// zIndex：自带 zIndex 的图元尊重原值且不消耗递增序号；其余按「页面现有最大 zIndex + 1」
-// 依次递增（先节点数组、后边数组，顺序即入参顺序）。构造时深拷贝入参，命令自含快照。
+// zIndex：自带 zIndex 的图元尊重原值；其余按「运行最大 zIndex + 1」依次递增
+// （运行最大 = 页面现有最大与同批先前置显式 zIndex 的较大者，避免批内撞号；
+// 先节点数组、后边数组，顺序即入参顺序）。构造时深拷贝入参，命令自含快照。
 import type { DiagramDocument, DiagramEdge, DiagramNode } from '@/domain/diagram'
 import type { EditorCommand } from './editor-command'
 
@@ -32,11 +33,12 @@ export class CreateCellsCommand implements EditorCommand {
 
   apply(document: DiagramDocument): DiagramDocument {
     const page = this.requirePage(document)
-    // 递增序号只基于页面现有最大 zIndex；新图元自带 zIndex 不影响序号
+    // 运行最大 zIndex：起始于页面现有最大；同批显式 zIndex 也推进上界，避免批内撞号
     let nextZ =
       Math.max(-1, ...page.nodes.map((n) => n.zIndex), ...page.edges.map((e) => e.zIndex)) + 1
     const assignZ = <T extends { zIndex?: number }>(cell: T): T & { zIndex: number } => {
       if (cell.zIndex !== undefined) {
+        nextZ = Math.max(nextZ, cell.zIndex + 1)
         return cell as T & { zIndex: number }
       }
       return { ...cell, zIndex: nextZ++ }
