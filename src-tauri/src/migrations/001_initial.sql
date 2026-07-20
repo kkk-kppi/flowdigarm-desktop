@@ -20,7 +20,6 @@ CREATE TABLE IF NOT EXISTS recent_documents (
 
 CREATE TABLE IF NOT EXISTS recovery_snapshots (
     document_id TEXT PRIMARY KEY,
-    version_token TEXT NOT NULL,
     name TEXT NOT NULL,
     document_json TEXT NOT NULL,
     source_path TEXT,

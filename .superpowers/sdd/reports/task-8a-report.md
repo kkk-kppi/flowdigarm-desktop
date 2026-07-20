@@ -237,3 +237,31 @@ Tests 50 passed (50)
 | `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`、`git diff --check` | PASS（格式修正后；仅工作区 LF/CRLF 提示） |
 
 关注项仍仅为既有 Vite 单 chunk 超过 500 kB 的非阻断提示（JS 750.65 kB，gzip 220.99 kB）。`opencode.json` 保持未跟踪且未读取、修改或纳入提交。
+
+## 最终迁移缺口修复（2026-07-21）
+
+提交目标：`fix: 新增恢复版本令牌数据库迁移`
+
+### 修复明细
+
+1. 恢复不可变的 `001_initial.sql` v1 schema；新增 `002_recovery_version_token.sql`，通过 `ALTER TABLE ... ADD COLUMN version_token TEXT NOT NULL DEFAULT ''` 安全保留旧恢复行。
+2. migration runner 在同一事务内按 1、2 顺序检查并只执行未记录版本；新库最终包含当前 schema，已记录 v1 的旧库只执行 v2，迁移历史精确为 `[1, 2]`。
+3. 新增真实文件库升级测试：用 v1 SQL 建库、记录 version 1 并插入无 token 的恢复行，再由当前 repository 初始化；断言旧行以空 token 可读、非空 token 不会误删旧行、新 token 写入及条件删除正常、7 张表与 10 个默认设置完整。
+
+### TDD RED 证据
+
+- 幂等测试首次运行按预期失败：migration history 实际为 `[1]`，期望 `[1, 2]`。
+- v1 升级测试首次运行按预期失败：被错误修改的 v1 schema 在插入旧格式恢复行时触发 `NOT NULL constraint failed: recovery_snapshots.version_token`。
+
+### 最终验证
+
+| 命令 | 结果 |
+|---|---|
+| `cargo fmt --manifest-path src-tauri/Cargo.toml` | PASS |
+| `cargo test --manifest-path src-tauri/Cargo.toml persistence::sqlite_repository` | PASS，10 tests / 0 failed |
+| `cargo test --manifest-path src-tauri/Cargo.toml` | PASS，33 tests / 0 failed |
+| `pnpm vitest run` | PASS，68 files / 626 tests |
+| `cargo build --manifest-path src-tauri/Cargo.toml` | PASS |
+| `pnpm build` | PASS，`vue-tsc --noEmit` + Vite production build |
+
+构建仍仅报告既有单 chunk 超过 500 kB 的非阻断提示（JS 750.65 kB，gzip 220.99 kB）。前端/IPC bindings 未修改；`opencode.json` 保持未跟踪且未纳入提交。

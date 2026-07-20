@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 const INITIAL_MIGRATION: &str = include_str!("../migrations/001_initial.sql");
+const RECOVERY_VERSION_TOKEN_MIGRATION: &str =
+    include_str!("../migrations/002_recovery_version_token.sql");
 const DEFAULT_SETTINGS: [(&str, &str); 10] = [
     ("theme.mode", "\"system\""),
     ("editor.showRulers", "true"),
@@ -164,17 +166,22 @@ impl SqliteRepository {
         transaction.execute_batch(
             "CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL);",
         )?;
-        let applied = transaction.query_row(
-            "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=1)",
-            [],
-            |row| row.get::<_, bool>(0),
-        )?;
-        if !applied {
-            transaction.execute_batch(INITIAL_MIGRATION)?;
-            transaction.execute(
-                "INSERT INTO schema_migrations(version, applied_at) VALUES(1, ?1)",
-                [unix_millis()],
+        for (version, sql) in [
+            (1, INITIAL_MIGRATION),
+            (2, RECOVERY_VERSION_TOKEN_MIGRATION),
+        ] {
+            let applied = transaction.query_row(
+                "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=?1)",
+                [version],
+                |row| row.get::<_, bool>(0),
             )?;
+            if !applied {
+                transaction.execute_batch(sql)?;
+                transaction.execute(
+                    "INSERT INTO schema_migrations(version, applied_at) VALUES(?1, ?2)",
+                    params![version, unix_millis()],
+                )?;
+            }
         }
         initialize_defaults(&transaction)?;
         transaction.commit()?;
@@ -394,10 +401,12 @@ pub fn unix_millis() -> i64 {
 mod tests {
     use std::collections::{HashMap, HashSet};
 
+    use rusqlite::Connection;
     use tempfile::tempdir;
 
     use super::{
         RecentDocument, RecoverySnapshotWrite, SqliteRepository, UserTemplate, WindowState,
+        DEFAULT_SETTINGS, INITIAL_MIGRATION,
     };
 
     fn repository() -> SqliteRepository {
@@ -431,16 +440,119 @@ mod tests {
                 "user_templates".to_owned(),
             ])
         );
-        assert_eq!(
+        let versions = connection
+            .prepare("SELECT version FROM schema_migrations ORDER BY version")
+            .unwrap()
+            .query_map([], |row| row.get::<_, i64>(0))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(versions, vec![1, 2]);
+    }
+
+    #[test]
+    fn migrates_a_v1_database_without_losing_legacy_recovery_data() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("metadata.db");
+        {
+            let connection = Connection::open(&path).unwrap();
+            connection.execute_batch(INITIAL_MIGRATION).unwrap();
             connection
-                .query_row(
-                    "SELECT COUNT(*) FROM schema_migrations WHERE version=1",
+                .execute(
+                    "INSERT INTO schema_migrations(version,applied_at) VALUES(1,1)",
                     [],
-                    |row| row.get::<_, i64>(0)
                 )
-                .unwrap(),
-            1
+                .unwrap();
+            connection
+                .execute(
+                    "INSERT INTO recovery_snapshots(document_id,name,document_json,source_path,updated_at) VALUES(?1,?2,?3,?4,?5)",
+                    ("legacy", "旧恢复", "{\"schemaVersion\":1}", "C:/legacy.flowdiagram", 100),
+                )
+                .unwrap();
+        }
+
+        let repository = SqliteRepository::open(&path).unwrap();
+        let legacy = repository.latest_recovery().unwrap().unwrap();
+        assert_eq!(legacy.document_id, "legacy");
+        assert_eq!(legacy.version_token, "");
+        assert_eq!(legacy.document_json, "{\"schemaVersion\":1}");
+
+        repository.delete_recovery("legacy", "not-empty").unwrap();
+        assert_eq!(
+            repository.latest_recovery().unwrap().unwrap().document_id,
+            "legacy"
         );
+
+        repository
+            .upsert_recovery(&RecoverySnapshotWrite {
+                document_id: "current".into(),
+                version_token: "2:3".into(),
+                name: "新恢复".into(),
+                document_json: "{\"schemaVersion\":1}".into(),
+                source_path: None,
+                updated_at: 200,
+            })
+            .unwrap();
+        repository.delete_recovery("current", "wrong").unwrap();
+        assert_eq!(
+            repository.latest_recovery().unwrap().unwrap().version_token,
+            "2:3"
+        );
+        repository.delete_recovery("current", "2:3").unwrap();
+        assert_eq!(
+            repository.latest_recovery().unwrap().unwrap().document_id,
+            "legacy"
+        );
+
+        let connection = repository.connection.lock().unwrap();
+        let versions = connection
+            .prepare("SELECT version FROM schema_migrations ORDER BY version")
+            .unwrap()
+            .query_map([], |row| row.get::<_, i64>(0))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(versions, vec![1, 2]);
+
+        let names = connection
+            .prepare(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+            )
+            .unwrap()
+            .query_map([], |row| row.get::<_, String>(0))
+            .unwrap()
+            .collect::<Result<HashSet<_>, _>>()
+            .unwrap();
+        assert_eq!(
+            names,
+            HashSet::from([
+                "schema_migrations".to_owned(),
+                "app_settings".to_owned(),
+                "recent_documents".to_owned(),
+                "recovery_snapshots".to_owned(),
+                "shape_usage".to_owned(),
+                "window_state".to_owned(),
+                "user_templates".to_owned(),
+            ])
+        );
+        let settings = connection
+            .prepare("SELECT setting_key,value_json FROM app_settings")
+            .unwrap()
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .unwrap()
+            .collect::<Result<HashMap<String, String>, _>>()
+            .unwrap();
+        assert_eq!(
+            settings,
+            DEFAULT_SETTINGS
+                .into_iter()
+                .map(|(key, value)| (key.to_owned(), value.to_owned()))
+                .collect()
+        );
+        drop(connection);
+
+        repository.delete_recovery("legacy", "").unwrap();
+        assert!(repository.latest_recovery().unwrap().is_none());
     }
 
     #[test]
