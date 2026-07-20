@@ -1,25 +1,28 @@
 import { mount } from '@vue/test-utils'
-import { createPinia, setActivePinia } from 'pinia'
 import LayerManager from '@/ui/layers/LayerManager.vue'
-import { useDocumentStore } from '@/stores/document-store'
-import { useSelectionStore } from '@/stores/selection-store'
-import { createTestDocument } from '../helpers/test-document'
 
 describe('LayerManager', () => {
   it('lists nodes and edges descending by zIndex, selects, and uses z-order commands', async () => {
-    setActivePinia(createPinia())
-    const documentStore = useDocumentStore()
-    const selection = useSelectionStore()
-    const document = createTestDocument()
-    document.pages[0].nodes.forEach((node, index) => { node.zIndex = index + 1 })
-    document.pages[0].edges.forEach((edge, index) => { edge.zIndex = index + 4 })
-    documentStore.loadDocument(document)
-    const wrapper = mount(LayerManager)
+    const calls: string[] = []
+    let selected = ''
+    const controller = {
+      cells: () => [
+        { id: 'edge-2', kind: 'edge' as const, name: '边2', zIndex: 5 },
+        { id: 'edge-1', kind: 'edge' as const, name: '边1', zIndex: 4 },
+        { id: 'node-3', kind: 'node' as const, name: '三', zIndex: 3 },
+        { id: 'node-2', kind: 'node' as const, name: '二', zIndex: 2 },
+        { id: 'node-1', kind: 'node' as const, name: '一', zIndex: 1 },
+      ],
+      isSelected: (id: string) => selected === id,
+      locate: (id: string) => { selected = id; calls.push(`locate:${id}`) },
+      move: (action: string) => calls.push(`move:${action}`),
+    }
+    const wrapper = mount(LayerManager, { props: { controller } })
     expect(wrapper.findAll('[data-testid="layer-item"]').map((item) => item.attributes('data-cell-id'))).toEqual(['edge-2', 'edge-1', 'node-3', 'node-2', 'node-1'])
     await wrapper.find('[data-cell-id="node-1"]').trigger('click')
-    expect(selection.selectedIds).toEqual(['node-1'])
+    expect(calls).toContain('locate:node-1')
     await wrapper.find('[data-testid="layer-front"]').trigger('click')
-    expect(documentStore.undoLabel).toBe('置于顶层')
+    expect(calls).toContain('move:to-front')
     expect(wrapper.text()).not.toContain('隐藏')
   })
 })

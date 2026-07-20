@@ -1,5 +1,6 @@
 import { createDefaultTextContent } from '@/domain/diagram'
 import { MenuCommandController } from '@/application/menus/menu-command-controller'
+import type { EditorCommand } from '@/application/commands/editor-command'
 import { createTestDocument, createTestNode } from '../../../helpers/test-document'
 
 function setup() {
@@ -21,7 +22,7 @@ function setup() {
     undo: () => calls.push('undo'), redo: () => calls.push('redo'),
     cutSelection: () => calls.push('cut'), copySelection: () => { calls.push('copy'); documentPort.clipboard = {} },
     pasteClipboard: () => calls.push('paste'), deleteSelection: () => calls.push('delete'),
-    executeCommand: (command: { label: string }) => calls.push(`execute:${command.label}`),
+    executeCommand: (command: EditorCommand) => { calls.push(`execute:${command.label}`) },
     setNotice: (notice: string) => calls.push(`notice:${notice}`),
     createNodeFromShape: (shape: string) => calls.push(`shape:${shape}`),
   }
@@ -30,10 +31,15 @@ function setup() {
     toggleGuides: () => calls.push('guides'), togglePageBreaks: () => calls.push('breaks'),
     toggleSnap: () => calls.push('snap'),
   }
-  const callbacks = new Proxy<Record<string, () => void>>({}, {
-    get: (_, key) => () => calls.push(`callback:${String(key)}`),
-  })
-  return { controller: new MenuCommandController({ document: documentPort, selection, app, callbacks }), calls, selection, documentPort }
+  const formatPaint = { armOnce: () => calls.push('format-paint') }
+  const callbacks = {
+    save: () => calls.push('callback:save'),
+    editText: ({ cellId }: { cellId: string }) => calls.push(`edit-text:${cellId}`),
+    editLabel: ({ cellId }: { cellId: string }) => calls.push(`edit-label:${cellId}`),
+    focusInspector: ({ section }: { section: string }) => calls.push(`inspector:${section}`),
+    openContainerPicker: (request: { mode: string }) => calls.push(`picker:${request.mode}`),
+  }
+  return { controller: new MenuCommandController({ document: documentPort, selection, app, formatPaint, callbacks }), calls, selection, documentPort }
 }
 
 describe('MenuCommandController', () => {
@@ -80,6 +86,63 @@ describe('MenuCommandController', () => {
     documentPort.document.pages[0].nodes[0].parentId = 'container-1'
     selection.selectedIds = ['n1']
     controller.execute('arrange-ungroup')
-    expect(calls).toContain('execute:移出容器')
+    expect(calls).toContain('notice:请先选择组合。')
+  })
+
+  it('routes former context placeholders through typed interaction ports', () => {
+    const { controller, calls, selection } = setup()
+    selection.selectedIds = ['n1']
+    controller.execute('context-edit-text')
+    controller.execute('context-link')
+    controller.execute('format-font')
+    controller.execute('context-format-paint')
+    expect(calls).toEqual(['edit-text:n1', 'inspector:link', 'inspector:text', 'format-paint'])
+
+    selection.selectedIds = ['edge-1']
+    controller.execute('context-edit-label')
+    controller.execute('context-line-style')
+    expect(calls.slice(-2)).toEqual(['edit-label:edge-1', 'inspector:line'])
+  })
+
+  it('guards arrangement commands with the same exact prerequisites as menus', () => {
+    const { controller, calls, selection } = setup()
+    selection.selectedIds = ['n1']
+    controller.execute('arrange-align-left')
+    controller.execute('arrange-distribute-horizontal')
+    controller.execute('arrange-auto-connect')
+    expect(calls).toEqual([
+      'notice:至少选择两个节点。',
+      'notice:至少选择三个节点。',
+      'notice:至少选择两个节点。',
+    ])
+  })
+
+  it('opens an explicit container picker and executes membership only after confirmation', () => {
+    const { controller, calls, selection, documentPort } = setup()
+    documentPort.document.pages[0].nodes.push(createTestNode({ id: 'container', isContainer: true }))
+    documentPort.executeCommand = (command: EditorCommand) => {
+      calls.push(`execute:${command.label}`)
+      documentPort.document = command.apply(documentPort.document)
+    }
+    selection.selectedIds = ['n1']
+    controller.execute('context-add-container')
+    expect(calls).toEqual(['picker:add-to-container'])
+    expect(documentPort.document.pages[0].nodes.find((node) => node.id === 'n1')?.parentId).toBeUndefined()
+    controller.confirmContainerMembership({ containerId: 'container', memberIds: ['n1'] })
+    expect(documentPort.document.pages[0].nodes.find((node) => node.id === 'n1')?.parentId).toBe('container')
+
+    selection.selectedIds = ['container']
+    controller.execute('context-add-members')
+    expect(calls).toContain('picker:add-members')
+  })
+
+  it('does not offer a descendant container that would create a membership cycle', () => {
+    const { controller, calls, selection, documentPort } = setup()
+    documentPort.document.pages[0].nodes.push(createTestNode({
+      id: 'container', isContainer: true, parentId: 'n1',
+    }))
+    selection.selectedIds = ['n1']
+    controller.execute('context-add-container')
+    expect(calls).toEqual(['notice:没有可加入的目标容器。'])
   })
 })

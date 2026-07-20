@@ -1,4 +1,6 @@
 import { featureHelpRegistry, getFeatureHelp } from '@/ui/help/feature-help-registry'
+import { readFileSync, existsSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 describe('功能帮助注册表', () => {
   it('至少包含 undo 与 redo 两条首批条目', () => {
@@ -48,7 +50,7 @@ describe('功能帮助注册表', () => {
       }
       // 视图操作的撤销边界必须写明不进入撤销历史
       expect(entry?.undoBoundary).toContain('不进入撤销历史')
-      expect(entry?.docAnchor).toBe('user-guide#画布与视图')
+      expect(entry?.docAnchor).toBe('docs/user-guide.md#画布与视图')
     }
   })
 
@@ -195,5 +197,25 @@ describe('功能帮助注册表', () => {
     expect(entry?.operation).toContain('Ctrl')
     expect(entry?.limits).toContain('http')
     expect(entry?.limits).toContain('mailto')
+  })
+
+  it('每个文档锚点都解析到现有 Markdown 标题', () => {
+    const slug = (heading: string) => heading
+      .toLocaleLowerCase()
+      .replace(/[^\p{L}\p{N}\s-]/gu, '')
+      .trim()
+      .replace(/\s+/g, '-')
+    for (const entry of featureHelpRegistry.values()) {
+      const [relativePath, anchor, extra] = entry.docAnchor.split('#')
+      expect(extra, entry.id).toBeUndefined()
+      expect(relativePath, entry.id).toMatch(/^docs\/.+\.md$/)
+      const filePath = resolve(process.cwd(), relativePath)
+      expect(existsSync(filePath), entry.docAnchor).toBe(true)
+      const headings = readFileSync(filePath, 'utf8')
+        .split(/\r?\n/)
+        .filter((line) => /^#+\s/.test(line))
+        .map((line) => slug(line.replace(/^#+\s+/, '')))
+      expect(headings, entry.docAnchor).toContain(anchor)
+    }
   })
 })

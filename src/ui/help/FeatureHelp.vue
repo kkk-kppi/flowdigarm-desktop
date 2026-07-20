@@ -1,6 +1,6 @@
 <template>
-  <aside v-if="entry" class="feature-help" role="complementary" tabindex="-1" :aria-label="`${entry.title}帮助`" @keydown="onKeydown">
-    <header><h2>{{ entry.title }}</h2><button type="button" aria-label="关闭帮助" title="关闭帮助。返回此前的编辑位置。" @click="close">×</button></header>
+  <aside v-if="entry" ref="panel" class="feature-help" role="complementary" tabindex="-1" :aria-label="`${entry.title}帮助`">
+    <header><h2>{{ entry.title }}</h2><button ref="closeButton" type="button" aria-label="关闭帮助" title="关闭帮助。返回此前的编辑位置。" @click="close">×</button></header>
     <dl>
       <dt>目的</dt><dd>{{ entry.purpose }}</dd>
       <dt>操作方式</dt><dd>{{ entry.operation }}</dd>
@@ -8,19 +8,30 @@
       <dt>撤销边界</dt><dd>{{ entry.undoBoundary }}</dd>
       <dt>限制</dt><dd>{{ entry.limits }}</dd>
     </dl>
-    <a :href="`#${entry.docAnchor}`">查看文档：{{ entry.docAnchor }}</a>
+    <a :href="entry.docAnchor">查看文档：{{ entry.docAnchor }}</a>
   </aside>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getFeatureHelp } from './feature-help-registry'
-const props = defineProps<{ helpId: string }>()
+const props = defineProps<{ helpId: string; returnFocus?: HTMLElement | null }>()
 const emit = defineEmits<{ close: [] }>()
-const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+const fallbackFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+const panel = ref<HTMLElement | null>(null)
+const closeButton = ref<HTMLButtonElement | null>(null)
 const entry = computed(() => getFeatureHelp(props.helpId))
-function close(): void { emit('close'); returnFocus?.focus() }
+function close(): void {
+  emit('close')
+  const target = props.returnFocus?.isConnected ? props.returnFocus : fallbackFocus?.isConnected ? fallbackFocus : null
+  target?.focus()
+}
 function onKeydown(event: KeyboardEvent): void { if (event.key === 'Escape') { event.preventDefault(); close() } }
+onMounted(() => {
+  document.addEventListener('keydown', onKeydown)
+  void nextTick(() => (closeButton.value ?? panel.value)?.focus())
+})
+onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 </script>
 
 <style scoped>

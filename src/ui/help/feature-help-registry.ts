@@ -309,7 +309,7 @@ const entries: readonly FeatureHelpEntry[] = [
     operation: '在右侧查找替换面板输入文本，选择范围、大小写和全词选项；全部替换需预览后确认。',
     scope: '仅搜索节点文本与边标签，可限定当前页或全部页面。',
     undoBoundary: '单次替换是一条编辑文本记录；全部替换无论命中多少处都只产生一条记录。',
-    limits: '不搜索链接、业务数据或页面名称；全部替换后的单段文本不能超过长度限制。', docAnchor: 'user-guide#查找替换',
+    limits: '不搜索链接、业务数据或页面名称；大小写不敏感匹配保留重音差异，不做 Unicode 规范化；全部替换后的单段文本不能超过长度限制。', docAnchor: 'user-guide#查找替换',
   },
   {
     id: 'menus', title: '应用菜单', purpose: '集中提供文件、编辑、视图、插入、格式、工具与帮助命令。',
@@ -345,8 +345,14 @@ const entries: readonly FeatureHelpEntry[] = [
 ]
 
 /** 全部已注册的功能帮助条目，按 id 索引。 */
+function normalizedDocAnchor(anchor: string): string {
+  const [file, rawHeading] = anchor.split('#')
+  const heading = rawHeading === '菜单' || rawHeading === '右键菜单' ? '菜单与右键' : rawHeading
+  return `docs/${file}.md#${heading}`
+}
+
 export const featureHelpRegistry: ReadonlyMap<string, FeatureHelpEntry> = new Map(
-  entries.map((entry) => [entry.id, entry]),
+  entries.map((entry) => [entry.id, { ...entry, docAnchor: normalizedDocAnchor(entry.docAnchor) }]),
 )
 
 /** 按 id 查询帮助条目；未注册时返回 undefined。 */

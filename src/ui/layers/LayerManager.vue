@@ -12,39 +12,21 @@
       type="button"
       data-testid="layer-item"
       :data-cell-id="cell.id"
-      :class="{ selected: selectionStore.isSelected(cell.id) }"
-      @click="select(cell.id)"
+        :class="{ selected: controller.isSelected(cell.id) }"
+        @click="controller.locate(cell.id)"
     ><span>{{ cell.kind === 'node' ? '节点' : '连线' }}</span><strong>{{ cell.name }}</strong><small>z {{ cell.zIndex }}</small></button>
   </aside>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { createZOrderCommand, type ZOrderAction } from '@/application/arrangement/z-order'
-import { useDocumentStore } from '@/stores/document-store'
-import { useSelectionStore } from '@/stores/selection-store'
+import type { ZOrderAction } from '@/application/arrangement/z-order'
+import type { LayerManagerPort } from '@/application/layers/layer-manager-controller'
 
-const emit = defineEmits<{ locate: [cellId: string] }>()
-const documentStore = useDocumentStore()
-const selectionStore = useSelectionStore()
-const cells = computed(() => {
-  const page = documentStore.activePage
-  if (!page) return []
-  return [
-    ...page.nodes.map((node) => ({ id: node.id, kind: 'node' as const, name: node.text?.value || node.shape, zIndex: node.zIndex })),
-    ...page.edges.map((edge) => ({ id: edge.id, kind: 'edge' as const, name: edge.labels[0]?.text.value || edge.id, zIndex: edge.zIndex })),
-  ].sort((a, b) => b.zIndex - a.zIndex)
-})
-function select(cellId: string): void {
-  selectionStore.setSelection([cellId])
-  emit('locate', cellId)
-}
+const props = defineProps<{ controller: LayerManagerPort }>()
+const cells = computed(() => props.controller.cells())
 function move(action: ZOrderAction): void {
-  const page = documentStore.activePage
-  if (!page) return
-  const command = createZOrderCommand(page, selectionStore.selectedIds, action)
-  if (command) documentStore.executeCommand(command)
-  else documentStore.setNotice('当前图元已在目标层级。')
+  props.controller.move(action)
 }
 </script>
 

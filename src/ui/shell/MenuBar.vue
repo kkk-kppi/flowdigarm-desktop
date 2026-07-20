@@ -65,7 +65,7 @@ import { nextTick, onBeforeUnmount, onMounted, ref, type ComponentPublicInstance
 import type { MenuDefinition, MenuItem } from '@/application/menus/menu-model'
 
 const props = defineProps<{ menus: MenuDefinition[] }>()
-const emit = defineEmits<{ execute: [id: string] }>()
+const emit = defineEmits<{ execute: [id: string, trigger: HTMLButtonElement | null] }>()
 const root = ref<HTMLElement | null>(null)
 const triggers: HTMLButtonElement[] = []
 const itemElements: HTMLButtonElement[] = []
@@ -147,7 +147,7 @@ function onMenuKeydown(event: KeyboardEvent): void {
 function runItem(item: MenuItem | undefined): void {
   if (!item || item.disabledReason) return
   if (item.children) { submenuIndex.value = activeItem.value; return }
-  emit('execute', item.id)
+  emit('execute', item.id, triggers[openIndex.value] ?? null)
   close(true)
 }
 function close(restoreFocus: boolean): void {

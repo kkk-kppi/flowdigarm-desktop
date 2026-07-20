@@ -7,13 +7,13 @@
       @maximize="onWindowCommand('maximize')"
       @close="onWindowCommand('close')"
     />
-    <MenuBar :menus="menus" @execute="menuController.execute($event)" />
+    <MenuBar :menus="menus" @execute="onMenuExecute" />
     <CompactToolbar />
     <PageTabs />
     <div class="shell-main" data-testid="shell-main">
       <ElementLibrary @create-request="onCreateRequest" @more-shapes="onMoreShapes" />
       <CanvasArea ref="canvasAreaRef" class="shell-canvas" :menu-controller="menuController" @viewport-change="onViewportChange" />
-      <RightPanel>
+      <RightPanel ref="rightPanelRef">
         <template #find>
           <FindReplaceTab
             :controller="findController"
@@ -25,7 +25,7 @@
       </RightPanel>
       <div v-if="appStore.layerManagerOpen" class="layer-wrap">
         <button type="button" class="layer-close" aria-label="关闭图层管理" title="关闭图层管理。返回完整画布空间。" @click="appStore.closeLayerManager()">×</button>
-        <LayerManager />
+        <LayerManager :controller="layerController" />
       </div>
     </div>
     <StatusBar
@@ -38,7 +38,13 @@
       :dirty="documentStore.dirty"
       @set-zoom="onSetZoom"
     />
-    <FeatureHelp v-if="appStore.helpId" :help-id="appStore.helpId" @close="appStore.closeHelp()" />
+    <FeatureHelp v-if="appStore.helpId" :help-id="appStore.helpId" :return-focus="helpReturnFocus" @close="closeHelp" />
+    <ContainerMembershipPicker
+      v-if="containerPickerRequest"
+      :request="containerPickerRequest"
+      @confirm="confirmContainerMembership"
+      @cancel="containerPickerRequest = null"
+    />
   </div>
 </template>
 
@@ -55,15 +61,26 @@ import TitleBar from './TitleBar.vue'
 import StatusBar from './StatusBar.vue'
 import LayerManager from '@/ui/layers/LayerManager.vue'
 import FeatureHelp from '@/ui/help/FeatureHelp.vue'
+import ContainerMembershipPicker from '@/ui/components/ContainerMembershipPicker.vue'
 import { shapeDragStartKey } from '@/ui/shapes/shape-drag-key'
 import { createMainMenus } from '@/application/menus/menu-model'
-import { MenuCommandController, type MenuCallbacks } from '@/application/menus/menu-command-controller'
+import { isContainerNode } from '@/application/menus/container-picker-options'
+import {
+  MenuCommandController,
+  type ContainerMembershipSelection,
+  type ContainerPickerRequest,
+  type MenuCallbacks,
+  type MenuInvocation,
+} from '@/application/menus/menu-command-controller'
+import type { CanvasController } from '@/application/canvas/canvas-controller'
+import { LayerManagerController } from '@/application/layers/layer-manager-controller'
 import { FindController } from '@/application/search/find-controller'
 import { formatMeasure } from '@/domain/measurement'
 import type { ViewportState } from '@/application/viewport/viewport-transform'
 import { useAppStore } from '@/stores/app-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { useSelectionStore } from '@/stores/selection-store'
+import { useFormatPaintStore } from '@/stores/format-paint-store'
 
 const emit = defineEmits<{
   fileCommand: [command: 'new' | 'open' | 'save' | 'saveAs' | 'recent' | 'export']
@@ -73,8 +90,12 @@ const emit = defineEmits<{
 const appStore = useAppStore()
 const documentStore = useDocumentStore()
 const selectionStore = useSelectionStore()
+const formatPaintStore = useFormatPaintStore()
 
-const canvasAreaRef = ref<InstanceType<typeof CanvasArea> | null>(null)
+const canvasAreaRef = ref<CanvasController | null>(null)
+const rightPanelRef = ref<{ focusSection(section: 'link' | 'text' | 'line'): Promise<void> } | null>(null)
+const helpReturnFocus = ref<HTMLElement | null>(null)
+const containerPickerRequest = ref<ContainerPickerRequest | null>(null)
 const viewport = reactive<ViewportState>({ zoom: 1, panX: 0, panY: 0 })
 
 const fileName = computed(() => {
@@ -88,11 +109,23 @@ const anchorPosition = computed(() => {
   if (!page || !anchor) return null
   return { x: `${formatMeasure(anchor.x, page.unit)} ${page.unit}`, y: `${formatMeasure(anchor.y, page.unit)} ${page.unit}` }
 })
+const selectionSummary = computed(() => {
+  const page = documentStore.activePage
+  const selectedNodes = page?.nodes.filter((node) => selectionStore.selectedIds.includes(node.id)) ?? []
+  const selectedEdges = page?.edges.filter((edge) => selectionStore.selectedIds.includes(edge.id)) ?? []
+  return {
+    selectedNodeCount: selectedNodes.length,
+    selectedGroupCount: selectedNodes.filter((node) => node.shape === 'group').length,
+    selectedContainerCount: selectedNodes.filter(isContainerNode).length,
+    hasTextSelection: selectedNodes.some((node) => node.text !== undefined) || selectedEdges.some((edge) => edge.labels.length > 0),
+  }
+})
 const menus = computed(() => createMainMenus({
   canUndo: documentStore.canUndo,
   canRedo: documentStore.canRedo,
   hasSelection: selectionStore.hasSelection,
   canPaste: documentStore.clipboard !== null,
+  ...selectionSummary.value,
   showRulers: appStore.showRulers,
   showGrid: appStore.showGrid,
   showGuides: appStore.showGuides,
@@ -120,29 +153,37 @@ const menuCallbacks: MenuCallbacks = {
   fitSelection: () => canvasAreaRef.value?.fitSelection(),
   insertEdge: () => documentStore.setNotice('请从节点端口拖动以创建连接线。'),
   insertImage: () => documentStore.setNotice('外部图片文件选择将在下一步桌面接线中提供。'),
-  font: () => documentStore.setNotice('请在右侧属性面板设置字体。'),
   alignment: () => documentStore.setNotice('请从“工具 → 对齐”选择具体方向。'),
   autoAlign: () => documentStore.setNotice('请从“工具 → 对齐”选择具体方向。'),
   find: () => appStore.openFindPanel(),
   layers: () => appStore.openLayerManager(),
-  preferences: () => appStore.openHelp('preferences'),
-  helpCenter: () => appStore.openHelp('menus'),
-  shortcuts: () => appStore.openHelp('shortcuts'),
-  about: () => appStore.openHelp('about'),
-  editText: () => documentStore.setNotice('按 F2 或双击节点编辑文本。'),
-  editLabel: () => documentStore.setNotice('双击连线编辑标签。'),
-  link: () => documentStore.setNotice('请在右侧属性面板设置链接。'),
-  lineStyle: () => documentStore.setNotice('请在右侧属性面板设置线条样式。'),
-  formatPaint: () => documentStore.setNotice('请使用工具栏格式刷。'),
-  addContainer: () => documentStore.setNotice('请先同时选择成员与目标容器。'),
-  addMembers: () => documentStore.setNotice('请先同时选择容器和要添加的成员。'),
+  preferences: (request) => openHelp('preferences', request),
+  helpCenter: (request) => openHelp('menus', request),
+  shortcuts: (request) => openHelp('shortcuts', request),
+  about: (request) => openHelp('about', request),
+  editText: ({ cellId }) => canvasAreaRef.value?.editNodeText(cellId),
+  editLabel: ({ cellId }) => canvasAreaRef.value?.editEdgeLabel(cellId),
+  focusInspector: ({ section }) => { void rightPanelRef.value?.focusSection(section) },
+  openContainerPicker: (request) => { containerPickerRequest.value = request },
 }
 
 const menuController = new MenuCommandController({
   document: documentStore,
   selection: selectionStore,
   app: appStore,
+  formatPaint: formatPaintStore,
   callbacks: menuCallbacks,
+})
+
+const layerController = new LayerManagerController({
+  getDocument: () => documentStore.document,
+  getActivePageId: () => documentStore.activePageId,
+  switchPage: (pageId) => documentStore.switchPage(pageId),
+  getSelectedIds: () => selectionStore.selectedIds,
+  setSelection: (ids) => selectionStore.setSelection(ids),
+  executeCommand: (command) => documentStore.executeCommand(command),
+  setNotice: (notice) => documentStore.setNotice(notice),
+  canvas: { locateCell: (cellId) => canvasAreaRef.value?.locateCell(cellId) },
 })
 
 const findController = new FindController({
@@ -169,6 +210,25 @@ function onMoreShapes(): void {
 function onWindowCommand(command: 'minimize' | 'maximize' | 'close'): void {
   emit('windowCommand', command)
   documentStore.setNotice('窗口控制将在下一步桌面接线中启用。')
+}
+
+function onMenuExecute(id: string, trigger: HTMLButtonElement | null): void {
+  menuController.execute(id, { trigger })
+}
+
+function openHelp(helpId: string, request: MenuInvocation): void {
+  helpReturnFocus.value = request.trigger?.isConnected ? request.trigger : null
+  appStore.openHelp(helpId)
+}
+
+function closeHelp(): void {
+  appStore.closeHelp()
+  helpReturnFocus.value = null
+}
+
+function confirmContainerMembership(selection: ContainerMembershipSelection): void {
+  menuController.confirmContainerMembership(selection)
+  containerPickerRequest.value = null
 }
 
 function onSetZoom(value: number | 'fit'): void {

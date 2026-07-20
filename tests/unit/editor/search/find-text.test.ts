@@ -70,6 +70,39 @@ describe('findText', () => {
     expect(matches.map((match) => match.start)).toEqual([13])
   })
 
+  it('returns original UTF-16 offsets when case folding expands characters', () => {
+    const document = createTestDocument()
+    document.pages[0].nodes = [createTestNode({
+      id: 'n1', text: createDefaultTextContent('😀İX x 中文x'),
+    })]
+
+    const matches = findText(document, {
+      query: 'x', scope: 'allPages', caseSensitive: false, wholeWord: false,
+    })
+
+    expect(matches.map(({ start, end }) => ({ start, end }))).toEqual([
+      { start: 3, end: 4 },
+      { start: 5, end: 6 },
+      { start: 9, end: 10 },
+    ])
+  })
+
+  it('preserves exact Unicode whole-word boundaries without accent folding', () => {
+    const document = createTestDocument()
+    document.pages[0].nodes = [createTestNode({
+      id: 'n1', text: createDefaultTextContent('X xX (x) éx 中文 x x'),
+    })]
+
+    expect(findText(document, {
+      query: 'x', scope: 'allPages', caseSensitive: false, wholeWord: true,
+    }).map(({ start, end }) => ({ start, end }))).toEqual([
+      { start: 0, end: 1 },
+      { start: 6, end: 7 },
+      { start: 15, end: 16 },
+      { start: 17, end: 18 },
+    ])
+  })
+
   it('returns no matches for an empty query or a missing current page', () => {
     const document = createTestDocument()
     expect(findText(document, {

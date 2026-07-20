@@ -33,4 +33,11 @@ describe('desktop shell bars', () => {
     await wrapper.find('[data-testid="status-zoom"]').setValue('1.5')
     expect(wrapper.emitted('setZoom')?.[0]).toEqual([1.5])
   })
+
+  it('shows a selected custom option for a fit-derived zoom', () => {
+    const wrapper = mount(StatusBar, { props: { selectedCount: 0, pageIndex: 1, pageCount: 1, zoom: 0.87, dirty: false } })
+    const select = wrapper.find<HTMLSelectElement>('[data-testid="status-zoom"]')
+    expect(select.element.value).toBe('0.87')
+    expect(select.find('option:checked').text()).toBe('87%')
+  })
 })

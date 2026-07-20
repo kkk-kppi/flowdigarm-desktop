@@ -28,6 +28,8 @@
           type="button"
           role="menuitem"
           :data-command-id="child.id"
+          :aria-disabled="Boolean(child.disabledReason)"
+          :title="child.disabledReason"
           :class="{ active: childIndex === indexOfChild }"
           @click="execute(child)"
         >{{ child.label }}</button>
@@ -69,7 +71,7 @@ function onKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') { event.preventDefault(); close(); return }
   if (event.key === 'ArrowRight') {
     const item = props.items[activeIndex.value]
-    if (item?.children) { event.preventDefault(); submenuIndex.value = activeIndex.value; childIndex.value = 0 }
+    if (item?.children) { event.preventDefault(); submenuIndex.value = activeIndex.value; childIndex.value = nextEnabled(item.children, -1, 1) }
     return
   }
   if (event.key === 'ArrowLeft' && submenuIndex.value !== -1) {
@@ -78,6 +80,11 @@ function onKeydown(event: KeyboardEvent): void {
   if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
     event.preventDefault()
     const step = event.key === 'ArrowDown' ? 1 : -1
+    const children = props.items[activeIndex.value]?.children
+    if (submenuIndex.value === activeIndex.value && children) {
+      childIndex.value = nextEnabled(children, childIndex.value, step)
+      return
+    }
     activeIndex.value = (activeIndex.value + step + props.items.length) % props.items.length
     elements[activeIndex.value]?.focus()
   } else if (event.key === 'Enter' || event.key === ' ') {
@@ -86,6 +93,13 @@ function onKeydown(event: KeyboardEvent): void {
     if (submenuIndex.value === activeIndex.value && item?.children) execute(item.children[childIndex.value])
     else execute(item)
   }
+}
+function nextEnabled(items: MenuItem[], current: number, step: number): number {
+  for (let offset = 1; offset <= items.length; offset += 1) {
+    const index = (current + step * offset + items.length) % items.length
+    if (!items[index].disabledReason) return index
+  }
+  return current
 }
 function onDocumentMouseDown(event: MouseEvent): void {
   if (!root.value?.contains(event.target as Node)) close()

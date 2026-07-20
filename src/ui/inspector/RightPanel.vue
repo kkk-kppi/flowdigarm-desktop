@@ -53,7 +53,7 @@
           </button>
         </div>
         <div class="panel-body">
-          <PropertyTab v-if="tab === 'property'" />
+          <PropertyTab v-if="tab === 'property'" ref="propertyTab" />
           <PageSetupTab v-else />
         </div>
       </template>
@@ -70,7 +70,7 @@
 // 左侧边中点折叠按钮收起/展开整栏（app-store.rightPanelCollapsed，视图状态不入历史）；
 // 窄窗口（<1100px）浮层化（floating 类：absolute 右侧 + 阴影，可关闭）；
 // mode='find' 为 Task 8 查找替换预留状态位与插槽。
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useAppStore } from '@/stores/app-store'
 import PageSetupTab from '@/ui/pages/PageSetupTab.vue'
 import PropertyTab from './PropertyTab.vue'
@@ -79,6 +79,7 @@ const props = defineProps<{ mode?: 'tabs' | 'find' }>()
 
 const appStore = useAppStore()
 const tab = ref<'property' | 'page'>('property')
+const propertyTab = ref<{ focusSection(section: 'link' | 'text' | 'line'): Promise<void> } | null>(null)
 const isFloating = ref(false)
 const actualMode = computed<'tabs' | 'find'>(() =>
   props.mode ?? (appStore.rightPanelMode === 'find' ? 'find' : 'tabs'),
@@ -88,6 +89,14 @@ const title = computed(() => {
   if (actualMode.value === 'find') return '查找替换'
   return tab.value === 'property' ? '属性' : '页面设置'
 })
+
+async function focusSection(section: 'link' | 'text' | 'line'): Promise<void> {
+  appStore.showProperties()
+  tab.value = 'property'
+  await nextTick()
+  await propertyTab.value?.focusSection(section)
+}
+defineExpose({ focusSection })
 
 function syncFloating(): void {
   isFloating.value = window.innerWidth < 1100

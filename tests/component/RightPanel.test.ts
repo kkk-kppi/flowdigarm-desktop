@@ -6,6 +6,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import RightPanel from '@/ui/inspector/RightPanel.vue'
 import { useAppStore } from '@/stores/app-store'
 import { useDocumentStore } from '@/stores/document-store'
+import { useSelectionStore } from '@/stores/selection-store'
 import { createTestDocument } from '../helpers/test-document'
 
 function mountPanel() {
@@ -100,6 +101,21 @@ describe('RightPanel', () => {
     expect(wrapper.find('[data-testid="rp-title"]').text()).toBe('查找替换')
     expect(wrapper.find('[data-testid="find-live"]').exists()).toBe(true)
     expect(wrapper.find('[role="tablist"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('opens and focuses requested link, text, and line inspector sections', async () => {
+    const { wrapper } = mountPanel()
+    const selection = useSelectionStore()
+    selection.setSelection(['node-1'])
+    await (wrapper.vm as unknown as { focusSection(section: 'link' | 'text' | 'line'): Promise<void> }).focusSection('link')
+    expect(document.activeElement).toBe(wrapper.find('[data-testid="node-link"]').element)
+    await (wrapper.vm as unknown as { focusSection(section: 'link' | 'text' | 'line'): Promise<void> }).focusSection('text')
+    expect(document.activeElement).toBe(wrapper.find('[data-testid="font-family"]').element)
+    selection.setSelection(['edge-1'])
+    await wrapper.vm.$nextTick()
+    await (wrapper.vm as unknown as { focusSection(section: 'link' | 'text' | 'line'): Promise<void> }).focusSection('line')
+    expect(document.activeElement).toBe(wrapper.find('[data-testid="edge-stroke"]').element)
     wrapper.unmount()
   })
 })

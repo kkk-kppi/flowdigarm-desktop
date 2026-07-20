@@ -67,3 +67,13 @@ Implemented search/replace, seven application menus, contextual menus, title/sta
 
 - Vite reports the existing production chunk above 500 kB (`815.09 kB`, gzip `242.66 kB`); build succeeds and this task does not add a new lazy-loading boundary.
 - Native file dialogs, persistence handler injection, and native window controls intentionally remain Task 8b2 work; current actions emit typed events and show a Chinese notice rather than failing silently.
+
+## Findings Remediation (2026-07-21)
+
+- Replaced all Task 8b1 context-action notices with typed Canvas/inspector/format-paint interactions and an accessible, explicit container/member picker. Membership command construction remains in `MenuCommandController`.
+- Reworked case-insensitive search to compare original code-point-boundary substrings. Match offsets and replace-all slices now always reference original UTF-16 text; locale lowercase matching preserves accent differences and performs no Unicode normalization.
+- Added exact node/group/container/clipboard/text prerequisites to menu and context state, matching controller guards and Chinese disabled reasons.
+- Added context submenu child traversal with disabled-item skipping, document-scoped help Escape/focus restoration, resolvable Markdown anchors, a LayerManager application controller with typed Canvas locating, and custom status zoom options.
+- Focused verification: `pnpm vitest run tests/unit/editor/search tests/unit/editor/menus tests/unit/editor/layers tests/unit/editor/help-registry.test.ts tests/component/MenuBar.test.ts tests/component/CanvasContextMenu.test.ts tests/component/ContainerMembershipPicker.test.ts tests/component/FeatureHelp.test.ts tests/component/LayerManager.test.ts tests/component/RightPanel.test.ts tests/component/CanvasArea.test.ts tests/component/DesktopShellParts.test.ts tests/unit/app-shell.test.ts` PASS, 17 files / 95 tests.
+- Full verification: `pnpm vitest run` PASS, 83 files / 696 tests.
+- Build verification: `pnpm build` PASS (`vue-tsc --noEmit`, Vite 1122 modules); existing chunk-size warning remains (`827.12 kB`, gzip `246.08 kB`).

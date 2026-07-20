@@ -8,6 +8,7 @@
       <span>页 {{ pageIndex }}/{{ pageCount }}</span>
       <label class="zoom-label"><span class="sr-only">缩放比例</span>
         <select data-testid="status-zoom" :value="String(zoom)" title="缩放比例。调整当前页面视图，不修改文档。" @change="onZoom">
+          <option v-if="!isPresetZoom" :value="String(zoom)">{{ Math.round(zoom * 100) }}%</option>
           <option v-for="value in zooms" :key="value" :value="value">{{ Math.round(value * 100) }}%</option>
           <option value="fit">适应屏幕</option>
         </select>
@@ -20,11 +21,13 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useAppStore } from '@/stores/app-store'
-defineProps<{ selectedCount: number; anchorX?: string; anchorY?: string; pageIndex: number; pageCount: number; zoom: number; dirty: boolean }>()
+const props = defineProps<{ selectedCount: number; anchorX?: string; anchorY?: string; pageIndex: number; pageCount: number; zoom: number; dirty: boolean }>()
 const emit = defineEmits<{ setZoom: [zoom: number | 'fit'] }>()
 const appStore = useAppStore()
 const zooms = [0.5, 0.75, 1, 1.25, 1.5, 2]
+const isPresetZoom = computed(() => zooms.includes(props.zoom))
 function onZoom(event: Event): void {
   const value = (event.target as HTMLSelectElement).value
   emit('setZoom', value === 'fit' ? 'fit' : Number(value))

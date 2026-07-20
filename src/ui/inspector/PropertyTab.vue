@@ -1,5 +1,5 @@
 <template>
-  <div class="property-tab" data-testid="property-tab">
+  <div ref="propertyRoot" class="property-tab" data-testid="property-tab">
     <div class="property-help-links" aria-label="属性功能帮助">
       <QuickHelpButton help-id="connect" label="连线" />
       <QuickHelpButton help-id="group-container" label="组合容器" />
@@ -490,7 +490,7 @@
 // 多选聚合：一致显示值、不一致显示「多个值」（颜色混合标记、布尔按钮不定态）、无文本禁用；
 // 任何控件写入 = 全部选中目标一条命令（before 逐目标从文档实读）。
 // 颜色控件用 @change（取色器关闭/确认时一次提交一条记录；拖动过程的 input 事件不入栈）。
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import QuickHelpButton from '@/ui/help/QuickHelpButton.vue'
 import {
   type ConnectorKind,
@@ -540,8 +540,24 @@ import { useSelectionStore } from '@/stores/selection-store'
 
 const documentStore = useDocumentStore()
 const selectionStore = useSelectionStore()
+const propertyRoot = ref<HTMLElement | null>(null)
 
 const expanded = reactive({ info: true, geometry: true, style: true, text: true, edge: true })
+
+async function focusSection(section: 'link' | 'text' | 'line'): Promise<void> {
+  if (section === 'text') expanded.text = true
+  else if (section === 'line') expanded.edge = true
+  else if (selectedEdges.value.length > 0) expanded.edge = true
+  else expanded.info = true
+  await nextTick()
+  const selector = section === 'text'
+    ? '[data-testid="font-family"]'
+    : section === 'line'
+      ? '[data-testid="edge-stroke"]'
+      : '[data-testid="node-link"], [data-testid="edge-link"]'
+  propertyRoot.value?.querySelector<HTMLElement>(selector)?.focus()
+}
+defineExpose({ focusSection })
 
 const page = computed(() => documentStore.activePage)
 const pageUnit = computed(() => page.value?.unit ?? 'mm')

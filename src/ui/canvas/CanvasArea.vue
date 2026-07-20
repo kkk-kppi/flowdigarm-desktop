@@ -85,6 +85,7 @@ import { UpdateEdgeVerticesCommand } from '@/application/commands/update-edge-ve
 import { collectDescendantIds } from '@/application/arrangement/descendants'
 import { openCellHyperlink, shouldOpenHyperlink } from '@/application/links/open-hyperlink'
 import { contextMenuItems, type ContextKind } from '@/application/menus/context-menu-model'
+import { isContainerNode, validContainerMembers, validContainerTargets } from '@/application/menus/container-picker-options'
 import { usePlatform } from '@/platform/platform-provider'
 import { useAppStore } from '@/stores/app-store'
 import { useDocumentStore } from '@/stores/document-store'
@@ -97,7 +98,7 @@ import RulerOverlay from './RulerOverlay.vue'
 import TextEditorOverlay from '@/ui/text/TextEditorOverlay.vue'
 import CanvasContextMenu from '@/ui/components/CanvasContextMenu.vue'
 
-interface MenuControllerPort { execute(id: string): void }
+interface MenuControllerPort { execute(id: string, invocation?: { trigger?: HTMLElement | null }): void }
 const props = defineProps<{ menuController?: MenuControllerPort }>()
 const emit = defineEmits<{ viewportChange: [state: ViewportState] }>()
 
@@ -273,7 +274,11 @@ function fitPage(): void {
   if (size && activePage.value) activeController().fitToPage(activePage.value.pageSize, size)
 }
 function bboxFor(ids: string[]): { x: number; y: number; width: number; height: number } | null {
-  const nodes = activePage.value?.nodes.filter((node) => ids.includes(node.id)) ?? []
+  const page = activePage.value
+  const edgeNodeIds = new Set(page?.edges
+    .filter((edge) => ids.includes(edge.id))
+    .flatMap((edge) => [edge.source.nodeId, edge.target.nodeId]) ?? [])
+  const nodes = page?.nodes.filter((node) => ids.includes(node.id) || edgeNodeIds.has(node.id)) ?? []
   if (nodes.length === 0) return null
   const minX = Math.min(...nodes.map((node) => node.x)); const minY = Math.min(...nodes.map((node) => node.y))
   const maxX = Math.max(...nodes.map((node) => node.x + node.width)); const maxY = Math.max(...nodes.map((node) => node.y + node.height))
@@ -290,7 +295,18 @@ function fitSelection(): void {
   if (size && bbox) activeController().fitToSelection(bbox, size)
   else documentStore.setNotice('请先选择节点。')
 }
-defineExpose({ createShapeAtViewportCenter, startShapeDrag, zoomIn, zoomOut, setZoom, fitPage, fitContent, fitSelection })
+function editNodeText(nodeId: string): void { openNodeTextEditor(nodeId) }
+function editEdgeLabel(edgeId: string): void { openEdgeTextEditor(edgeId) }
+function locateCell(cellId: string): void {
+  const page = activePage.value
+  if (!page?.nodes.some(({ id }) => id === cellId) && !page?.edges.some(({ id }) => id === cellId)) return
+  selectionStore.setSelection([cellId])
+  fitSelection()
+}
+defineExpose({
+  createShapeAtViewportCenter, startShapeDrag, zoomIn, zoomOut, setZoom,
+  fitPage, fitContent, fitSelection, editNodeText, editEdgeLabel, locateCell,
+})
 
 function openContextMenu(args: { kind: 'blank' | 'node' | 'edge'; cellId?: string; x: number; y: number }): void {
   let kind: ContextKind = args.kind
@@ -304,18 +320,27 @@ function openContextMenu(args: { kind: 'blank' | 'node' | 'edge'; cellId?: strin
     selectionStore.setSelection([args.cellId])
   }
   const selectedNodes = activePage.value?.nodes.filter((node) => selectionStore.selectedIds.includes(node.id)) ?? []
+  const selectedEdges = activePage.value?.edges.filter((edge) => selectionStore.selectedIds.includes(edge.id)) ?? []
+  const selectedContainers = selectedNodes.filter(isContainerNode)
+  const page = activePage.value
+  const availableContainers = page ? validContainerTargets(page, selectedNodes.map(({ id }) => id)) : []
+  const canAddMembers = page !== undefined && selectedContainers.length === 1 && validContainerMembers(page, selectedContainers[0].id).length > 0
   contextMenu.value = {
     x: args.x,
     y: args.y,
     items: contextMenuItems(kind, {
       canPaste: documentStore.clipboard !== null,
-      canGroup: selectedNodes.length >= 2,
-      canUngroup: selectedNodes.some((node) => node.shape === 'group' || node.parentId !== undefined),
+      selectedNodeCount: selectedNodes.length,
+      selectedGroupCount: selectedNodes.filter((node) => node.shape === 'group').length,
+      selectedContainerCount: selectedContainers.length,
+      hasTextSelection: selectedNodes.some((node) => node.text !== undefined) || selectedEdges.some((edge) => edge.labels.length > 0),
+      canAddToContainer: selectedNodes.length > 0 && availableContainers.length > 0,
+      canAddMembers,
     }),
   }
 }
 function executeContextCommand(id: string): void {
-  if (props.menuController) props.menuController.execute(id)
+  if (props.menuController) props.menuController.execute(id, { trigger: containerRef.value })
   else documentStore.setNotice('右键命令控制器不可用。')
 }
 

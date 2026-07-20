@@ -6,6 +6,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createDefaultTextContent, type DiagramDocument } from '@/domain/diagram'
 import type { GraphAdapterEvents } from '@/infrastructure/x6/graph-adapter'
 import CanvasArea from '@/ui/canvas/CanvasArea.vue'
+import type { CanvasController } from '@/application/canvas/canvas-controller'
 import { useDocumentStore } from '@/stores/document-store'
 import { useSelectionStore } from '@/stores/selection-store'
 import { createTestDocument } from '../helpers/test-document'
@@ -117,6 +118,17 @@ describe('CanvasArea 超链接点击', () => {
     wrapper.unmount()
   })
 
+  it('exposes typed text-edit and locate interactions', async () => {
+    const { wrapper, selectionStore } = mountCanvas('https://example.com')
+    const canvas = wrapper.vm as unknown as CanvasController
+    canvas.editNodeText('node-1')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.findComponent({ name: 'TextEditorOverlay' }).exists()).toBe(true)
+    canvas.locateCell('node-2')
+    expect(selectionStore.selectedIds).toEqual(['node-2'])
+    wrapper.unmount()
+  })
+
   it('按节点/多选/容器上下文生成菜单并只调用菜单控制器', async () => {
     setActivePinia(createPinia())
     const documentStore = useDocumentStore()
@@ -134,7 +146,7 @@ describe('CanvasArea 超链接点击', () => {
     await wrapper.vm.$nextTick()
     expect(wrapper.find('[role="menu"]').text()).toContain('取消组合或移出容器')
     await wrapper.find('[data-command-id="edit-copy"]').trigger('click')
-    expect(execute).toHaveBeenCalledWith('edit-copy')
+    expect(execute).toHaveBeenCalledWith('edit-copy', { trigger: expect.any(HTMLElement) })
 
     selectionStore.setSelection(['node-1', 'node-2'])
     mocks.events!.onContextMenu?.({ kind: 'node', cellId: 'node-1', x: 30, y: 40 })

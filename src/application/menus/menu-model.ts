@@ -20,6 +20,10 @@ export interface MenuState {
   canRedo: boolean
   hasSelection: boolean
   canPaste: boolean
+  selectedNodeCount: number
+  selectedGroupCount: number
+  selectedContainerCount: number
+  hasTextSelection: boolean
   showRulers?: boolean
   showGrid?: boolean
   showGuides?: boolean
@@ -32,6 +36,10 @@ function disabled(condition: boolean, reason: string): string | undefined {
 
 export function createMainMenus(state: MenuState): MenuDefinition[] {
   const selectionReason = disabled(state.hasSelection, '请先选择图元。')
+  const twoNodesReason = disabled(state.selectedNodeCount >= 2, '至少选择两个节点。')
+  const threeNodesReason = disabled(state.selectedNodeCount >= 3, '至少选择三个节点。')
+  const groupReason = disabled(state.selectedGroupCount > 0, '请先选择组合。')
+  const textReason = disabled(state.hasTextSelection, '所选图元没有可编辑文本。')
   return [
     {
       id: 'file', label: '文件', items: [
@@ -82,20 +90,20 @@ export function createMainMenus(state: MenuState): MenuDefinition[] {
     },
     {
       id: 'format', label: '格式', items: [
-        { id: 'format-font', label: '字体设置', helpId: 'text-style', disabledReason: selectionReason },
-        { id: 'format-alignment', label: '水平/垂直对齐', disabledReason: selectionReason },
+        { id: 'format-font', label: '字体设置', helpId: 'text-style', disabledReason: textReason },
+        { id: 'format-alignment', label: '水平/垂直对齐', disabledReason: twoNodesReason },
         { id: 'arrange-to-front', label: '置于顶层', separatorBefore: true, helpId: 'z-order', disabledReason: selectionReason },
         { id: 'arrange-to-back', label: '置于底层', helpId: 'z-order', disabledReason: selectionReason },
         { id: 'arrange-forward', label: '上移一层', helpId: 'z-order', disabledReason: selectionReason },
         { id: 'arrange-backward', label: '下移一层', helpId: 'z-order', disabledReason: selectionReason },
-        { id: 'arrange-group', label: '组合', separatorBefore: true, helpId: 'group-container', disabledReason: selectionReason },
-        { id: 'arrange-ungroup', label: '取消组合', helpId: 'group-container', disabledReason: selectionReason },
+        { id: 'arrange-group', label: '组合', separatorBefore: true, helpId: 'group-container', disabledReason: twoNodesReason },
+        { id: 'arrange-ungroup', label: '取消组合', helpId: 'group-container', disabledReason: groupReason },
       ],
     },
     {
       id: 'tools', label: '工具', items: [
-        { id: 'tool-auto-align', label: '自动对齐', disabledReason: selectionReason },
-        { id: 'arrange-auto-connect', label: '自动连线', helpId: 'auto-connect', disabledReason: selectionReason },
+        { id: 'tool-auto-align', label: '自动对齐', disabledReason: twoNodesReason },
+        { id: 'arrange-auto-connect', label: '自动连线', helpId: 'auto-connect', disabledReason: twoNodesReason },
         {
           id: 'arrange-align', label: '对齐', helpId: 'align', children: [
             { id: 'arrange-align-left', label: '左对齐' },
@@ -104,13 +112,13 @@ export function createMainMenus(state: MenuState): MenuDefinition[] {
             { id: 'arrange-align-top', label: '顶端对齐' },
             { id: 'arrange-align-middle-v', label: '垂直居中' },
             { id: 'arrange-align-bottom', label: '底端对齐' },
-          ], disabledReason: selectionReason,
+          ], disabledReason: twoNodesReason,
         },
         {
           id: 'arrange-distribute', label: '分布', helpId: 'distribute', children: [
             { id: 'arrange-distribute-horizontal', label: '水平分布' },
             { id: 'arrange-distribute-vertical', label: '垂直分布' },
-          ], disabledReason: selectionReason,
+          ], disabledReason: threeNodesReason,
         },
         { id: 'tool-find', label: '查找替换', separatorBefore: true, helpId: 'find-replace' },
         { id: 'tool-layers', label: '图层管理', helpId: 'layer-manager' },

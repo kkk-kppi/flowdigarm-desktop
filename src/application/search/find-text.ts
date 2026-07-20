@@ -39,21 +39,46 @@ function codePointAt(value: string, index: number): string | undefined {
 }
 
 function positions(value: string, request: FindTextRequest): Array<{ start: number; end: number }> {
+  // Case-insensitive matching uses locale lowercasing without Unicode normalization:
+  // accents remain significant. Compare original substrings so case-fold expansion
+  // (for example, İ -> i + combining dot) never corrupts UTF-16 offsets.
   const query = request.caseSensitive ? request.query : request.query.toLocaleLowerCase()
-  const source = request.caseSensitive ? value : value.toLocaleLowerCase()
   const results: Array<{ start: number; end: number }> = []
+  const boundaries = [0]
+  for (let index = 0; index < value.length;) {
+    index += value.codePointAt(index)! > 0xffff ? 2 : 1
+    boundaries.push(index)
+  }
   let from = 0
-  while (from <= source.length - query.length) {
-    const start = source.indexOf(query, from)
-    if (start === -1) break
-    const end = start + query.length
-    if (
-      !request.wholeWord ||
-      (!isWordCharacter(codePointBefore(value, start)) && !isWordCharacter(codePointAt(value, end)))
-    ) {
-      results.push({ start, end })
+  for (let startIndex = 0; startIndex < boundaries.length - 1;) {
+    const start = boundaries[startIndex]
+    if (start < from) {
+      startIndex += 1
+      continue
     }
-    from = start + Math.max(query.length, 1)
+    let matchedEnd: number | undefined
+    for (let endIndex = startIndex + 1; endIndex < boundaries.length; endIndex += 1) {
+      const end = boundaries[endIndex]
+      const candidate = value.slice(start, end)
+      const comparable = request.caseSensitive ? candidate : candidate.toLocaleLowerCase()
+      if (comparable === query) {
+        matchedEnd = end
+        break
+      }
+      if (comparable.length >= query.length) break
+    }
+    if (matchedEnd !== undefined) {
+      if (
+        !request.wholeWord ||
+        (!isWordCharacter(codePointBefore(value, start)) && !isWordCharacter(codePointAt(value, matchedEnd)))
+      ) {
+        results.push({ start, end: matchedEnd })
+      }
+      from = matchedEnd
+    } else {
+      from = boundaries[startIndex + 1]
+    }
+    startIndex += 1
   }
   return results
 }

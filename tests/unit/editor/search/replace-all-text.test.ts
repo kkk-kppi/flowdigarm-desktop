@@ -49,4 +49,17 @@ describe('createReplaceAllTextCommand', () => {
     expect(() => createReplaceAllTextCommand(document, request, 'x'.repeat(MAX_TEXT_LENGTH + 1)))
       .toThrow('替换后的文本长度超出限制。')
   })
+
+  it('replaces exact original slices after surrogate pairs and expanding case folds', () => {
+    const document = createTestDocument()
+    document.pages[0].nodes = [createTestNode({
+      id: 'n1', text: createDefaultTextContent('😀İX xX 中文x x'),
+    })]
+    const command = createReplaceAllTextCommand(document, {
+      query: 'x', scope: 'allPages', caseSensitive: false, wholeWord: false,
+    }, '值')
+
+    expect(command?.count).toBe(5)
+    expect(command?.apply(document).pages[0].nodes[0].text?.value).toBe('😀İ值 值值 中文值 值')
+  })
 })
