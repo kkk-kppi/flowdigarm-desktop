@@ -116,4 +116,34 @@ describe('功能帮助注册表', () => {
   it('delete-cells 撤销边界写明一次删除多个图元只产生一条记录', () => {
     expect(getFeatureHelp('delete-cells')?.undoBoundary).toContain('一条记录')
   })
+
+  it('文本与样式条目（text-edit/text-style/property-panel/edge-style）均已注册且 8 字段非空', () => {
+    const requiredFields = [
+      'id',
+      'title',
+      'purpose',
+      'operation',
+      'scope',
+      'undoBoundary',
+      'limits',
+      'docAnchor',
+    ] as const
+    for (const id of ['text-edit', 'text-style', 'property-panel', 'edge-style']) {
+      const entry = getFeatureHelp(id)
+      expect(entry, `条目 ${id} 应已注册`).toBeTruthy()
+      for (const field of requiredFields) {
+        expect(entry?.[field], `条目 ${id} 字段 ${field}`).toBeTruthy()
+      }
+    }
+  })
+
+  it('text-edit 撤销边界写明一次编辑会话一条记录；限制写明 IME 组合过程不入栈', () => {
+    expect(getFeatureHelp('text-edit')?.undoBoundary).toContain('一次编辑会话一条记录')
+    expect(getFeatureHelp('text-edit')?.limits).toContain('IME')
+  })
+
+  it('text-style 撤销边界写明一次控件变更一条记录；操作写明 mixed 多值态', () => {
+    expect(getFeatureHelp('text-style')?.undoBoundary).toContain('一次控件变更一条记录')
+    expect(getFeatureHelp('text-style')?.operation).toContain('多个值')
+  })
 })

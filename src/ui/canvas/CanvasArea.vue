@@ -26,6 +26,15 @@
         :viewport="viewport"
         :visible="appStore.showPageBreaks"
       />
+      <TextEditorOverlay
+        v-if="editingSession && activePage"
+        :page-id="activePage.id"
+        :target="editingSession.target"
+        :area-pt="editingSession.areaPt"
+        :content="editingSession.content"
+        :viewport="viewport"
+        @close="editingSession = null"
+      />
     </div>
   </div>
 </template>
@@ -39,14 +48,18 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   createDefaultEdgeStyle,
+  createDefaultTextContent,
   type DiagramEdge,
   type PageUnit,
+  type TextContent,
 } from '@/domain/diagram'
 import type { ViewportController } from '@/application/viewport/viewport-controller'
 import { ViewportTransform, type ViewportState } from '@/application/viewport/viewport-transform'
 import { resolveBackgroundPage } from '@/application/pages/background-page-resolver'
 import { computeRestoredSelection } from '@/application/selection/restore-selection'
 import { GraphAdapter, type EdgeEndpointRef } from '@/infrastructure/x6/graph-adapter'
+import { textAreaForNode } from '@/infrastructure/x6/text-layout'
+import type { TextTarget } from '@/application/commands/edit-text'
 import { shapeRegistry } from '@/application/shapes/shape-registry'
 import '@/application/shapes/common-shapes' // 模块副作用：注册内置形状
 import { CreateCellsCommand } from '@/application/commands/create-cells'
@@ -62,6 +75,7 @@ import PageBreakOverlay from './PageBreakOverlay.vue'
 import PageFrame from './PageFrame.vue'
 import RulerCorner from './RulerCorner.vue'
 import RulerOverlay from './RulerOverlay.vue'
+import TextEditorOverlay from '@/ui/text/TextEditorOverlay.vue'
 
 const appStore = useAppStore()
 const documentStore = useDocumentStore()
@@ -134,6 +148,69 @@ function findEdge(edgeId: string): DiagramEdge | undefined {
   return activePage.value?.edges.find((edge) => edge.id === edgeId)
 }
 
+// ---------- 文本编辑会话（覆盖层；一次会话一条 EditTextCommand，由覆盖层提交） ----------
+
+/** 打开中的文本编辑会话（null = 未编辑）；编辑期间画布键盘快捷键挂起。 */
+const editingSession = ref<{
+  target: TextTarget
+  areaPt: { x: number; y: number; width: number; height: number }
+  content: TextContent
+} | null>(null)
+
+/** 打开节点文本编辑：文本区 = bbox − 形状 textAreaInset（pt，文档坐标）。 */
+function openNodeTextEditor(nodeId: string): void {
+  const page = activePage.value
+  const node = page?.nodes.find((n) => n.id === nodeId)
+  if (!page || !node) {
+    return
+  }
+  const definition = shapeRegistry.get(node.shape)
+  editingSession.value = {
+    target: { kind: 'node', nodeId },
+    areaPt: textAreaForNode(node, definition.textAreaInset),
+    content: node.text ?? createDefaultTextContent(),
+  }
+}
+
+/** 打开边标签文本编辑（首标签；无标签时提交会追加）。 */
+function openEdgeTextEditor(edgeId: string): void {
+  const edge = findEdge(edgeId)
+  if (!edge) {
+    return
+  }
+  editingSession.value = {
+    target: { kind: 'edgeLabel', edgeId, labelIndex: 0 },
+    areaPt: edgeLabelAreaPt(edge),
+    content: edge.labels[0]?.text ?? createDefaultTextContent(),
+  }
+}
+
+/** 边标签编辑锚区：标签沿线位置处 120×28pt 小矩形（X6 view 取点，退化为两端节点中心中点）。 */
+function edgeLabelAreaPt(edge: DiagramEdge): { x: number; y: number; width: number; height: number } {
+  const position = edge.labels[0]?.position ?? 0.5
+  let point: { x: number; y: number } | null = null
+  if (adapter) {
+    const view = adapter.getGraph().findViewByCell(edge.id)
+    if (view && 'getPointAtRatio' in view) {
+      point = (view as { getPointAtRatio: (ratio: number) => { x: number; y: number } })
+        .getPointAtRatio(position)
+    }
+  }
+  if (!point) {
+    const page = activePage.value
+    const source = page?.nodes.find((n) => n.id === edge.source.nodeId)
+    const target = page?.nodes.find((n) => n.id === edge.target.nodeId)
+    point =
+      source && target
+        ? {
+            x: (source.x + source.width / 2 + target.x + target.width / 2) / 2,
+            y: (source.y + source.height / 2 + target.y + target.height / 2) / 2,
+          }
+        : { x: 0, y: 0 }
+  }
+  return { x: point.x - 60, y: point.y - 14, width: 120, height: 28 }
+}
+
 /** 双击创建入口（App 转发）：以视口中心为放置点（px→pt 经 ViewportTransform）。 */
 function createShapeAtViewportCenter(shapeType: string): void {
   const container = containerRef.value
@@ -161,9 +238,21 @@ function isEditableTarget(target: EventTarget | null): boolean {
   )
 }
 
-/** 画布键盘：Delete/Backspace 删除选择（一条记录）；Ctrl+C/X/V 应用内剪贴板。 */
+/** 画布键盘：Delete/Backspace 删除选择（一条记录）；Ctrl+C/X/V 应用内剪贴板；
+ *  F2/Enter（选中单节点）进入文本编辑；文本编辑期间画布快捷键整体挂起。 */
 function onWindowKeyDown(event: KeyboardEvent): void {
   if (isEditableTarget(event.target)) {
+    return
+  }
+  if (editingSession.value) {
+    return // 编辑期间挂起画布快捷键（避免 Delete 删节点等）
+  }
+  if (event.key === 'F2' || event.key === 'Enter') {
+    const ids = selectionStore.selectedIds
+    if (ids.length === 1 && activePage.value?.nodes.some((n) => n.id === ids[0])) {
+      openNodeTextEditor(ids[0])
+      event.preventDefault()
+    }
     return
   }
   if (event.key === 'Delete' || event.key === 'Backspace') {
@@ -282,6 +371,12 @@ onMounted(() => {
         y: topLeftPt.y + def.defaultSize.height / 2,
       })
     },
+    onNodeDblClick: (nodeId) => {
+      openNodeTextEditor(nodeId)
+    },
+    onEdgeDblClick: (edgeId) => {
+      openEdgeTextEditor(edgeId)
+    },
   })
   renderActivePage()
   adapter.setGridVisible(appStore.showGrid)
@@ -313,10 +408,11 @@ onBeforeUnmount(() => {
   adapter = null
 })
 
-// 切换页：重渲染（含背景页）并应用该页视口状态
+// 切换页：重渲染（含背景页）并应用该页视口状态；进行中的文本编辑随页切换关闭
 watch(
   () => documentStore.activePageId,
   () => {
+    editingSession.value = null
     bindViewport()
     renderActivePage()
     fitPageIfFirst()

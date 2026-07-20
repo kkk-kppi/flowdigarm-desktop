@@ -34,4 +34,13 @@ describe('app-store 视图设置', () => {
     store.toggleRulers()
     expect(store.showRulers).toBe(true)
   })
+
+  it('右侧面板折叠默认展开；toggleRightPanel 取反（视图状态）', () => {
+    const store = useAppStore()
+    expect(store.rightPanelCollapsed).toBe(false)
+    store.toggleRightPanel()
+    expect(store.rightPanelCollapsed).toBe(true)
+    store.toggleRightPanel()
+    expect(store.rightPanelCollapsed).toBe(false)
+  })
 })

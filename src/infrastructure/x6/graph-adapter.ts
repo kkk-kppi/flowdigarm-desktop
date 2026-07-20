@@ -54,6 +54,10 @@ export interface GraphAdapterEvents {
   onRotateGesture?: (args: { nodeId: string; before: number; after: number }) => void
   /** Dnd 放置图元库形状（topLeftPt 为放置点节点左上角 pt）。 */
   onShapeDropped?: (args: { shapeType: string; topLeftPt: { x: number; y: number } }) => void
+  /** 双击节点（进入文本编辑入口之一）。 */
+  onNodeDblClick?: (nodeId: string) => void
+  /** 双击边（进入边标签文本编辑入口）。 */
+  onEdgeDblClick?: (edgeId: string) => void
 }
 
 type Unsubscribe = () => void
@@ -242,6 +246,7 @@ export class GraphAdapter {
     this.bindTransformGestures()
     this.bindEdgeTools()
     this.bindShapeDrop()
+    this.bindDblClickReflow()
   }
 
   /**
@@ -362,7 +367,12 @@ export class GraphAdapter {
       target: meta.target,
       vertices: meta.vertices,
       zIndex: meta.zIndex,
-      label: meta.label,
+      // 多标签经 labels 数组渲染（逐标签字体样式）；无标签时为 undefined
+      labels: meta.labels?.map((label) => ({
+        position: label.position,
+        attrs: { label: { text: label.text, ...label.attrs } },
+      })),
+      label: meta.labels ? undefined : meta.label,
       ...connectorOptionsOf(meta),
       attrs: expandStyle(meta.style) as Edge.Metadata['attrs'],
       data: meta.data ? { ...meta.data } : undefined,
@@ -659,6 +669,16 @@ export class GraphAdapter {
       const topLeftPt = node.position()
       node.remove() // 预览节点：领域 CreateCellsCommand 建立后由 renderPage 重绘
       this.events.onShapeDropped?.({ shapeType, topLeftPt })
+    })
+  }
+
+  /** 双击回流：节点/边双击进入文本编辑（命令化由调用方经覆盖层完成）。 */
+  private bindDblClickReflow(): void {
+    this.graph.on('node:dblclick', ({ node }) => {
+      this.events.onNodeDblClick?.(node.id)
+    })
+    this.graph.on('edge:dblclick', ({ edge }) => {
+      this.events.onEdgeDblClick?.(edge.id)
     })
   }
 

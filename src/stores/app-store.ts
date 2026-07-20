@@ -12,6 +12,8 @@ interface AppViewSettings {
   showPageBreaks: boolean
   snapToGrid: boolean
   theme: ThemeMode
+  /** 右侧面板折叠（视图状态，不入撤销历史）。 */
+  rightPanelCollapsed: boolean
 }
 
 export const useAppStore = defineStore('app', {
@@ -22,6 +24,7 @@ export const useAppStore = defineStore('app', {
     showPageBreaks: false,
     snapToGrid: true,
     theme: 'system',
+    rightPanelCollapsed: false,
   }),
   actions: {
     toggleRulers() {
@@ -38,6 +41,9 @@ export const useAppStore = defineStore('app', {
     },
     toggleSnap() {
       this.snapToGrid = !this.snapToGrid
+    },
+    toggleRightPanel() {
+      this.rightPanelCollapsed = !this.rightPanelCollapsed
     },
   },
 })

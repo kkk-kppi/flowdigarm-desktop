@@ -13,6 +13,14 @@ import type {
 import { shapeRegistry, type ShapeDefinition } from '@/application/shapes/shape-registry'
 import '@/application/shapes/common-shapes' // 模块副作用：保证内置形状已注册
 import { x6ConnectorName } from './edge-connector-map'
+import { layoutText, textAreaForNode } from './text-layout'
+
+/** 边标签渲染元数据：文本、沿线位置与 label attrs（字体样式）。 */
+export interface EdgeLabelMetadata {
+  text: string
+  position: number
+  attrs: Record<string, unknown>
+}
 
 export interface CellMetadata {
   id: string
@@ -24,6 +32,8 @@ export interface CellMetadata {
   angle?: number
   zIndex: number
   label?: string
+  /** 边多标签元数据（无标签时缺省）；节点不使用。 */
+  labels?: EdgeLabelMetadata[]
   shape: string
   connector?: ConnectorKind
   /** X6 连接器名称（normal/orth/smooth/jumpover），由 connector + 页面跳线开关算出。 */
@@ -106,9 +116,66 @@ function edgeStyleOf(edge: DiagramEdge): Record<string, unknown> {
   return style
 }
 
+/**
+ * 节点 label 渲染：文本区 = bbox − textAreaInset（经 layoutText 布局一次，文本与样式同源）。
+ * 锚点定位：textAnchor/textVerticalAnchor 决定 x/y 落在文本区左中右/上中下；
+ * refX/refY 归 0（覆盖 X6 默认 0.5 相对定位，避免与绝对 x/y 叠乘）。
+ * 横排开启 textWrap（超出文本区裁剪，不自动增大节点）；竖排逐字 \n 分行、关闭 textWrap。
+ */
+function nodeLabelOf(
+  node: DiagramNode,
+  definition: ShapeDefinition,
+): { text?: string; style: Record<string, unknown> } {
+  if (!node.text) {
+    return { style: {} }
+  }
+  const area = textAreaForNode(node, definition.textAreaInset)
+  const layout = layoutText({
+    content: node.text,
+    areaPt: { width: area.width, height: area.height },
+  })
+  const localX = area.x - node.x
+  const localY = area.y - node.y
+  const anchor = layout.attrs.textAnchor
+  const vAnchor = layout.attrs.textVerticalAnchor
+  const x =
+    anchor === 'start' ? localX : anchor === 'end' ? localX + area.width : localX + area.width / 2
+  const y =
+    vAnchor === 'top'
+      ? localY
+      : vAnchor === 'bottom'
+        ? localY + area.height
+        : localY + area.height / 2
+  const style: Record<string, unknown> = {
+    'label/refX': 0,
+    'label/refY': 0,
+    'label/x': x,
+    'label/y': y,
+  }
+  for (const [key, value] of Object.entries(layout.attrs)) {
+    style[`label/${key}`] = value
+  }
+  if (layout.wrap) {
+    style['label/textWrap'] = { width: area.width, height: area.height, breakWord: true }
+  }
+  return { text: layout.lines.join('\n'), style }
+}
+
+/** 边标签渲染：TextContent 水平排版（字体/颜色/行距；无边文本区，不映射对齐锚点）。 */
+function edgeLabelAttrs(label: DiagramEdge['labels'][number]): Record<string, unknown> {
+  const layout = layoutText({ content: label.text, areaPt: { width: 0, height: 0 } })
+  const attrs: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(layout.attrs)) {
+    if (key === 'textAnchor' || key === 'textVerticalAnchor') continue
+    attrs[key] = value
+  }
+  return attrs
+}
+
 function nodeToCell(node: DiagramNode): CellMetadata {
   // 未知形状在此抛出「未知形状类型：xxx」（注册表为唯一形状真源）
   const definition = shapeRegistry.get(node.shape)
+  const label = nodeLabelOf(node, definition)
   return {
     id: node.id,
     kind: 'node',
@@ -118,11 +185,11 @@ function nodeToCell(node: DiagramNode): CellMetadata {
     height: node.height,
     angle: node.angle,
     zIndex: node.zIndex,
-    label: node.text?.value,
+    label: label.text,
     shape: node.shape,
     ports: shapeRegistry.portIds(node.shape),
     bodyMarkup: { ...definition.body },
-    style: nodeStyleOf(node),
+    style: { ...nodeStyleOf(node), ...label.style },
   }
 }
 
@@ -132,6 +199,15 @@ function edgeToCell(edge: DiagramEdge, showLineJumps: boolean): CellMetadata {
     kind: 'edge',
     zIndex: edge.zIndex,
     label: edge.labels[0]?.text.value,
+    // 标签字体样式逐标签携带（cell 级 label/* 会串扰到全部标签，故不入 style）
+    labels:
+      edge.labels.length > 0
+        ? edge.labels.map((label) => ({
+            text: label.text.value,
+            position: label.position,
+            attrs: edgeLabelAttrs(label),
+          }))
+        : undefined,
     shape: 'edge',
     connector: edge.connector,
     connectorName: x6ConnectorName(edge.connector, showLineJumps),

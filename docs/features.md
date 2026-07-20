@@ -54,23 +54,23 @@
 
 ## 6. 文字与样式（标签输入/字体样式/对齐/格式刷）
 
-- 入口：实现后补全
-- 前置条件：实现后补全
-- 成功结果：实现后补全
-- 失败反馈：实现后补全
-- 撤销边界：实现后补全
-- 数据字段：实现后补全
-- 自动化测试位置：实现后补全（规划：`tests/unit/editor/text/*`、`tests/unit/editor/format-paint.test.ts`、`tests/component/TextEditorOverlay.test.ts`）
+- 入口：覆盖式文本编辑器 `src/ui/text/TextEditorOverlay.vue`（双击节点 / 选中单节点按 F2 或 Enter / 双击边编辑首标签，画布接线 `src/ui/canvas/CanvasArea.vue`）；文本样式控件在紧凑工具栏字体/段落对齐组 `src/ui/toolbar/CompactToolbar.vue` 与属性面板文本区 `src/ui/inspector/PropertyTab.vue`；会话状态机 `src/application/text/text-session.ts`。
+- 前置条件：节点或边已存在；进入编辑时该图元可为空文本（以默认 TextContent 开始）。
+- 成功结果：编辑镜像当前字体样式并按文本区就地覆盖显示；Esc 取消（文档不变），失焦或 Ctrl/Cmd+Enter 提交，Enter 在文本内换行；IME 组合过程不入撤销栈（组合中失焦挂起，上屏后提交）；提交有变更才写文档。批量文本样式（字体/字号/B/I/U/S/字体色/背景色/水平垂直对齐/方向/四边距/段前段后行距）一次控件变更作用于全部选中节点与选中边首标签；多选一致显示值、不一致显示「多个值」（不定态）、无文本禁用。竖排为逐字排版（每字符一行，源文本换行视为换列空行占位），不旋转整段。
+- 失败反馈：提交文本超过 MAX_TEXT_LENGTH（10000）抛「文本长度超出限制。」（通知栏提示，文档不变）。
+- 撤销边界：一次编辑会话一条「编辑文本」记录（未变更不产生）；一次控件变更的全部目标合并为一条「文本样式」记录；编辑期间画布快捷键挂起。
+- 数据字段：`TextContent/TextStyle/TextBlock/TextParagraph`（`src/domain/diagram.ts`）；`EditTextCommand`（`src/application/commands/edit-text.ts`，node 与 edgeLabel 目标，edgeLabel 可追加新标签）；`TextStyleCommand`（`src/application/commands/text-style-command.ts`，style/block/paragraph 三段浅合并）；聚合 `aggregateTextStyles`（`src/application/inspector/aggregate-style.ts`）；目标构建 `buildTextStyleTargets`（`src/application/inspector/text-style-targets.ts`）；渲染布局 `layoutText/textAreaForNode`（`src/infrastructure/x6/text-layout.ts`）。
+- 自动化测试位置：`tests/unit/editor/text/text-session.test.ts`、`tests/unit/editor/commands/edit-text.test.ts`、`tests/unit/editor/commands/text-style-command.test.ts`、`tests/unit/editor/aggregate-style.test.ts`、`tests/unit/editor/text-style-targets.test.ts`、`tests/unit/editor/text-layout.test.ts`、`tests/unit/editor/cell-mapper-text.test.ts`、`tests/component/TextEditorOverlay.test.ts`、`tests/component/CompactToolbar.test.ts`、`tests/component/PropertyTab.test.ts`；格式刷 Task 7 补全（当前为禁用占位按钮）。
 
 ## 7. 形状与边样式（填充/边框/阴影/线型/箭头）
 
-- 入口：实现后补全
-- 前置条件：实现后补全
-- 成功结果：实现后补全
-- 失败反馈：实现后补全
-- 撤销边界：实现后补全
-- 数据字段：实现后补全
-- 自动化测试位置：实现后补全（规划：`tests/unit/editor/commands/apply-style.test.ts`、`tests/component/PropertyTab.test.ts`）
+- 入口：属性面板 `src/ui/inspector/PropertyTab.vue` 样式区（节点：填充色/填充透明度/边框色/边框宽度/虚线/圆角/阴影五参）与边属性区（线条颜色/宽度/透明度/线型/起始箭头/结束箭头/连接类型/标签文本）；右侧面板容器 `src/ui/inspector/RightPanel.vue`。
+- 前置条件：选中至少一个节点（样式区）或至少一条边（边属性区）；节点多选与边混选时仅显示共有可操作区。
+- 成功结果：样式写入立即重渲染（cell-mapper 映射为 X6 attrs：填充/描边/虚线 dasharray/圆角 rx/阴影 dropShadow/箭头 block marker）；多选聚合一致显示值、不一致显示「多个值」（颜色混合标记）；连线类型直线/直角/曲线切换经 X6 connector 生效；边标签文本失焦写入（无标签时追加 position 0.5）。
+- 失败反馈：命令目标不存在时抛「命令目标不存在。」（文档与历史均不变）。
+- 撤销边界：一次控件变更的全部目标合并为一条「应用样式」记录；连线类型变更合并为一条「连线类型」记录；标签文本一次失焦提交一条「编辑文本」记录。
+- 数据字段：`NodeStyle`（fill/fillOpacity/stroke/strokeWidth/strokeDash/cornerRadius/shadow）与 `EdgeStyle`（stroke/strokeWidth/opacity/dash/sourceArrow/targetArrow）、`DiagramEdge.connector`（`src/domain/diagram.ts`）；`ApplyStyleCommand`（`src/application/commands/apply-style.ts`）；`UpdateEdgeConnectorCommand`（`src/application/commands/update-edge-connector.ts`）；聚合 `aggregateNodeStyles/aggregateField`（`src/application/inspector/aggregate-style.ts`）。
+- 自动化测试位置：`tests/unit/editor/commands/apply-style.test.ts`、`tests/unit/editor/commands/update-edge-connector.test.ts`、`tests/unit/editor/aggregate-style.test.ts`、`tests/component/PropertyTab.test.ts`、`tests/component/RightPanel.test.ts`、`tests/unit/editor/cell-mapper-text.test.ts`。
 
 ## 8. 排列（对齐/等距/层序/组合/容器/自动连线）
 
