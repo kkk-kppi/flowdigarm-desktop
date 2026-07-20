@@ -99,10 +99,19 @@ function recordUndoRevision(store: object, pageId: string): boolean {
   const tracker = revisionTrackerOf(store)
   const transitions = transitionsFor(tracker, pageId)
   const transition = transitions.undo.pop()
-  if (transition) transitions.redo.push(transition)
-  tracker.current = transition && tracker.current === transition.afterRevision
-    ? transition.beforeRevision
-    : ++tracker.next
+  if (!transition) return tracker.current !== tracker.saved
+  const preUndoCurrentRevision = tracker.current
+  if (preUndoCurrentRevision === transition.afterRevision) {
+    tracker.current = transition.beforeRevision
+    transitions.redo.push(transition)
+  } else {
+    const freshResultRevision = ++tracker.next
+    tracker.current = freshResultRevision
+    transitions.redo.push({
+      beforeRevision: freshResultRevision,
+      afterRevision: preUndoCurrentRevision,
+    })
+  }
   return tracker.current !== tracker.saved
 }
 
@@ -110,10 +119,19 @@ function recordRedoRevision(store: object, pageId: string): boolean {
   const tracker = revisionTrackerOf(store)
   const transitions = transitionsFor(tracker, pageId)
   const transition = transitions.redo.pop()
-  if (transition) transitions.undo.push(transition)
-  tracker.current = transition && tracker.current === transition.beforeRevision
-    ? transition.afterRevision
-    : ++tracker.next
+  if (!transition) return tracker.current !== tracker.saved
+  const preRedoCurrentRevision = tracker.current
+  if (preRedoCurrentRevision === transition.beforeRevision) {
+    tracker.current = transition.afterRevision
+    transitions.undo.push(transition)
+  } else {
+    const freshResultRevision = ++tracker.next
+    tracker.current = freshResultRevision
+    transitions.undo.push({
+      beforeRevision: preRedoCurrentRevision,
+      afterRevision: freshResultRevision,
+    })
+  }
   return tracker.current !== tracker.saved
 }
 
@@ -178,6 +196,10 @@ export const useDocumentStore = defineStore('document', {
     canRedo(): boolean {
       void this.document
       return this.pageManager.historyFor(this.activePageId).canRedo
+    },
+    currentRevision(): number {
+      void this.document
+      return revisionTrackerOf(this).current
     },
     undoLabel(): string | undefined {
       void this.document
@@ -245,12 +267,15 @@ export const useDocumentStore = defineStore('document', {
       this.activePageId = pageId
       useSelectionStore().clear()
     },
-    /** 保存成功后调用：清 dirty 并记录文件路径。 */
-    markSaved(path: string) {
+    /** 保存成功后调用：记录文件路径与实际写入的精确 revision。 */
+    markSaved(path: string, revision?: number) {
       this.filePath = path
       const tracker = revisionTrackerOf(this)
-      tracker.saved = tracker.current
-      this.dirty = false
+      tracker.saved = revision ?? tracker.current
+      this.dirty = tracker.current !== tracker.saved
+    },
+    updateFilePath(path: string) {
+      this.filePath = path
     },
     /** 复制当前页选中图元到应用内剪贴板（仅内部边）；空选/选择失效不动作。 */
     copySelection() {

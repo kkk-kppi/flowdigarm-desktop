@@ -183,3 +183,28 @@ Tests 50 passed (50)
 | `pnpm build` | PASS，`vue-tsc --noEmit` + Vite production build |
 
 构建仍仅报告既有单 chunk 超过 500 kB 的非阻断提示（JS 748.96 kB，gzip 220.57 kB）；本次未改构建拆包。`opencode.json` 未读取、修改或纳入提交。
+
+## 二次评审竞态修复（2026-07-21）
+
+提交目标：`fix: 修复保存并发与精确修订状态竞态`
+
+### 修复明细
+
+1. `DocumentPersistenceController.save` 在首次 `await` 前捕获 document id、revision、路径和序列化 JSON。文件成功后仅在 id/revision 仍精确匹配时 flush、best-effort 删除 recovery 并标记该 revision；同文档继续编辑只更新仍适用的路径并保持 dirty，不同文档不接收旧路径，两者都保留或重新调度当前恢复快照。cleanup 等待期间再次变化也会重新检查；recovery 删除失败仍返回文件保存成功。
+2. document store 暴露只读 `currentRevision` 与 path-only `updateFilePath`。跨页 mismatch 的 undo 转换改写为 `{before: freshResultRevision, after: preUndoCurrentRevision}`，redo 转换改写为 `{before: preRedoCurrentRevision, after: freshResultRevision}`，使跨页分歧后的重复逆操作可精确回到保存点；转换元数据继续与 100 条命令历史同步裁剪。
+3. `AutosaveController` 使用显式 `pendingReady`。schedule 的独立 2 秒 timer 只负责把 pending 标为 ready，旧 writer 完成时不会消费尚未到期的新快照；`flush()` 会立即提升 pending 并等待当前及提升后的写入，dispose 清除 pending/timer，repository/onError 失败仍不产生未处理 rejection。
+
+### TDD RED 证据
+
+- `pnpm vitest run tests/unit/editor/persistence/document-persistence-controller.test.ts tests/unit/editor/persistence/autosave-controller.test.ts tests/unit/stores/document-store.test.ts`：预期 RED，3 files / 4 failures。旧 autosave 在 writer 于新快照 deadline 前完成时立即写入新快照；旧 save completion 覆盖替换文档路径；store/controller 尚无 `currentRevision` 精确 token。
+
+### 最终验证
+
+| 命令 | 结果 |
+|---|---|
+| `pnpm vitest run tests/unit/editor/persistence tests/unit/stores` | PASS，7 files / 74 tests |
+| `pnpm vitest run` | PASS，68 files / 619 tests |
+| `pnpm build` | PASS，`vue-tsc --noEmit` + Vite production build |
+| `cargo test --manifest-path src-tauri/Cargo.toml` | 未运行：本次未修改 Rust，按二次评审要求可选 |
+
+构建仍仅报告既有单 chunk 超过 500 kB 的非阻断提示（JS 750.44 kB，gzip 220.92 kB）。`opencode.json` 保持未跟踪且未纳入本次修改或提交。

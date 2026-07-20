@@ -215,6 +215,53 @@ describe('document-store', () => {
     expect(store.dirty).toBe(true)
   })
 
+  it('跨页 revision 分歧后的 undo/redo 重写精确转换并可重复返回保存点', () => {
+    const store = useDocumentStore()
+    store.loadDocument(twoPageDocument())
+    store.executeCommand(new RenamePageCommand({ pageId: 'page-a', before: '页面 1', after: 'A1' }))
+    store.switchPage('page-b')
+    store.executeCommand(new RenamePageCommand({ pageId: 'page-b', before: '页面 2', after: 'B1' }))
+    store.switchPage('page-a')
+    store.undo()
+    store.markSaved('D:/diagrams/cross-page.flowdiagram')
+    const savedRevision = store.currentRevision
+
+    for (let index = 0; index < 3; index += 1) {
+      store.redo()
+      expect(store.activePage?.name).toBe('A1')
+      expect(store.dirty).toBe(true)
+      expect(store.currentRevision).not.toBe(savedRevision)
+      store.undo()
+      expect(store.activePage?.name).toBe('页面 1')
+      expect(store.currentRevision).toBe(savedRevision)
+      expect(store.dirty).toBe(false)
+    }
+  })
+
+  it('跨页 revision 分歧后的 redo/undo 也重写精确转换并可重复返回保存点', () => {
+    const store = useDocumentStore()
+    store.loadDocument(twoPageDocument())
+    store.executeCommand(new RenamePageCommand({ pageId: 'page-a', before: '页面 1', after: 'A1' }))
+    store.undo()
+    store.switchPage('page-b')
+    store.executeCommand(new RenamePageCommand({ pageId: 'page-b', before: '页面 2', after: 'B1' }))
+    store.switchPage('page-a')
+    store.redo()
+    store.markSaved('D:/diagrams/cross-page-redo.flowdiagram')
+    const savedRevision = store.currentRevision
+
+    for (let index = 0; index < 3; index += 1) {
+      store.undo()
+      expect(store.activePage?.name).toBe('页面 1')
+      expect(store.dirty).toBe(true)
+      expect(store.currentRevision).not.toBe(savedRevision)
+      store.redo()
+      expect(store.activePage?.name).toBe('A1')
+      expect(store.currentRevision).toBe(savedRevision)
+      expect(store.dirty).toBe(false)
+    }
+  })
+
   it('revision 转换元数据与 100 条命令历史一起裁剪', () => {
     const store = useDocumentStore()
     const pageId = store.activePageId
@@ -226,8 +273,15 @@ describe('document-store', () => {
         after: `版本 ${index}`,
       }))
     }
+    const latestRevision = store.currentRevision
     for (let index = 0; index < 100; index += 1) store.undo()
     expect(store.canUndo).toBe(false)
+    expect(store.activePage?.name).toBe('版本 0')
+    expect(store.dirty).toBe(true)
+    for (let index = 0; index < 100; index += 1) store.redo()
+    expect(store.currentRevision).toBe(latestRevision)
+    expect(store.activePage?.name).toBe('版本 100')
+    for (let index = 0; index < 100; index += 1) store.undo()
     expect(store.activePage?.name).toBe('版本 0')
     expect(store.dirty).toBe(true)
   })

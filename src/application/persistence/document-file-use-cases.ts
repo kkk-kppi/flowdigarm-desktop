@@ -10,6 +10,12 @@ export type SaveDiagramResult =
   | { ok: true; path: string }
   | { ok: false; error: string }
 
+export interface DiagramSaveSnapshot {
+  name: string
+  json: string
+  path?: string
+}
+
 export async function openDiagram(repository: DiagramFileRepository): Promise<OpenDiagramResult | null> {
   try {
     const selected = await repository.open()
@@ -35,11 +41,22 @@ export async function saveDiagram(
   document: DiagramDocument,
   path?: string,
 ): Promise<SaveDiagramResult> {
+  return saveDiagramSnapshot(repository, {
+    name: document.name,
+    json: serializeDiagramDocument(document),
+    ...(path === undefined ? {} : { path }),
+  })
+}
+
+export async function saveDiagramSnapshot(
+  repository: DiagramFileRepository,
+  snapshot: DiagramSaveSnapshot,
+): Promise<SaveDiagramResult> {
   try {
     const savedPath = await repository.save({
-      path,
-      suggestedName: `${document.name}.flowdiagram`,
-      json: serializeDiagramDocument(document),
+      ...(snapshot.path === undefined ? {} : { path: snapshot.path }),
+      suggestedName: `${snapshot.name}.flowdiagram`,
+      json: snapshot.json,
     })
     return savedPath
       ? { ok: true, path: savedPath }

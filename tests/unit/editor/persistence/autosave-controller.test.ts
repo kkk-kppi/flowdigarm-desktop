@@ -131,4 +131,62 @@ describe('AutosaveController', () => {
     expect(calls).toBe(2)
     expect(stored).toBe('最终快照')
   })
+
+  it('进行中写入提前完成时，新快照仍等待自己的完整 2 秒防抖', async () => {
+    const firstWrite = deferred()
+    const writes: string[] = []
+    const controller = new AutosaveController({
+      latest: async () => null,
+      write: async (input) => {
+        writes.push(input.name)
+        if (writes.length === 1) await firstWrite.promise
+      },
+      remove: async () => {},
+    }, 2000)
+    const document = createEmptyDocument('旧快照')
+
+    controller.schedule(document)
+    await vi.advanceTimersByTimeAsync(2000)
+    await vi.advanceTimersByTimeAsync(1000)
+    controller.schedule({ ...document, name: '最新快照' })
+    await vi.advanceTimersByTimeAsync(500)
+    firstWrite.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(writes).toEqual(['旧快照'])
+
+    await vi.advanceTimersByTimeAsync(1499)
+    expect(writes).toEqual(['旧快照'])
+    await vi.advanceTimersByTimeAsync(1)
+    expect(writes).toEqual(['旧快照', '最新快照'])
+  })
+
+  it('dispose 丢弃未到期快照，并安全收尾进行中的失败写入', async () => {
+    let rejectWrite!: (reason: unknown) => void
+    const inFlight = new Promise<void>((_resolve, reject) => {
+      rejectWrite = reject
+    })
+    let calls = 0
+    const errors: string[] = []
+    const controller = new AutosaveController({
+      latest: async () => null,
+      write: async () => {
+        calls += 1
+        await inFlight
+      },
+      remove: async () => {},
+    }, 2000, (message) => errors.push(message))
+    const document = createEmptyDocument('进行中')
+
+    controller.schedule(document)
+    await vi.advanceTimersByTimeAsync(2000)
+    controller.schedule({ ...document, name: '应丢弃' })
+    controller.dispose()
+    expect(vi.getTimerCount()).toBe(0)
+
+    rejectWrite(new Error('db unavailable'))
+    await expect(controller.flush()).resolves.toBeUndefined()
+    expect(calls).toBe(1)
+    expect(errors).toEqual(['自动恢复快照保存失败，图文件不受影响。'])
+  })
 })
