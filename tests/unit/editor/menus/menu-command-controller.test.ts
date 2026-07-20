@@ -31,7 +31,12 @@ function setup() {
     toggleGuides: () => calls.push('guides'), togglePageBreaks: () => calls.push('breaks'),
     toggleSnap: () => calls.push('snap'),
   }
-  const formatPaint = { armOnce: () => calls.push('format-paint') }
+  const formatPaint = {
+    mode: 'off' as 'off' | 'once' | 'continuous',
+    sourceCellId: null as string | null,
+    armOnce: () => calls.push('format-paint'),
+    applyToMany: (ids: string[]) => { calls.push(`format-paint:${ids.join(',')}`); return true },
+  }
   const callbacks = {
     save: () => calls.push('callback:save'),
     editText: ({ cellId }: { cellId: string }) => calls.push(`edit-text:${cellId}`),
@@ -39,7 +44,7 @@ function setup() {
     focusInspector: ({ section }: { section: string }) => calls.push(`inspector:${section}`),
     openContainerPicker: (request: { mode: string }) => calls.push(`picker:${request.mode}`),
   }
-  return { controller: new MenuCommandController({ document: documentPort, selection, app, formatPaint, callbacks }), calls, selection, documentPort }
+  return { controller: new MenuCommandController({ document: documentPort, selection, app, formatPaint, callbacks }), calls, selection, documentPort, formatPaint }
 }
 
 describe('MenuCommandController', () => {
@@ -81,12 +86,38 @@ describe('MenuCommandController', () => {
     expect(calls.at(-1)).toBe('notice:此命令暂不可用。')
   })
 
-  it('uses the existing remove-from-container command for a non-group member', () => {
+  it('ungroups only when every selected target is a group', () => {
+    const { controller, calls, selection, documentPort } = setup()
+    documentPort.document.pages[0].nodes.push(
+      createTestNode({ id: 'group-1', shape: 'group', isContainer: true }),
+      createTestNode({ id: 'group-2', shape: 'group', isContainer: true }),
+    )
+    selection.selectedIds = ['group-1', 'group-2']
+    controller.execute('ungroup-or-remove')
+    expect(calls).toContain('execute:取消组合')
+  })
+
+  it('removes every selected ordinary member from its container in one command', () => {
     const { controller, calls, selection, documentPort } = setup()
     documentPort.document.pages[0].nodes[0].parentId = 'container-1'
-    selection.selectedIds = ['n1']
-    controller.execute('arrange-ungroup')
-    expect(calls).toContain('notice:请先选择组合。')
+    documentPort.document.pages[0].nodes[1].parentId = 'container-1'
+    selection.selectedIds = ['n1', 'n2']
+    controller.execute('ungroup-or-remove')
+    expect(calls).toContain('execute:移出容器')
+  })
+
+  it('rejects mixed and partially unparented ungroup-or-remove selections precisely', () => {
+    const { controller, calls, selection, documentPort } = setup()
+    documentPort.document.pages[0].nodes.push(createTestNode({ id: 'group', shape: 'group', isContainer: true }))
+    documentPort.document.pages[0].nodes[0].parentId = 'container-1'
+    selection.selectedIds = ['group', 'n1']
+    controller.execute('ungroup-or-remove')
+    selection.selectedIds = ['n1', 'n2']
+    controller.execute('ungroup-or-remove')
+    expect(calls).toEqual([
+      'notice:不能同时取消组合和移出容器。',
+      'notice:所选图元必须全部位于容器内。',
+    ])
   })
 
   it('routes former context placeholders through typed interaction ports', () => {
@@ -95,13 +126,34 @@ describe('MenuCommandController', () => {
     controller.execute('context-edit-text')
     controller.execute('context-link')
     controller.execute('format-font')
-    controller.execute('context-format-paint')
-    expect(calls).toEqual(['edit-text:n1', 'inspector:link', 'inspector:text', 'format-paint'])
+    expect(calls).toEqual(['edit-text:n1', 'inspector:link', 'inspector:text'])
 
     selection.selectedIds = ['edge-1']
     controller.execute('context-edit-label')
     controller.execute('context-line-style')
     expect(calls.slice(-2)).toEqual(['edit-label:edge-1', 'inspector:line'])
+  })
+
+  it('applies an armed format source to all compatible context targets', () => {
+    const { controller, calls, selection, formatPaint, documentPort } = setup()
+    documentPort.document.pages[0].nodes[0].style.fill = '#ff0000'
+    formatPaint.mode = 'once'
+    formatPaint.sourceCellId = 'n1'
+    selection.selectedIds = ['n2', 'n3']
+    controller.execute('context-format-paint')
+    expect(calls).toEqual(['format-paint:n2,n3'])
+  })
+
+  it('uses the format-paint source prerequisite before target compatibility', () => {
+    const { controller, calls, selection, formatPaint } = setup()
+    selection.selectedIds = ['n2', 'n3']
+    controller.execute('context-format-paint')
+    expect(calls).toEqual(['notice:请先选择单个源图元并启用格式刷。'])
+
+    formatPaint.mode = 'once'
+    formatPaint.sourceCellId = 'edge-1'
+    controller.execute('context-format-paint')
+    expect(calls.at(-1)).toBe('notice:所选图元中没有可应用格式的目标。')
   })
 
   it('guards arrangement commands with the same exact prerequisites as menus', () => {
@@ -113,7 +165,21 @@ describe('MenuCommandController', () => {
     expect(calls).toEqual([
       'notice:至少选择两个节点。',
       'notice:至少选择三个节点。',
-      'notice:至少选择两个节点。',
+      'notice:至少选择两个可自动连线的节点。',
+    ])
+  })
+
+  it('guards auto-connect using eligible nodes rather than all selected nodes', () => {
+    const { controller, calls, selection, documentPort } = setup()
+    documentPort.document.pages[0].nodes[0].isContainer = true
+    documentPort.document.pages[0].nodes[1].isContainer = true
+    selection.selectedIds = ['n1', 'n2']
+    controller.execute('arrange-auto-connect')
+    selection.selectedIds = ['n1', 'n3']
+    controller.execute('arrange-auto-connect')
+    expect(calls).toEqual([
+      'notice:至少选择两个可自动连线的节点。',
+      'notice:至少选择两个可自动连线的节点。',
     ])
   })
 
@@ -128,12 +194,23 @@ describe('MenuCommandController', () => {
     controller.execute('context-add-container')
     expect(calls).toEqual(['picker:add-to-container'])
     expect(documentPort.document.pages[0].nodes.find((node) => node.id === 'n1')?.parentId).toBeUndefined()
-    controller.confirmContainerMembership({ containerId: 'container', memberIds: ['n1'] })
+    expect(controller.confirmContainerMembership({ containerId: 'container', memberIds: ['n1'] })).toBe(true)
     expect(documentPort.document.pages[0].nodes.find((node) => node.id === 'n1')?.parentId).toBe('container')
 
     selection.selectedIds = ['container']
     controller.execute('context-add-members')
     expect(calls).toContain('picker:add-members')
+  })
+
+  it('keeps a pending container request when command execution fails', () => {
+    const { controller, calls, selection, documentPort } = setup()
+    documentPort.document.pages[0].nodes.push(createTestNode({ id: 'container', isContainer: true }))
+    documentPort.executeCommand = () => { throw new Error('容器状态已变化。') }
+    selection.selectedIds = ['n1']
+    controller.execute('context-add-container')
+    expect(controller.confirmContainerMembership({ containerId: 'container', memberIds: ['n1'] })).toBe(false)
+    expect(controller.confirmContainerMembership({ containerId: 'container', memberIds: ['n1'] })).toBe(false)
+    expect(calls.slice(-2)).toEqual(['notice:容器状态已变化。', 'notice:容器状态已变化。'])
   })
 
   it('does not offer a descendant container that would create a membership cycle', () => {

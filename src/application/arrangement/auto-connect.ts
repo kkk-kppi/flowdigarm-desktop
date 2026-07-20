@@ -12,12 +12,9 @@ function centerOf(node: DiagramNode): { x: number; y: number } {
   return { x: node.x + node.width / 2, y: node.y + node.height / 2 }
 }
 
-/** 容器节点（组合/容器）不可作为连接端点。 */
-function isContainerNode(node: DiagramNode): boolean {
-  return (
-    node.isContainer === true ||
-    (shapeRegistry.has(node.shape) && shapeRegistry.get(node.shape).isContainer)
-  )
+/** 组合和显式容器不可作为自动连线端点。 */
+export function isAutoConnectEligibleNode(node: DiagramNode): boolean {
+  return node.shape !== 'group' && node.isContainer !== true
 }
 
 /** 生成一条「自动连线」命令；有效节点（页面内存在且非容器）不足 2 个 → null。 */
@@ -29,7 +26,7 @@ export function createAutoConnectCommand(
   const nodesById = new Map(page.nodes.map((node) => [node.id, node]))
   const nodes = orderedIds
     .map((id) => nodesById.get(id))
-    .filter((node): node is DiagramNode => node !== undefined && !isContainerNode(node))
+    .filter((node): node is DiagramNode => node !== undefined && isAutoConnectEligibleNode(node))
   if (nodes.length < 2) {
     return null
   }

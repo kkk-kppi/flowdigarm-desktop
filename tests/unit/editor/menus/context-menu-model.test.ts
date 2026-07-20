@@ -2,8 +2,9 @@ import { contextMenuItems, type ContextKind } from '@/application/menus/context-
 
 describe('contextMenuItems', () => {
   const unavailable = {
-    canPaste: false, selectedNodeCount: 0, selectedGroupCount: 0,
-    selectedContainerCount: 0, hasTextSelection: false,
+    canPaste: false, selectedTargetCount: 0, selectedNodeCount: 0, selectedGroupCount: 0,
+    selectedContainerCount: 0, selectedParentedNodeCount: 0, eligibleNodeCount: 0,
+    hasTextSelection: false, hasFormatPaintSource: false, compatibleFormatPaintTargetCount: 0,
     canAddToContainer: false, canAddMembers: false,
   }
   const expected: Record<ContextKind, string[]> = {
@@ -25,7 +26,7 @@ describe('contextMenuItems', () => {
   })
 
   it('provides existing alignment and distribution command IDs as submenus', () => {
-    const items = contextMenuItems('multi', { ...unavailable, canPaste: true, selectedNodeCount: 3, hasTextSelection: true })
+    const items = contextMenuItems('multi', { ...unavailable, canPaste: true, selectedTargetCount: 3, selectedNodeCount: 3, eligibleNodeCount: 3, hasTextSelection: true })
     expect(items.find((item) => item.label === '对齐')?.children?.map((item) => item.id)).toEqual([
       'arrange-align-left', 'arrange-align-center-h', 'arrange-align-right',
       'arrange-align-top', 'arrange-align-middle-v', 'arrange-align-bottom',
@@ -36,11 +37,11 @@ describe('contextMenuItems', () => {
   })
 
   it('disables commands using their exact prerequisites and exposes Chinese reasons', () => {
-    const multi = contextMenuItems('multi', { ...unavailable, selectedNodeCount: 2 })
+    const multi = contextMenuItems('multi', { ...unavailable, selectedTargetCount: 2, selectedNodeCount: 2, eligibleNodeCount: 2 })
     expect(multi.find((item) => item.id === 'arrange-align')?.disabledReason).toBeUndefined()
     expect(multi.find((item) => item.id === 'arrange-distribute')?.disabledReason).toBe('至少选择三个节点。')
     expect(multi.find((item) => item.id === 'arrange-auto-connect')?.disabledReason).toBeUndefined()
-    expect(multi.find((item) => item.id === 'context-format-paint')?.disabledReason).toBe('格式刷需要恰好一个源图元。')
+    expect(multi.find((item) => item.id === 'context-format-paint')?.disabledReason).toBe('请先选择单个源图元并启用格式刷。')
 
     const node = contextMenuItems('node', unavailable)
     expect(node.find((item) => item.id === 'context-add-container')?.disabledReason).toBe('没有可加入的目标容器。')
@@ -48,5 +49,31 @@ describe('contextMenuItems', () => {
 
     const container = contextMenuItems('container', { ...unavailable, selectedContainerCount: 1 })
     expect(container.find((item) => item.id === 'context-add-members')?.disabledReason).toBe('没有可添加的成员。')
+  })
+
+  it('enables context format paint only with an armed source and effective compatible target', () => {
+    const noTarget = contextMenuItems('multi', {
+      ...unavailable, selectedTargetCount: 2, selectedNodeCount: 2, eligibleNodeCount: 2, hasFormatPaintSource: true,
+    })
+    expect(noTarget.find((item) => item.id === 'context-format-paint')?.disabledReason).toBe('所选图元中没有可应用格式的目标。')
+    const enabled = contextMenuItems('multi', {
+      ...unavailable, selectedTargetCount: 2, selectedNodeCount: 2, eligibleNodeCount: 2,
+      hasFormatPaintSource: true, compatibleFormatPaintTargetCount: 1,
+    })
+    expect(enabled.find((item) => item.id === 'context-format-paint')?.disabledReason).toBeUndefined()
+  })
+
+  it('uses eligible node count for auto-connect and exact ungroup-or-remove prerequisites', () => {
+    const multi = contextMenuItems('multi', { ...unavailable, selectedTargetCount: 2, selectedNodeCount: 2, eligibleNodeCount: 1 })
+    expect(multi.find((item) => item.id === 'arrange-auto-connect')?.disabledReason).toBe('至少选择两个可自动连线的节点。')
+
+    const allGroups = contextMenuItems('container', { ...unavailable, selectedTargetCount: 2, selectedNodeCount: 2, selectedGroupCount: 2 })
+    expect(allGroups.find((item) => item.id === 'ungroup-or-remove')?.disabledReason).toBeUndefined()
+    const parented = contextMenuItems('container', { ...unavailable, selectedTargetCount: 2, selectedNodeCount: 2, selectedParentedNodeCount: 2 })
+    expect(parented.find((item) => item.id === 'ungroup-or-remove')?.disabledReason).toBeUndefined()
+    const mixed = contextMenuItems('container', {
+      ...unavailable, selectedTargetCount: 2, selectedNodeCount: 2, selectedGroupCount: 1, selectedParentedNodeCount: 1,
+    })
+    expect(mixed.find((item) => item.id === 'ungroup-or-remove')?.disabledReason).toBe('不能同时取消组合和移出容器。')
   })
 })

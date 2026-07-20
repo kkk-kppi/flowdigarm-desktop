@@ -50,6 +50,10 @@ export const useFormatPaintStore = defineStore('format-paint', {
     },
     /** 应用格式到目标；无效目标返回 false 且不退模式。once 应用后自动 off 并清源。 */
     applyTo(targetId: string): boolean {
+      return this.applyToMany([targetId])
+    },
+    /** 批量应用共用一条命令，因此任意数量目标只产生一条历史记录。 */
+    applyToMany(targetIds: string[]): boolean {
       if (this.mode === 'off' || this.sourceCellId === null) {
         return false
       }
@@ -58,7 +62,7 @@ export const useFormatPaintStore = defineStore('format-paint', {
       if (!page) {
         return false
       }
-      const command = createFormatPaintCommand(page, this.sourceCellId, [targetId])
+      const command = createFormatPaintCommand(page, this.sourceCellId, targetIds)
       if (!command) {
         return false
       }

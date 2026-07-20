@@ -4,15 +4,36 @@ export type ContextKind = 'blank' | 'node' | 'edge' | 'multi' | 'container'
 
 export interface ContextMenuState {
   canPaste: boolean
+  selectedTargetCount: number
   selectedNodeCount: number
   selectedGroupCount: number
   selectedContainerCount: number
+  selectedParentedNodeCount: number
+  eligibleNodeCount: number
   hasTextSelection: boolean
+  hasFormatPaintSource: boolean
+  compatibleFormatPaintTargetCount: number
   canAddToContainer: boolean
   canAddMembers: boolean
 }
 
 const item = (id: string, label: string, disabledReason?: string): MenuItem => ({ id, label, disabledReason })
+
+export function ungroupOrRemoveDisabledReason(state: Pick<ContextMenuState,
+  'selectedTargetCount' | 'selectedNodeCount' | 'selectedGroupCount' | 'selectedParentedNodeCount'
+>): string | undefined {
+  if (state.selectedTargetCount === 0) return '请先选择组合或容器内图元。'
+  if (state.selectedTargetCount !== state.selectedNodeCount) return '只能选择组合或容器内图元。'
+  if (state.selectedGroupCount === state.selectedTargetCount) return undefined
+  if (state.selectedGroupCount > 0) return '不能同时取消组合和移出容器。'
+  if (state.selectedParentedNodeCount === state.selectedTargetCount) return undefined
+  return '所选图元必须全部位于容器内。'
+}
+
+function formatPaintDisabledReason(state: ContextMenuState): string | undefined {
+  if (!state.hasFormatPaintSource) return '请先选择单个源图元并启用格式刷。'
+  return state.compatibleFormatPaintTargetCount > 0 ? undefined : '所选图元中没有可应用格式的目标。'
+}
 
 export function contextMenuItems(kind: ContextKind, state: ContextMenuState): MenuItem[] {
   const paste = item('edit-paste', '粘贴', state.canPaste ? undefined : '剪贴板为空。')
@@ -40,12 +61,12 @@ export function contextMenuItems(kind: ContextKind, state: ContextMenuState): Me
     ],
     multi: [
       item('edit-cut', '剪切'), item('edit-copy', '复制'), item('edit-delete', '删除'),
-       item('context-format-paint', '格式刷', state.selectedNodeCount === 1 ? undefined : '格式刷需要恰好一个源图元。'), align, distribute,
-       item('arrange-auto-connect', '自动连线', state.selectedNodeCount >= 2 ? undefined : '至少选择两个节点。'), group,
+       item('context-format-paint', '格式刷', formatPaintDisabledReason(state)), align, distribute,
+       item('arrange-auto-connect', '自动连线', state.eligibleNodeCount >= 2 ? undefined : '至少选择两个可自动连线的节点。'), group,
     ],
     container: [
       item('edit-copy', '复制'), item('edit-delete', '删除'),
-       item('arrange-ungroup', '取消组合或移出容器', state.selectedGroupCount > 0 ? undefined : '所选容器不能取消组合。'),
+       item('ungroup-or-remove', '取消组合或移出容器', ungroupOrRemoveDisabledReason(state)),
        item('context-add-members', '添加成员', state.selectedContainerCount === 1 && state.canAddMembers ? undefined : '没有可添加的成员。'),
        item('arrange-to-front', '置于顶层'), item('arrange-to-back', '置于底层'),
     ],

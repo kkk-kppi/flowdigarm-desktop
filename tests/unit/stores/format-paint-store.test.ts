@@ -79,6 +79,29 @@ describe('format-paint-store arm 与状态', () => {
 })
 
 describe('format-paint-store applyTo', () => {
+  it('applyToMany applies multiple targets as exactly one undo record', () => {
+    const { documentStore, selection, paint } = setup()
+    selection.setSelection(['source'])
+    paint.armOnce()
+    expect(paint.applyToMany(['target-1', 'target-2'])).toBe(true)
+    expect(documentStore.activePage!.nodes.filter((node) => node.id.startsWith('target-')).every((node) => node.style.fill === '#FF0000')).toBe(true)
+    expect(documentStore.undoLabel).toBe('格式刷')
+    documentStore.undo()
+    expect(documentStore.activePage!.nodes.filter((node) => node.id.startsWith('target-')).every((node) => node.style.fill !== '#FF0000')).toBe(true)
+    expect(documentStore.canUndo).toBe(false)
+    expect(paint.mode).toBe('off')
+    expect(paint.sourceCellId).toBeNull()
+  })
+
+  it('applyToMany preserves continuous mode after one multi-target command', () => {
+    const { selection, paint } = setup()
+    selection.setSelection(['source'])
+    paint.armContinuous()
+    expect(paint.applyToMany(['target-1', 'target-2'])).toBe(true)
+    expect(paint.mode).toBe('continuous')
+    expect(paint.sourceCellId).toBe('source')
+  })
+
   it('once 模式：应用一次后自动 off 并清源；目标样式被改写', () => {
     const { documentStore, selection, paint } = setup()
     selection.setSelection(['source'])

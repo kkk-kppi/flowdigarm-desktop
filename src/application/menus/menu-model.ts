@@ -21,6 +21,7 @@ export interface MenuState {
   hasSelection: boolean
   canPaste: boolean
   selectedNodeCount: number
+  eligibleNodeCount: number
   selectedGroupCount: number
   selectedContainerCount: number
   hasTextSelection: boolean
@@ -37,6 +38,7 @@ function disabled(condition: boolean, reason: string): string | undefined {
 export function createMainMenus(state: MenuState): MenuDefinition[] {
   const selectionReason = disabled(state.hasSelection, '请先选择图元。')
   const twoNodesReason = disabled(state.selectedNodeCount >= 2, '至少选择两个节点。')
+  const autoConnectReason = disabled(state.eligibleNodeCount >= 2, '至少选择两个可自动连线的节点。')
   const threeNodesReason = disabled(state.selectedNodeCount >= 3, '至少选择三个节点。')
   const groupReason = disabled(state.selectedGroupCount > 0, '请先选择组合。')
   const textReason = disabled(state.hasTextSelection, '所选图元没有可编辑文本。')
@@ -103,7 +105,7 @@ export function createMainMenus(state: MenuState): MenuDefinition[] {
     {
       id: 'tools', label: '工具', items: [
         { id: 'tool-auto-align', label: '自动对齐', disabledReason: twoNodesReason },
-        { id: 'arrange-auto-connect', label: '自动连线', helpId: 'auto-connect', disabledReason: twoNodesReason },
+        { id: 'arrange-auto-connect', label: '自动连线', helpId: 'auto-connect', disabledReason: autoConnectReason },
         {
           id: 'arrange-align', label: '对齐', helpId: 'align', children: [
             { id: 'arrange-align-left', label: '左对齐' },

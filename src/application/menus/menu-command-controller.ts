@@ -2,10 +2,12 @@ import type { DiagramDocument, DiagramNode, DiagramPage } from '@/domain/diagram
 import type { EditorCommand } from '@/application/commands/editor-command'
 import { createAlignCommand, type AlignMode } from '@/application/arrangement/align-cells'
 import { createDistributeCommand, type DistributeMode } from '@/application/arrangement/distribute-cells'
-import { createAutoConnectCommand } from '@/application/arrangement/auto-connect'
+import { createAutoConnectCommand, isAutoConnectEligibleNode } from '@/application/arrangement/auto-connect'
 import { createZOrderCommand, type ZOrderAction } from '@/application/arrangement/z-order'
 import { createGroupCommand, createUngroupCommand } from '@/application/commands/group-cells'
-import { createAddToContainerCommand } from '@/application/commands/container-membership'
+import { createAddToContainerCommand, createRemoveFromContainerCommand } from '@/application/commands/container-membership'
+import { hasApplicableFormatPaintTarget } from '@/application/commands/apply-format-paint'
+import { ungroupOrRemoveDisabledReason } from '@/application/menus/context-menu-model'
 import {
   isContainerNode,
   validContainerMembers,
@@ -41,7 +43,9 @@ interface AppPort {
 }
 
 interface FormatPaintPort {
-  armOnce(): void
+  mode: 'off' | 'once' | 'continuous'
+  sourceCellId: string | null
+  applyToMany(ids: string[]): boolean
 }
 
 export interface MenuInvocation {
@@ -156,7 +160,11 @@ export class MenuCommandController {
       'insert-circle': () => document.createNodeFromShape('circle'),
       'insert-diamond': () => document.createNodeFromShape('diamond'),
       'insert-text': () => document.createNodeFromShape('text'),
-      'context-format-paint': () => this.dependencies.formatPaint.armOnce(),
+      'context-format-paint': () => {
+        if (!this.dependencies.formatPaint.applyToMany(selection.selectedIds)) {
+          document.setNotice('所选图元中没有可应用格式的目标。')
+        }
+      },
     }
     if (direct[id]) {
       direct[id]()
@@ -167,27 +175,33 @@ export class MenuCommandController {
     document.setNotice('此命令暂不可用。')
   }
 
-  confirmContainerMembership(selection: ContainerMembershipSelection): void {
+  confirmContainerMembership(selection: ContainerMembershipSelection): boolean {
     const request = this.pendingContainerRequest
     const { document } = this.dependencies
     if (!request) {
       document.setNotice('请先选择容器成员操作。')
-      return
+      return false
     }
     const validContainers = new Set(request.containers.map(({ id }) => id))
     const validMembers = new Set(request.members.map(({ id }) => id))
     if (!validContainers.has(selection.containerId) || selection.memberIds.length === 0 || selection.memberIds.some((id) => !validMembers.has(id))) {
       document.setNotice('容器或成员选择无效。')
-      return
+      return false
     }
     const page = this.activePage()
-    if (!page) return
+    if (!page) return false
     try {
       document.executeCommand(createAddToContainerCommand(page, selection.memberIds, selection.containerId))
       this.pendingContainerRequest = null
+      return true
     } catch (error) {
       document.setNotice(error instanceof Error ? error.message : '命令执行失败。')
+      return false
     }
+  }
+
+  cancelContainerMembership(): void {
+    this.pendingContainerRequest = null
   }
 
   private activePage(): DiagramPage | undefined {
@@ -210,15 +224,28 @@ export class MenuCommandController {
     if (['edit-cut', 'edit-copy', 'edit-duplicate', 'edit-delete'].includes(id) && selectedCount === 0) return '请先选择图元。'
     if ((id.startsWith('arrange-align-') || id === 'format-alignment' || id === 'tool-auto-align') && selected.nodes.length < 2) return '至少选择两个节点。'
     if (id.startsWith('arrange-distribute-') && selected.nodes.length < 3) return '至少选择三个节点。'
-    if ((id === 'arrange-auto-connect' || id === 'arrange-group') && selected.nodes.length < 2) return '至少选择两个节点。'
+    if (id === 'arrange-auto-connect' && selected.nodes.filter(isAutoConnectEligibleNode).length < 2) return '至少选择两个可自动连线的节点。'
+    if (id === 'arrange-group' && selected.nodes.length < 2) return '至少选择两个节点。'
     if (id === 'arrange-ungroup' && !selected.nodes.some((node) => node.shape === 'group')) return '请先选择组合。'
+    if (id === 'ungroup-or-remove') {
+      return ungroupOrRemoveDisabledReason({
+        selectedTargetCount: selectedCount,
+        selectedNodeCount: selected.nodes.length,
+        selectedGroupCount: selected.nodes.filter((node) => node.shape === 'group').length,
+        selectedParentedNodeCount: selected.nodes.filter((node) => node.parentId !== undefined).length,
+      })
+    }
     if (id === 'context-edit-text' && selected.nodes.length !== 1) return '请选择一个节点。'
     if (id === 'context-edit-label' && selected.edgeIds.length !== 1) return '请选择一条连线。'
     const hasTextSelection = selected.nodes.some((node) => node.text !== undefined) || (page?.edges.some((edge) => selected.edgeIds.includes(edge.id) && edge.labels.length > 0) ?? false)
     if (id === 'context-link' && selectedCount === 0) return '请先选择图元。'
     if (id === 'format-font' && !hasTextSelection) return '所选图元没有可编辑文本。'
     if (id === 'context-line-style' && selected.edgeIds.length === 0) return '请先选择连线。'
-    if (id === 'context-format-paint' && selectedCount !== 1) return '格式刷需要恰好一个源图元。'
+    if (id === 'context-format-paint') {
+      const sourceId = this.dependencies.formatPaint.sourceCellId
+      if (this.dependencies.formatPaint.mode === 'off' || sourceId === null) return '请先选择单个源图元并启用格式刷。'
+      if (!page || !hasApplicableFormatPaintTarget(page, sourceId, this.dependencies.selection.selectedIds)) return '所选图元中没有可应用格式的目标。'
+    }
     if (['arrange-to-front', 'arrange-to-back', 'arrange-forward', 'arrange-backward', 'view-fit-selection'].includes(id) && selectedCount === 0) return '请先选择图元。'
     return undefined
   }
@@ -297,6 +324,11 @@ export class MenuCommandController {
         command = createGroupCommand(page, selection.selectedIds)
       } else if (id === 'arrange-ungroup') {
         command = createUngroupCommand(page, selection.selectedIds)
+      } else if (id === 'ungroup-or-remove') {
+        const selectedNodes = this.selected(page).nodes
+        command = selectedNodes.every((node) => node.shape === 'group')
+          ? createUngroupCommand(page, selection.selectedIds)
+          : createRemoveFromContainerCommand(page, selection.selectedIds)
       } else {
         const zActions: Record<string, ZOrderAction> = {
           'arrange-to-front': 'to-front', 'arrange-to-back': 'to-back',

@@ -77,3 +77,14 @@ Implemented search/replace, seven application menus, contextual menus, title/sta
 - Focused verification: `pnpm vitest run tests/unit/editor/search tests/unit/editor/menus tests/unit/editor/layers tests/unit/editor/help-registry.test.ts tests/component/MenuBar.test.ts tests/component/CanvasContextMenu.test.ts tests/component/ContainerMembershipPicker.test.ts tests/component/FeatureHelp.test.ts tests/component/LayerManager.test.ts tests/component/RightPanel.test.ts tests/component/CanvasArea.test.ts tests/component/DesktopShellParts.test.ts tests/unit/app-shell.test.ts` PASS, 17 files / 95 tests.
 - Full verification: `pnpm vitest run` PASS, 83 files / 696 tests.
 - Build verification: `pnpm build` PASS (`vue-tsc --noEmit`, Vite 1122 modules); existing chunk-size warning remains (`827.12 kB`, gzip `246.08 kB`).
+
+## Context And Container Follow-up (2026-07-21)
+
+- Restored `ungroup-or-remove`: homogeneous group selections ungroup, homogeneous parented members use one remove-from-container command, and mixed/invalid selections expose precise Chinese reasons.
+- Context format paint now requires an armed source and an applicable target; `applyToMany` executes all targets in one command/history record and preserves once/continuous mode semantics.
+- Auto-connect menus and controller now share the factory's eligible-node predicate; groups and containers do not count toward the two-node prerequisite.
+- Container candidates must satisfy every selected member and exclude self/ancestor/cycle cases. Failed confirmations keep the picker open and announce the command error inside the modal.
+- The membership picker now has a backdrop, initial focus, Tab/Shift+Tab trap, Escape cancellation, inert/`aria-hidden` background isolation, and connected-trigger focus restoration after cancel or successful confirm.
+- Focused verification: `pnpm vitest run tests/unit/editor/menus tests/unit/stores/format-paint-store.test.ts tests/unit/editor/format-paint.test.ts tests/component/ContainerMembershipPicker.test.ts tests/component/CanvasContextMenu.test.ts tests/component/MenuBar.test.ts tests/component/CanvasArea.test.ts tests/unit/app-shell.test.ts` PASS, 11 files / 81 tests.
+- Full verification: `pnpm vitest run` PASS, 84 files / 712 tests.
+- Build verification: `pnpm build` PASS (`vue-tsc --noEmit`, Vite 1122 modules); existing chunk-size warning remains (`830.57 kB`, gzip `247.15 kB`).

@@ -3,7 +3,12 @@ import CanvasContextMenu from '@/ui/components/CanvasContextMenu.vue'
 import { contextMenuItems } from '@/application/menus/context-menu-model'
 
 describe('CanvasContextMenu', () => {
-  const state = { canPaste: true, selectedNodeCount: 3, selectedGroupCount: 0, selectedContainerCount: 0, hasTextSelection: true, canAddToContainer: true, canAddMembers: false }
+  const state = {
+    canPaste: true, selectedTargetCount: 3, selectedNodeCount: 3, selectedGroupCount: 0,
+    selectedContainerCount: 0, selectedParentedNodeCount: 0, eligibleNodeCount: 3,
+    hasTextSelection: true, hasFormatPaintSource: true, compatibleFormatPaintTargetCount: 1,
+    canAddToContainer: true, canAddMembers: false,
+  }
   it('clamps to viewport and executes with Enter', async () => {
     Object.defineProperty(window, 'innerWidth', { value: 300, configurable: true })
     Object.defineProperty(window, 'innerHeight', { value: 200, configurable: true })

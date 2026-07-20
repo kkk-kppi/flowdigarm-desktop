@@ -225,17 +225,16 @@ export class FormatPaintCommand implements EditorCommand {
   }
 }
 
-/** 生成一条「格式刷」命令；类型不匹配/无变化目标跳过，无有效目标 → null。 */
-export function createFormatPaintCommand(
+function applicableFormatPaintTargets(
   page: DiagramPage,
   sourceCellId: string,
   targetIds: string[],
-): FormatPaintCommand | null {
+): FormatPaintTarget[] {
   const sourceNode = page.nodes.find((n) => n.id === sourceCellId)
   const sourceEdge = page.edges.find((e) => e.id === sourceCellId)
   const source = sourceNode ?? sourceEdge
   if (!source) {
-    return null
+    return []
   }
   const after = captureFormatPaintSource(source)
   const targets: FormatPaintTarget[] = []
@@ -257,8 +256,25 @@ export function createFormatPaintCommand(
     }
     targets.push({ cellId: targetId, before, after })
   }
-  if (targets.length === 0) {
-    return null
-  }
+  return targets
+}
+
+/** 是否至少有一个类型匹配且会发生样式变化的目标。 */
+export function hasApplicableFormatPaintTarget(
+  page: DiagramPage,
+  sourceCellId: string,
+  targetIds: string[],
+): boolean {
+  return applicableFormatPaintTargets(page, sourceCellId, targetIds).length > 0
+}
+
+/** 生成一条「格式刷」命令；类型不匹配/无变化目标跳过，无有效目标 → null。 */
+export function createFormatPaintCommand(
+  page: DiagramPage,
+  sourceCellId: string,
+  targetIds: string[],
+): FormatPaintCommand | null {
+  const targets = applicableFormatPaintTargets(page, sourceCellId, targetIds)
+  if (targets.length === 0) return null
   return new FormatPaintCommand({ pageId: page.id, sourceCellId, targets })
 }

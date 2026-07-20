@@ -1,55 +1,63 @@
 <template>
   <div class="editor-shell" data-testid="editor-shell">
-    <TitleBar
-      :file-name="fileName"
-      :dirty="documentStore.dirty"
-      @minimize="onWindowCommand('minimize')"
-      @maximize="onWindowCommand('maximize')"
-      @close="onWindowCommand('close')"
-    />
-    <MenuBar :menus="menus" @execute="onMenuExecute" />
-    <CompactToolbar />
-    <PageTabs />
-    <div class="shell-main" data-testid="shell-main">
-      <ElementLibrary @create-request="onCreateRequest" @more-shapes="onMoreShapes" />
-      <CanvasArea ref="canvasAreaRef" class="shell-canvas" :menu-controller="menuController" @viewport-change="onViewportChange" />
-      <RightPanel ref="rightPanelRef">
-        <template #find>
-          <FindReplaceTab
-            :controller="findController"
-            :current-page-id="documentStore.activePageId"
-            @back="appStore.showProperties()"
-            @help="appStore.openHelp($event)"
-          />
-        </template>
-      </RightPanel>
-      <div v-if="appStore.layerManagerOpen" class="layer-wrap">
-        <button type="button" class="layer-close" aria-label="关闭图层管理" title="关闭图层管理。返回完整画布空间。" @click="appStore.closeLayerManager()">×</button>
-        <LayerManager :controller="layerController" />
+    <div
+      class="shell-background"
+      data-testid="shell-background"
+      :inert="containerPickerRequest ? true : undefined"
+      :aria-hidden="containerPickerRequest ? 'true' : undefined"
+    >
+      <TitleBar
+        :file-name="fileName"
+        :dirty="documentStore.dirty"
+        @minimize="onWindowCommand('minimize')"
+        @maximize="onWindowCommand('maximize')"
+        @close="onWindowCommand('close')"
+      />
+      <MenuBar :menus="menus" @execute="onMenuExecute" />
+      <CompactToolbar />
+      <PageTabs />
+      <div class="shell-main" data-testid="shell-main">
+        <ElementLibrary @create-request="onCreateRequest" @more-shapes="onMoreShapes" />
+        <CanvasArea ref="canvasAreaRef" class="shell-canvas" :menu-controller="menuController" @viewport-change="onViewportChange" />
+        <RightPanel ref="rightPanelRef">
+          <template #find>
+            <FindReplaceTab
+              :controller="findController"
+              :current-page-id="documentStore.activePageId"
+              @back="appStore.showProperties()"
+              @help="appStore.openHelp($event)"
+            />
+          </template>
+        </RightPanel>
+        <div v-if="appStore.layerManagerOpen" class="layer-wrap">
+          <button type="button" class="layer-close" aria-label="关闭图层管理" title="关闭图层管理。返回完整画布空间。" @click="appStore.closeLayerManager()">×</button>
+          <LayerManager :controller="layerController" />
+        </div>
       </div>
+      <StatusBar
+        :selected-count="selectionStore.count"
+        :anchor-x="anchorPosition?.x"
+        :anchor-y="anchorPosition?.y"
+        :page-index="pageIndex"
+        :page-count="documentStore.document.pages.length"
+        :zoom="viewport.zoom"
+        :dirty="documentStore.dirty"
+        @set-zoom="onSetZoom"
+      />
+      <FeatureHelp v-if="appStore.helpId" :help-id="appStore.helpId" :return-focus="helpReturnFocus" @close="closeHelp" />
     </div>
-    <StatusBar
-      :selected-count="selectionStore.count"
-      :anchor-x="anchorPosition?.x"
-      :anchor-y="anchorPosition?.y"
-      :page-index="pageIndex"
-      :page-count="documentStore.document.pages.length"
-      :zoom="viewport.zoom"
-      :dirty="documentStore.dirty"
-      @set-zoom="onSetZoom"
-    />
-    <FeatureHelp v-if="appStore.helpId" :help-id="appStore.helpId" :return-focus="helpReturnFocus" @close="closeHelp" />
     <ContainerMembershipPicker
       v-if="containerPickerRequest"
       :request="containerPickerRequest"
+      :error="containerPickerError"
       @confirm="confirmContainerMembership"
-      @cancel="containerPickerRequest = null"
+      @cancel="cancelContainerMembership"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, provide, reactive, ref } from 'vue'
+import { computed, nextTick, provide, reactive, ref } from 'vue'
 import CanvasArea from '@/ui/canvas/CanvasArea.vue'
 import CompactToolbar from '@/ui/toolbar/CompactToolbar.vue'
 import ElementLibrary from '@/ui/shapes/ElementLibrary.vue'
@@ -75,6 +83,7 @@ import {
 import type { CanvasController } from '@/application/canvas/canvas-controller'
 import { LayerManagerController } from '@/application/layers/layer-manager-controller'
 import { FindController } from '@/application/search/find-controller'
+import { isAutoConnectEligibleNode } from '@/application/arrangement/auto-connect'
 import { formatMeasure } from '@/domain/measurement'
 import type { ViewportState } from '@/application/viewport/viewport-transform'
 import { useAppStore } from '@/stores/app-store'
@@ -96,6 +105,8 @@ const canvasAreaRef = ref<CanvasController | null>(null)
 const rightPanelRef = ref<{ focusSection(section: 'link' | 'text' | 'line'): Promise<void> } | null>(null)
 const helpReturnFocus = ref<HTMLElement | null>(null)
 const containerPickerRequest = ref<ContainerPickerRequest | null>(null)
+const containerPickerReturnFocus = ref<HTMLElement | null>(null)
+const containerPickerError = ref<string | undefined>()
 const viewport = reactive<ViewportState>({ zoom: 1, panX: 0, panY: 0 })
 
 const fileName = computed(() => {
@@ -115,6 +126,7 @@ const selectionSummary = computed(() => {
   const selectedEdges = page?.edges.filter((edge) => selectionStore.selectedIds.includes(edge.id)) ?? []
   return {
     selectedNodeCount: selectedNodes.length,
+    eligibleNodeCount: selectedNodes.filter(isAutoConnectEligibleNode).length,
     selectedGroupCount: selectedNodes.filter((node) => node.shape === 'group').length,
     selectedContainerCount: selectedNodes.filter(isContainerNode).length,
     hasTextSelection: selectedNodes.some((node) => node.text !== undefined) || selectedEdges.some((edge) => edge.labels.length > 0),
@@ -164,7 +176,7 @@ const menuCallbacks: MenuCallbacks = {
   editText: ({ cellId }) => canvasAreaRef.value?.editNodeText(cellId),
   editLabel: ({ cellId }) => canvasAreaRef.value?.editEdgeLabel(cellId),
   focusInspector: ({ section }) => { void rightPanelRef.value?.focusSection(section) },
-  openContainerPicker: (request) => { containerPickerRequest.value = request },
+  openContainerPicker: openContainerPicker,
 }
 
 const menuController = new MenuCommandController({
@@ -226,9 +238,31 @@ function closeHelp(): void {
   helpReturnFocus.value = null
 }
 
-function confirmContainerMembership(selection: ContainerMembershipSelection): void {
-  menuController.confirmContainerMembership(selection)
+function openContainerPicker(request: ContainerPickerRequest): void {
+  containerPickerReturnFocus.value = request.trigger?.isConnected ? request.trigger : null
+  containerPickerError.value = undefined
+  containerPickerRequest.value = request
+}
+
+async function closeContainerPicker(): Promise<void> {
   containerPickerRequest.value = null
+  await nextTick()
+  if (containerPickerReturnFocus.value?.isConnected) containerPickerReturnFocus.value.focus()
+  containerPickerReturnFocus.value = null
+  containerPickerError.value = undefined
+}
+
+function cancelContainerMembership(): void {
+  menuController.cancelContainerMembership()
+  void closeContainerPicker()
+}
+
+function confirmContainerMembership(selection: ContainerMembershipSelection): void {
+  if (menuController.confirmContainerMembership(selection)) {
+    void closeContainerPicker()
+  } else {
+    containerPickerError.value = documentStore.lastNotice ?? '命令执行失败。'
+  }
 }
 
 function onSetZoom(value: number | 'fit'): void {
@@ -249,6 +283,14 @@ function onViewportChange(state: ViewportState): void {
   height: 100vh;
   overflow: hidden;
   background: var(--color-bg);
+  position: relative;
+}
+
+.shell-background {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .shell-main {

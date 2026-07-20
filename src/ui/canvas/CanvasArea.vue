@@ -83,6 +83,8 @@ import { RotateCellsCommand } from '@/application/commands/rotate-cells'
 import { ReconnectEdgeCommand } from '@/application/commands/reconnect-edge'
 import { UpdateEdgeVerticesCommand } from '@/application/commands/update-edge-vertices'
 import { collectDescendantIds } from '@/application/arrangement/descendants'
+import { isAutoConnectEligibleNode } from '@/application/arrangement/auto-connect'
+import { hasApplicableFormatPaintTarget } from '@/application/commands/apply-format-paint'
 import { openCellHyperlink, shouldOpenHyperlink } from '@/application/links/open-hyperlink'
 import { contextMenuItems, type ContextKind } from '@/application/menus/context-menu-model'
 import { isContainerNode, validContainerMembers, validContainerTargets } from '@/application/menus/container-picker-options'
@@ -325,15 +327,24 @@ function openContextMenu(args: { kind: 'blank' | 'node' | 'edge'; cellId?: strin
   const page = activePage.value
   const availableContainers = page ? validContainerTargets(page, selectedNodes.map(({ id }) => id)) : []
   const canAddMembers = page !== undefined && selectedContainers.length === 1 && validContainerMembers(page, selectedContainers[0].id).length > 0
+  const hasFormatPaintSource = formatPaintStore.mode !== 'off' && formatPaintStore.sourceCellId !== null
+  const hasCompatibleFormatPaintTarget = page && hasFormatPaintSource
+    ? hasApplicableFormatPaintTarget(page, formatPaintStore.sourceCellId!, selectionStore.selectedIds)
+    : false
   contextMenu.value = {
     x: args.x,
     y: args.y,
     items: contextMenuItems(kind, {
       canPaste: documentStore.clipboard !== null,
+      selectedTargetCount: selectedNodes.length + selectedEdges.length,
       selectedNodeCount: selectedNodes.length,
       selectedGroupCount: selectedNodes.filter((node) => node.shape === 'group').length,
       selectedContainerCount: selectedContainers.length,
+      selectedParentedNodeCount: selectedNodes.filter((node) => node.parentId !== undefined).length,
+      eligibleNodeCount: selectedNodes.filter(isAutoConnectEligibleNode).length,
       hasTextSelection: selectedNodes.some((node) => node.text !== undefined) || selectedEdges.some((edge) => edge.labels.length > 0),
+      hasFormatPaintSource,
+      compatibleFormatPaintTargetCount: hasCompatibleFormatPaintTarget ? 1 : 0,
       canAddToContainer: selectedNodes.length > 0 && availableContainers.length > 0,
       canAddMembers,
     }),

@@ -2,7 +2,7 @@ import { createMainMenus } from '@/application/menus/menu-model'
 
 describe('createMainMenus', () => {
   it('defines the seven exact Chinese top-level menus and item labels', () => {
-    const menus = createMainMenus({ canUndo: true, canRedo: true, hasSelection: true, canPaste: true, selectedNodeCount: 3, selectedGroupCount: 1, selectedContainerCount: 1, hasTextSelection: true })
+    const menus = createMainMenus({ canUndo: true, canRedo: true, hasSelection: true, canPaste: true, selectedNodeCount: 3, eligibleNodeCount: 3, selectedGroupCount: 1, selectedContainerCount: 1, hasTextSelection: true })
     expect(menus.map((menu) => menu.label)).toEqual(['文件', '编辑', '视图', '插入', '格式', '工具', '帮助'])
     expect(menus[0].items.map((item) => item.label)).toEqual([
       '新建', '打开', '保存', '另存为', '最近文件', '导出', '页面设置',
@@ -30,7 +30,7 @@ describe('createMainMenus', () => {
   it('gives every disabled item a Chinese reason and exposes checked states', () => {
     const menus = createMainMenus({
       canUndo: false, canRedo: false, hasSelection: false, canPaste: false,
-      selectedNodeCount: 0, selectedGroupCount: 0, selectedContainerCount: 0, hasTextSelection: false,
+      selectedNodeCount: 0, eligibleNodeCount: 0, selectedGroupCount: 0, selectedContainerCount: 0, hasTextSelection: false,
       showGrid: true, showRulers: false,
     })
     const items = menus.flatMap((menu) => menu.items.flatMap((item) => [item, ...(item.children ?? [])]))
@@ -42,14 +42,25 @@ describe('createMainMenus', () => {
   it('uses exact node, group, clipboard, and text prerequisites', () => {
     const items = createMainMenus({
       canUndo: true, canRedo: true, hasSelection: true, canPaste: false,
-      selectedNodeCount: 1, selectedGroupCount: 0, selectedContainerCount: 0, hasTextSelection: false,
+      selectedNodeCount: 1, eligibleNodeCount: 1, selectedGroupCount: 0, selectedContainerCount: 0, hasTextSelection: false,
     }).flatMap((menu) => menu.items)
     expect(items.find((item) => item.id === 'arrange-align')?.disabledReason).toBe('至少选择两个节点。')
     expect(items.find((item) => item.id === 'arrange-distribute')?.disabledReason).toBe('至少选择三个节点。')
-    expect(items.find((item) => item.id === 'arrange-auto-connect')?.disabledReason).toBe('至少选择两个节点。')
+    expect(items.find((item) => item.id === 'arrange-auto-connect')?.disabledReason).toBe('至少选择两个可自动连线的节点。')
     expect(items.find((item) => item.id === 'arrange-group')?.disabledReason).toBe('至少选择两个节点。')
     expect(items.find((item) => item.id === 'arrange-ungroup')?.disabledReason).toBe('请先选择组合。')
     expect(items.find((item) => item.id === 'format-font')?.disabledReason).toBe('所选图元没有可编辑文本。')
     expect(items.find((item) => item.id === 'edit-paste')?.disabledReason).toBe('剪贴板为空。')
+  })
+
+  it('disables auto-connect for two containers and for one container plus one ordinary node', () => {
+    for (const eligibleNodeCount of [0, 1]) {
+      const items = createMainMenus({
+        canUndo: true, canRedo: true, hasSelection: true, canPaste: true,
+        selectedNodeCount: 2, eligibleNodeCount, selectedGroupCount: 0,
+        selectedContainerCount: 2 - eligibleNodeCount, hasTextSelection: false,
+      }).flatMap((menu) => menu.items)
+      expect(items.find((item) => item.id === 'arrange-auto-connect')?.disabledReason).toBe('至少选择两个可自动连线的节点。')
+    }
   })
 })

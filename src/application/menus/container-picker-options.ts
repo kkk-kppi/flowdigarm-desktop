@@ -19,10 +19,11 @@ function ancestorIds(page: DiagramPage, nodeId: string): Set<string> {
 
 export function validContainerTargets(page: DiagramPage, memberIds: string[]): DiagramNode[] {
   const members = page.nodes.filter(({ id }) => memberIds.includes(id))
+  if (members.length === 0 || members.length !== new Set(memberIds).size) return []
   return page.nodes.filter((container) => {
     if (!isContainerNode(container)) return false
     const forbidden = new Set([container.id, ...ancestorIds(page, container.id)])
-    return members.some((member) => !forbidden.has(member.id) && member.parentId !== container.id)
+    return members.every((member) => !forbidden.has(member.id) && member.parentId !== container.id)
   })
 }
 

@@ -4,7 +4,7 @@ import { createMainMenus } from '@/application/menus/menu-model'
 
 const readyState = {
   canUndo: true, canRedo: true, hasSelection: true, canPaste: true,
-  selectedNodeCount: 3, selectedGroupCount: 1, selectedContainerCount: 1, hasTextSelection: true,
+  selectedNodeCount: 3, eligibleNodeCount: 2, selectedGroupCount: 1, selectedContainerCount: 1, hasTextSelection: true,
 }
 const menus = createMainMenus(readyState)
 
@@ -51,7 +51,7 @@ describe('MenuBar', () => {
   it('shows checked text and disabled Chinese reason', async () => {
     const stateMenus = createMainMenus({
       canUndo: false, canRedo: false, hasSelection: false, canPaste: false, showGrid: true,
-      selectedNodeCount: 0, selectedGroupCount: 0, selectedContainerCount: 0, hasTextSelection: false,
+      selectedNodeCount: 0, eligibleNodeCount: 0, selectedGroupCount: 0, selectedContainerCount: 0, hasTextSelection: false,
     })
     const wrapper = mount(MenuBar, { props: { menus: stateMenus } })
     await wrapper.find('[data-menu-id="view"]').trigger('click')

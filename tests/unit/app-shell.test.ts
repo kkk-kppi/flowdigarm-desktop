@@ -36,8 +36,8 @@ const CanvasAreaStub = defineComponent({
     <button data-testid="run-link" @click="menuController.execute('context-link')" />
     <button data-testid="run-line" @click="menuController.execute('context-line-style')" />
     <button data-testid="run-format-paint" @click="menuController.execute('context-format-paint')" />
-    <button data-testid="run-add-container" @click="menuController.execute('context-add-container')" />
-    <button data-testid="run-add-members" @click="menuController.execute('context-add-members')" />
+    <button data-testid="run-add-container" @click="menuController.execute('context-add-container', { trigger: $event.currentTarget })" />
+    <button data-testid="run-add-members" @click="menuController.execute('context-add-members', { trigger: $event.currentTarget })" />
   </div>`,
 })
 
@@ -142,8 +142,12 @@ describe('AppShell 组装', () => {
     await wrapper.find('[data-testid="run-link"]').trigger('click')
     await flushPromises()
     expect(document.activeElement).toBe(wrapper.find('[data-testid="node-link"]').element)
+    store.activePage!.nodes.find(({ id }) => id === 'node-1')!.style.fill = '#ff0000'
+    formatPaint.armOnce()
+    selection.setSelection(['node-2'])
     await wrapper.find('[data-testid="run-format-paint"]').trigger('click')
-    expect(formatPaint.mode).toBe('once')
+    expect(formatPaint.mode).toBe('off')
+    expect(store.activePage?.nodes.find(({ id }) => id === 'node-2')?.style.fill).toBe('#ff0000')
 
     selection.setSelection(['edge-1'])
     await wrapper.find('[data-testid="run-edit-label"]').trigger('click')
@@ -177,6 +181,33 @@ describe('AppShell 组装', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await wrapper.vm.$nextTick()
     expect(document.activeElement).toBe(helpTrigger.element)
+    wrapper.unmount()
+  })
+
+  it('makes background content inert while the picker is open and restores trigger focus on cancel and confirm', async () => {
+    const { wrapper, store, selection } = mountShell(true)
+    const diagram = createTestDocument()
+    diagram.pages[0].nodes[2].isContainer = true
+    store.loadDocument(diagram)
+    selection.setSelection(['node-1'])
+    const trigger = wrapper.find<HTMLButtonElement>('[data-testid="run-add-container"]')
+    trigger.element.focus()
+    await trigger.trigger('click')
+    const background = wrapper.find('[data-testid="shell-background"]')
+    expect(background.attributes('inert')).toBeDefined()
+    expect(background.attributes('aria-hidden')).toBe('true')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(trigger.element)
+
+    await trigger.trigger('click')
+    await wrapper.find<HTMLInputElement>('[value="node-3"]').setValue(true)
+    await wrapper.find('[data-testid="membership-confirm"]').trigger('click')
+    await flushPromises()
+    expect(background.attributes('inert')).toBeUndefined()
+    expect(background.attributes('aria-hidden')).toBeUndefined()
+    expect(document.activeElement).toBe(trigger.element)
     wrapper.unmount()
   })
 })
