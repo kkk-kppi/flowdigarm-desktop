@@ -46,6 +46,49 @@ const pageManagers = new WeakMap<object, PageManager>()
 // 常用形状仓库：接口注入（默认 InMemory；Task 8 经 setShapeUsageRepository 换 SQLite 实现）。
 const shapeUsageRepositories = new WeakMap<object, ShapeUsageRepository>()
 
+interface RevisionTracker {
+  next: number
+  current: number
+  saved: number
+  revisions: Map<string, number>
+}
+
+const revisionTrackers = new WeakMap<object, RevisionTracker>()
+
+function documentFingerprint(document: DiagramDocument): string {
+  return JSON.stringify(document)
+}
+
+function revisionTrackerOf(store: object, document: DiagramDocument): RevisionTracker {
+  let tracker = revisionTrackers.get(store)
+  if (!tracker) {
+    tracker = { next: 0, current: 0, saved: 0, revisions: new Map([[documentFingerprint(document), 0]]) }
+    revisionTrackers.set(store, tracker)
+  }
+  return tracker
+}
+
+function advanceRevision(store: object, document: DiagramDocument): boolean {
+  const tracker = revisionTrackerOf(store, document)
+  const fingerprint = documentFingerprint(document)
+  let revision = tracker.revisions.get(fingerprint)
+  if (revision === undefined) {
+    revision = ++tracker.next
+    tracker.revisions.set(fingerprint, revision)
+  }
+  tracker.current = revision
+  return tracker.current !== tracker.saved
+}
+
+function resetRevision(store: object, document: DiagramDocument): void {
+  revisionTrackers.set(store, {
+    next: 0,
+    current: 0,
+    saved: 0,
+    revisions: new Map([[documentFingerprint(document), 0]]),
+  })
+}
+
 function shapeUsageRepositoryOf(store: object): ShapeUsageRepository {
   let repository = shapeUsageRepositories.get(store)
   if (!repository) {
@@ -120,15 +163,20 @@ export const useDocumentStore = defineStore('document', {
       this.activePageId = document.pages[0]?.id ?? ''
       this.filePath = path ?? null
       this.dirty = false
+      resetRevision(this, document)
+    },
+    replaceDocument(document: DiagramDocument, path?: string) {
+      this.loadDocument(document, path)
     },
     /** 在当前页命令栈执行命令并置 dirty；apply 抛错时文档与栈不变。 */
     executeCommand(command: EditorCommand) {
+      revisionTrackerOf(this, this.document)
       const manager = pageManagerOf(this, this.document)
       const history = manager.historyFor(this.activePageId)
       this.document = markRaw(history.execute(command, this.document))
       manager.syncFromDocument(this.document)
       this.activePageId = manager.activePageId
-      this.dirty = true
+      this.dirty = advanceRevision(this, this.document)
     },
     undo() {
       const manager = pageManagerOf(this, this.document)
@@ -137,7 +185,7 @@ export const useDocumentStore = defineStore('document', {
         this.document = markRaw(next)
         manager.syncFromDocument(next)
         this.activePageId = manager.activePageId
-        this.dirty = true
+        this.dirty = advanceRevision(this, this.document)
       }
     },
     redo() {
@@ -147,7 +195,7 @@ export const useDocumentStore = defineStore('document', {
         this.document = markRaw(next)
         manager.syncFromDocument(next)
         this.activePageId = manager.activePageId
-        this.dirty = true
+        this.dirty = advanceRevision(this, this.document)
       }
     },
     /** 切换活动页：视图行为，不产生命令、不进入历史；同时清空选择（选择按页隔离）。 */
@@ -159,6 +207,8 @@ export const useDocumentStore = defineStore('document', {
     /** 保存成功后调用：清 dirty 并记录文件路径。 */
     markSaved(path: string) {
       this.filePath = path
+      const tracker = revisionTrackerOf(this, this.document)
+      tracker.saved = tracker.current
       this.dirty = false
     },
     /** 复制当前页选中图元到应用内剪贴板（仅内部边）；空选/选择失效不动作。 */

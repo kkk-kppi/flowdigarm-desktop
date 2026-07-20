@@ -4,13 +4,14 @@
 
 ## 1. 文档与页面（新建/打开/保存/多页标签/页面设置）
 
-- 入口：页面标签栏 `src/ui/pages/PageTabs.vue`（单击切换、双击行内重命名、× 内联确认删除、末尾 + 新建、右侧缩放控件）；右侧"页面设置"标签页 `src/ui/pages/PageSetupTab.vue`（页面属性 + 连线配置，右侧面板容器在后续任务接线）；分页符叠层 `src/ui/canvas/PageBreakOverlay.vue`（开关经 app-store.showPageBreaks，菜单入口在后续任务接线）。文件新建/打开/保存入口 Task 8 补全。
+- 入口：页面标签栏 `src/ui/pages/PageTabs.vue`（单击切换、双击行内重命名、× 内联确认删除、末尾 + 新建、右侧缩放控件）；右侧"页面设置"标签页 `src/ui/pages/PageSetupTab.vue`；分页符叠层 `src/ui/canvas/PageBreakOverlay.vue`。文件打开/保存的应用用例与平台能力已就绪，菜单入口和恢复对话框由 Task 8b 接线。
 - 前置条件：存在已打开文档（至少一页）；背景页引用目标必须是背景类型页面且不成循环。
-- 成功结果：多页新建（自动「页面 N」递增不重名）/切换（每页独立撤销栈与视口状态）/重命名/删除（二次确认）；页面设置一次应用生效（纸张/方向/单位/背景色/背景页/连线类型/默认箭头/自动连线标签/跳线）；单位切换只改显示与输入，内部 pt 几何不变；"自动调整大小"按本页图元外接矩形 +36pt 边距重设页面尺寸与方向；分页符按 A4 打印纸减四边 5mm 打印机边距显示真实打印分块虚线；前景页渲染时先绘制其直接引用的背景页（背景内容不可选、不可交互）。
+- 成功结果：多页新建/切换/重命名/删除及页面设置保持既有行为；`.flowdiagram` 打开经 Rust 做 20 MiB、UTF-8、JSON 与 schemaVersion 基础校验，再由 application 做完整领域校验；保存使用目标同目录临时文件、文件 fsync、原子替换（Windows 可覆盖已有文件）及 Unix 父目录 fsync。显式保存成功记录保存 revision，undo 回保存点时 `dirty=false`，redo 或分支编辑时恢复 `dirty=true`。脏文档可由 `AutosaveController` 在最后一次变化 2 秒后写恢复快照，显式保存调用方负责删除快照。
 - 失败反馈：删除最后一页「至少保留一个页面。」；删除被引用为背景页的页面「该页面被引用为背景页，无法删除。」；重命名空名或纯空白「页面名称不能为空。」；背景页引用循环或指向非背景页「背景页设置无效。」；页面无图元时"自动调整大小"禁用（title 提示"页面无图元"）。
 - 撤销边界：新建/删除/重命名页面各一条记录；页面设置一次"应用"一条记录（无变化不产生）；"自动调整大小"一条记录；切换页与分页符等视图开关不产生命令、不进入撤销历史。
-- 数据字段：`DiagramPage`（pageSize/orientation/unit/defaultConnector/defaultArrow/autoConnectLabel/showLineJumps/canvas.background/backgroundPageId，`src/domain/diagram.ts`）；文档状态 `document/activePageId/filePath/dirty`（`src/stores/document-store.ts`）；打印分块 `computePageBreaks`（`src/application/pages/page-breaks.ts`）。
-- 自动化测试位置：`tests/unit/editor/pages/*`（update-page/page-lifecycle/fit-page/page-manager/page-breaks/background-page-resolver）、`tests/unit/stores/document-store.test.ts`、`tests/component/PageTabs.test.ts`、`tests/component/PageSetupTab.test.ts`、`tests/component/PageBreakOverlay.test.ts`、`tests/unit/editor/help-registry.test.ts`；文件部分 Task 8 补全（规划：Rust 持久化单测）。
+- 数据字段：图文件只保存 `DiagramDocument`；SQLite `flowchart-editor.db` 只保存 7 张本机元数据表：迁移版本、设置、最近文件、恢复快照、形状统计、窗口状态和用户模板。最近文件含 path/documentId/name/lastOpenedAt/pinned，恢复快照含 documentId/name/json/sourcePath/updatedAt，时间为 Unix 毫秒 UTC。应用契约见 `src/application/persistence/persistence-ports.ts`，SQLite 不保存用户图文件主体。
+- 失败反馈：非法文件返回「文件格式无效，未打开文件。」且不替换当前文档；保存失败返回「无法保存，原文件未被覆盖。」。原子图文件保存成功后，即使最近文件 SQLite 更新失败也保持保存成功；自动恢复失败报告「自动恢复快照保存失败，图文件不受影响。」。
+- 自动化测试位置：文件用例与自动恢复在 `tests/unit/editor/persistence/*`，保存点在 `tests/unit/stores/document-store.test.ts`，形状统计降级在 `tests/unit/editor/shapes/shape-usage-repository.test.ts`；Rust 原子文件、SQLite、迁移和 command 校验测试与实现同模块位于 `src-tauri/src/{persistence,commands}`。
 
 ## 2. 画布与视图（工作区/标尺/缩放/网格/状态栏）
 

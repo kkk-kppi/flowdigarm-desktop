@@ -163,6 +163,32 @@ describe('document-store', () => {
     expect(store.dirty).toBe(false)
     expect(store.filePath).toBe('D:/diagrams/流程.flowdiagram')
   })
+
+  it('保存点后编辑为 dirty，undo 回保存点 clean，redo 再次 dirty', () => {
+    const store = useDocumentStore()
+    const pageId = store.activePageId
+    const original = store.activePage!.name
+    store.executeCommand(new RenamePageCommand({ pageId, before: original, after: '保存版本' }))
+    store.markSaved('D:/diagrams/savepoint.flowdiagram')
+    store.executeCommand(new RenamePageCommand({ pageId, before: '保存版本', after: '后续版本' }))
+    expect(store.dirty).toBe(true)
+    store.undo()
+    expect(store.activePage?.name).toBe('保存版本')
+    expect(store.dirty).toBe(false)
+    store.redo()
+    expect(store.dirty).toBe(true)
+  })
+
+  it('撤销后建立不同分支，即使命令深度相同也保持 dirty', () => {
+    const store = useDocumentStore()
+    const pageId = store.activePageId
+    const original = store.activePage!.name
+    store.executeCommand(new RenamePageCommand({ pageId, before: original, after: '保存版本' }))
+    store.markSaved('D:/diagrams/savepoint.flowdiagram')
+    store.undo()
+    store.executeCommand(new RenamePageCommand({ pageId, before: original, after: '另一分支' }))
+    expect(store.dirty).toBe(true)
+  })
 })
 
 describe('document-store 剪贴板与创建', () => {

@@ -25,6 +25,7 @@
     "@antv/x6-plugin-snapline": "^2.1.7",
     "@antv/x6-plugin-transform": "^2.1.8",
     "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-dialog": "^2.7.2",
     "pinia": "^2.2.0",
     "vue": "^3.5.0"
   },

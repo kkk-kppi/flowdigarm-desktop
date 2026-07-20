@@ -6,6 +6,7 @@ import {
   computeTopShapes,
   InMemoryShapeUsageRepository,
 } from '@/application/shapes/shape-usage-repository'
+import { TauriShapeUsageRepository } from '@/infrastructure/persistence/tauri-shape-usage-repository'
 
 const LIBRARY_TYPES = [
   'rect',
@@ -84,5 +85,28 @@ describe('computeTopShapes', () => {
   it('显式 limit 截断结果', () => {
     const result = computeTopShapes([], LIBRARY_TYPES, 5)
     expect(result).toEqual(LIBRARY_TYPES.slice(0, 5))
+  })
+})
+
+describe('TauriShapeUsageRepository', () => {
+  it('只通过注入的 invoke adapter 调用 Rust command', async () => {
+    const calls: { command: string; args?: Record<string, unknown> }[] = []
+    const repository = new TauriShapeUsageRepository(async (command, args) => {
+      calls.push({ command, args })
+      if (command === 'top_shape_usage') return [{ shapeType: 'rect', useCount: 3, lastUsedAt: 1 }]
+    })
+    await repository.recordUsage('rect')
+    await expect(repository.topUsed(20)).resolves.toEqual([{ shapeType: 'rect', count: 3 }])
+    expect(calls).toEqual([
+      { command: 'record_shape_usage', args: { shapeType: 'rect' } },
+      { command: 'top_shape_usage', args: { limit: 20 } },
+    ])
+  })
+
+  it('数据库调用失败后降级 InMemory，形状记录仍成功', async () => {
+    const repository = new TauriShapeUsageRepository(async () => { throw new Error('db') })
+    await expect(repository.recordUsage('diamond')).resolves.toBeUndefined()
+    await expect(repository.recordUsage('diamond')).resolves.toBeUndefined()
+    await expect(repository.topUsed(20)).resolves.toEqual([{ shapeType: 'diamond', count: 2 }])
   })
 })
