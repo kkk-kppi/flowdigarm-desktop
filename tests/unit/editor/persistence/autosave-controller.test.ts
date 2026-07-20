@@ -30,20 +30,21 @@ describe('AutosaveController', () => {
     const controller = new AutosaveController(repository(writes))
     const first = createEmptyDocument('第一版')
     const last = { ...first, name: '最后一版' }
-    controller.schedule(first)
-    controller.schedule(last, 'C:/docs/a.flowdiagram')
+    controller.schedule(first, '0:1')
+    controller.schedule(last, '0:2', 'C:/docs/a.flowdiagram')
     await vi.advanceTimersByTimeAsync(1999)
     expect(writes).toEqual([])
     await vi.advanceTimersByTimeAsync(1)
     expect(writes).toHaveLength(1)
     expect(writes[0]).toMatchObject({ documentId: last.id, name: '最后一版', sourcePath: 'C:/docs/a.flowdiagram' })
+    expect(writes[0].versionToken).toBe('0:2')
     expect(JSON.parse(writes[0].json).name).toBe('最后一版')
   })
 
   it('flush 立即写待处理快照且不重复写', async () => {
     const writes: RecoverySnapshotWrite[] = []
     const controller = new AutosaveController(repository(writes))
-    controller.schedule(createEmptyDocument())
+    controller.schedule(createEmptyDocument(), '0:0')
     await controller.flush()
     await vi.runAllTimersAsync()
     expect(writes).toHaveLength(1)
@@ -52,14 +53,14 @@ describe('AutosaveController', () => {
   it('cancel 与 dispose 清除 timer，dispose 后 schedule 不再工作', async () => {
     const writes: RecoverySnapshotWrite[] = []
     const controller = new AutosaveController(repository(writes))
-    controller.schedule(createEmptyDocument())
+    controller.schedule(createEmptyDocument(), '0:0')
     expect(vi.getTimerCount()).toBe(1)
     controller.cancel()
     expect(vi.getTimerCount()).toBe(0)
-    controller.schedule(createEmptyDocument())
+    controller.schedule(createEmptyDocument(), '0:0')
     controller.dispose()
     expect(vi.getTimerCount()).toBe(0)
-    controller.schedule(createEmptyDocument())
+    controller.schedule(createEmptyDocument(), '0:0')
     await vi.runAllTimersAsync()
     expect(writes).toEqual([])
   })
@@ -67,7 +68,7 @@ describe('AutosaveController', () => {
   it('repository reject 由 onError 捕获且不产生未处理 rejection', async () => {
     const errors: string[] = []
     const controller = new AutosaveController(repository([], true), 2000, (message) => errors.push(message))
-    controller.schedule(createEmptyDocument())
+    controller.schedule(createEmptyDocument(), '0:0')
     await vi.advanceTimersByTimeAsync(2000)
     expect(errors).toEqual(['自动恢复快照保存失败，图文件不受影响。'])
   })
@@ -87,9 +88,9 @@ describe('AutosaveController', () => {
     const controller = new AutosaveController(recovery, 2000)
 
     const first = createEmptyDocument('旧快照')
-    controller.schedule(first)
+    controller.schedule(first, '0:1')
     await vi.advanceTimersByTimeAsync(2000)
-    controller.schedule({ ...first, name: '新快照' })
+    controller.schedule({ ...first, name: '新快照' }, '0:2')
 
     let flushed = false
     const flushing = controller.flush().then(() => {
@@ -120,9 +121,9 @@ describe('AutosaveController', () => {
     })
     const first = createEmptyDocument('旧快照')
 
-    controller.schedule(first)
+    controller.schedule(first, '0:1')
     await vi.advanceTimersByTimeAsync(2000)
-    controller.schedule({ ...first, name: '最终快照' })
+    controller.schedule({ ...first, name: '最终快照' }, '0:2')
     await vi.advanceTimersByTimeAsync(2000)
     expect(calls).toBe(1)
 
@@ -145,10 +146,10 @@ describe('AutosaveController', () => {
     }, 2000)
     const document = createEmptyDocument('旧快照')
 
-    controller.schedule(document)
+    controller.schedule(document, '0:1')
     await vi.advanceTimersByTimeAsync(2000)
     await vi.advanceTimersByTimeAsync(1000)
-    controller.schedule({ ...document, name: '最新快照' })
+    controller.schedule({ ...document, name: '最新快照' }, '0:2')
     await vi.advanceTimersByTimeAsync(500)
     firstWrite.resolve()
     await Promise.resolve()
@@ -178,9 +179,9 @@ describe('AutosaveController', () => {
     }, 2000, (message) => errors.push(message))
     const document = createEmptyDocument('进行中')
 
-    controller.schedule(document)
+    controller.schedule(document, '0:1')
     await vi.advanceTimersByTimeAsync(2000)
-    controller.schedule({ ...document, name: '应丢弃' })
+    controller.schedule({ ...document, name: '应丢弃' }, '0:2')
     controller.dispose()
     expect(vi.getTimerCount()).toBe(0)
 

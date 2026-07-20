@@ -23,6 +23,7 @@ const persistenceController = new DocumentPersistenceController(
       filePath: documentStore.filePath,
       dirty: documentStore.dirty,
       revision: documentStore.currentRevision,
+      documentEpoch: documentStore.documentEpoch,
     }),
     replaceDocument: (document, path) => documentStore.replaceDocument(document, path),
     markSaved: (path, revision) => documentStore.markSaved(path, revision),

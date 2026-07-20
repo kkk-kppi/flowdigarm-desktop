@@ -101,6 +101,19 @@ describe('document-store', () => {
     expect(store.dirty).toBe(false)
   })
 
+  it('new/load/replace 即使文档 ID 相同也单调递增 documentEpoch', () => {
+    const store = useDocumentStore()
+    const initialEpoch = store.documentEpoch
+    const documentId = store.document.id
+
+    store.loadDocument({ ...createEmptyDocument('载入'), id: documentId })
+    expect(store.documentEpoch).toBe(initialEpoch + 1)
+    store.replaceDocument({ ...createEmptyDocument('替换'), id: documentId })
+    expect(store.documentEpoch).toBe(initialEpoch + 2)
+    store.newDocument()
+    expect(store.documentEpoch).toBe(initialEpoch + 3)
+  })
+
   it('switchPage 不产生命令：当前页撤销栈不变、文档不变', () => {
     const store = useDocumentStore()
     store.loadDocument(twoPageDocument())

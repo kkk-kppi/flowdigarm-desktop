@@ -6,6 +6,7 @@ export interface DiagramFileRepository {
 
 export interface RecoverySnapshot {
   documentId: string
+  versionToken: string
   name: string
   json: string
   sourcePath?: string
@@ -14,6 +15,7 @@ export interface RecoverySnapshot {
 
 export interface RecoverySnapshotWrite {
   documentId: string
+  versionToken: string
   name: string
   json: string
   sourcePath?: string
@@ -22,7 +24,7 @@ export interface RecoverySnapshotWrite {
 export interface RecoveryRepository {
   latest(): Promise<RecoverySnapshot | null>
   write(input: RecoverySnapshotWrite): Promise<void>
-  remove(documentId: string): Promise<void>
+  remove(documentId: string, versionToken: string): Promise<void>
 }
 
 export interface RecentDocument {

@@ -177,6 +177,7 @@ pub fn read_recovery_snapshot(
 pub fn write_recovery_snapshot(
     repository: State<'_, PersistenceState>,
     document_id: String,
+    version_token: String,
     name: String,
     json: String,
     source_path: Option<String>,
@@ -184,6 +185,7 @@ pub fn write_recovery_snapshot(
     database_result(
         database_repository(&repository)?.upsert_recovery(&RecoverySnapshotWrite {
             document_id,
+            version_token,
             name,
             document_json: json,
             source_path,
@@ -196,8 +198,9 @@ pub fn write_recovery_snapshot(
 pub fn delete_recovery_snapshot(
     repository: State<'_, PersistenceState>,
     document_id: String,
+    version_token: String,
 ) -> Result<(), String> {
-    database_result(database_repository(&repository)?.delete_recovery(&document_id))
+    database_result(database_repository(&repository)?.delete_recovery(&document_id, &version_token))
 }
 
 #[tauri::command]

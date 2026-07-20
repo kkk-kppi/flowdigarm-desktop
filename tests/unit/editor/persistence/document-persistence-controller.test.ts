@@ -23,14 +23,22 @@ function fileRepository(overrides: Partial<DiagramFileRepository> = {}): Diagram
   }
 }
 
-function recoveryRepository(writes: RecoverySnapshotWrite[], removed: string[]): RecoveryRepository {
+interface RemovedRecovery {
+  documentId: string
+  versionToken: string
+}
+
+function recoveryRepository(
+  writes: RecoverySnapshotWrite[],
+  removed: RemovedRecovery[],
+): RecoveryRepository {
   return {
     latest: async () => null,
     write: async (input) => {
       writes.push(input)
     },
-    remove: async (documentId) => {
-      removed.push(documentId)
+    remove: async (documentId, versionToken) => {
+      removed.push({ documentId, versionToken })
     },
   }
 }
@@ -51,6 +59,7 @@ function persistenceStore(): DocumentPersistenceStore {
       filePath: store.filePath,
       dirty: store.dirty,
       revision: store.currentRevision,
+      documentEpoch: store.documentEpoch,
     }),
     replaceDocument: (document, path) => store.replaceDocument(document, path),
     markSaved: (path, revision) => store.markSaved(path, revision),
@@ -106,7 +115,7 @@ describe('DocumentPersistenceController', () => {
   })
 
   it('协调保存仅在文件成功后删除恢复快照并标记保存点', async () => {
-    const removed: string[] = []
+    const removed: RemovedRecovery[] = []
     const store = useDocumentStore()
     store.executeCommand(new RenamePageCommand({
       pageId: store.activePageId,
@@ -120,7 +129,10 @@ describe('DocumentPersistenceController', () => {
     )
 
     await expect(controller.save()).resolves.toEqual({ ok: true, path: 'C:/docs/新文档.flowdiagram' })
-    expect(removed).toEqual([store.document.id])
+    expect(removed).toEqual([{
+      documentId: store.document.id,
+      versionToken: `${store.documentEpoch}:${store.currentRevision}`,
+    }])
     expect(store.filePath).toBe('C:/docs/新文档.flowdiagram')
     expect(store.dirty).toBe(false)
     controller.dispose()
@@ -129,7 +141,7 @@ describe('DocumentPersistenceController', () => {
   it('保存进行中继续编辑时保存捕获的快照，但当前 revision 保持 dirty 并保留最新恢复', async () => {
     const saveResult = deferred<string | null>()
     const writes: RecoverySnapshotWrite[] = []
-    const removed: string[] = []
+    const removed: RemovedRecovery[] = []
     let savedJson = ''
     const store = useDocumentStore()
     store.executeCommand(new RenamePageCommand({
@@ -174,7 +186,7 @@ describe('DocumentPersistenceController', () => {
   it('保存进行中替换并编辑文档时不覆盖新文档路径或删除其恢复', async () => {
     const saveResult = deferred<string | null>()
     const writes: RecoverySnapshotWrite[] = []
-    const removed: string[] = []
+    const removed: RemovedRecovery[] = []
     const store = useDocumentStore()
     store.executeCommand(new RenamePageCommand({
       pageId: store.activePageId,
@@ -203,7 +215,7 @@ describe('DocumentPersistenceController', () => {
     expect(store.document.id).toBe(replacement.id)
     expect(store.filePath).toBe('C:/docs/replacement.flowdiagram')
     expect(store.dirty).toBe(true)
-    expect(removed).not.toContain(oldDocumentId)
+    expect(removed.map((entry) => entry.documentId)).not.toContain(oldDocumentId)
 
     await vi.advanceTimersByTimeAsync(2000)
     expect(writes).toHaveLength(1)
@@ -211,6 +223,154 @@ describe('DocumentPersistenceController', () => {
     expect(JSON.parse(writes[0].json).pages[0].name).toBe('替换文档的新编辑')
     controller.dispose()
   })
+
+  it('保存期间以相同 ID 和相同 revision 替换文档时不清理替换文档状态', async () => {
+    const saveResult = deferred<string | null>()
+    const writes: RecoverySnapshotWrite[] = []
+    const removed: RemovedRecovery[] = []
+    const store = useDocumentStore()
+    store.executeCommand(new RenamePageCommand({
+      pageId: store.activePageId,
+      before: store.activePage!.name,
+      after: '旧实例 revision 1',
+    }))
+    const documentId = store.document.id
+    const capturedRevision = store.currentRevision
+    const capturedEpoch = store.documentEpoch
+    const controller = new DocumentPersistenceController(
+      persistenceStore(),
+      fileRepository({ save: async () => saveResult.promise }),
+      recoveryRepository(writes, removed),
+    )
+
+    const saving = controller.save()
+    store.replaceDocument({ ...createEmptyDocument('相同 ID 的替换实例'), id: documentId }, 'C:/docs/replacement.flowdiagram')
+    store.executeCommand(new RenamePageCommand({
+      pageId: store.activePageId,
+      before: store.activePage!.name,
+      after: '替换实例 revision 1',
+    }))
+    await nextTick()
+    expect(store.currentRevision).toBe(capturedRevision)
+    expect(store.documentEpoch).toBeGreaterThan(capturedEpoch)
+
+    saveResult.resolve('C:/docs/old.flowdiagram')
+    await expect(saving).resolves.toEqual({ ok: true, path: 'C:/docs/old.flowdiagram' })
+    expect(store.filePath).toBe('C:/docs/replacement.flowdiagram')
+    expect(store.dirty).toBe(true)
+    expect(removed).toEqual([])
+
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(writes.at(-1)).toMatchObject({
+      documentId,
+      versionToken: `${store.documentEpoch}:${store.currentRevision}`,
+      sourcePath: 'C:/docs/replacement.flowdiagram',
+    })
+    controller.dispose()
+  })
+
+  it('延迟删除旧 token 时完成的新恢复快照不会被删除', async () => {
+    const removeStarted = deferred<void>()
+    const allowRemove = deferred<void>()
+    const stored = new Map<string, RecoverySnapshotWrite>()
+    const removals: RemovedRecovery[] = []
+    const recovery: RecoveryRepository = {
+      latest: async () => null,
+      write: async (input) => {
+        stored.set(input.documentId, input)
+      },
+      remove: async (documentId, versionToken) => {
+        removals.push({ documentId, versionToken })
+        removeStarted.resolve()
+        await allowRemove.promise
+        if (stored.get(documentId)?.versionToken === versionToken) stored.delete(documentId)
+      },
+    }
+    const store = useDocumentStore()
+    const controller = new DocumentPersistenceController(persistenceStore(), fileRepository(), recovery)
+    store.executeCommand(new RenamePageCommand({
+      pageId: store.activePageId,
+      before: store.activePage!.name,
+      after: 'token A',
+    }))
+    await nextTick()
+    const tokenA = `${store.documentEpoch}:${store.currentRevision}`
+
+    const saving = controller.save()
+    await removeStarted.promise
+    store.executeCommand(new RenamePageCommand({
+      pageId: store.activePageId,
+      before: 'token A',
+      after: 'token B',
+    }))
+    await nextTick()
+    const tokenB = `${store.documentEpoch}:${store.currentRevision}`
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(stored.get(store.document.id)?.versionToken).toBe(tokenB)
+
+    allowRemove.resolve()
+    await saving
+    expect(removals).toEqual([{ documentId: store.document.id, versionToken: tokenA }])
+    expect(stored.get(store.document.id)?.versionToken).toBe(tokenB)
+    controller.dispose()
+  })
+
+  it.each(['pending', 'in-flight'] as const)(
+    '并发 Save As 后 %s 恢复快照最终使用新 sourcePath 并重新等待 2 秒',
+    async (writeState) => {
+      const saveResult = deferred<string | null>()
+      const firstWrite = deferred<void>()
+      const writes: RecoverySnapshotWrite[] = []
+      let writeCalls = 0
+      const recovery: RecoveryRepository = {
+        latest: async () => null,
+        write: async (input) => {
+          writes.push(input)
+          writeCalls += 1
+          if (writeState === 'in-flight' && writeCalls === 1) await firstWrite.promise
+        },
+        remove: async () => {},
+      }
+      const store = useDocumentStore()
+      store.executeCommand(new RenamePageCommand({
+        pageId: store.activePageId,
+        before: store.activePage!.name,
+        after: '保存捕获版本',
+      }))
+      const controller = new DocumentPersistenceController(
+        persistenceStore(),
+        fileRepository({ save: async () => saveResult.promise }),
+        recovery,
+      )
+
+      const saving = controller.save()
+      store.executeCommand(new RenamePageCommand({
+        pageId: store.activePageId,
+        before: '保存捕获版本',
+        after: '并发编辑版本',
+      }))
+      await nextTick()
+      if (writeState === 'in-flight') await vi.advanceTimersByTimeAsync(2000)
+
+      saveResult.resolve('C:/docs/save-as.flowdiagram')
+      await saving
+      expect(store.filePath).toBe('C:/docs/save-as.flowdiagram')
+      expect(store.dirty).toBe(true)
+      expect(vi.getTimerCount()).toBe(1)
+      if (writeState === 'in-flight') firstWrite.resolve()
+      await Promise.resolve()
+
+      await vi.advanceTimersByTimeAsync(1999)
+      expect(writes.some((write) => write.sourcePath === 'C:/docs/save-as.flowdiagram')).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      await Promise.resolve()
+      expect(writes.at(-1)).toMatchObject({
+        versionToken: `${store.documentEpoch}:${store.currentRevision}`,
+        sourcePath: 'C:/docs/save-as.flowdiagram',
+      })
+      controller.dispose()
+    },
+  )
 
   it('恢复快照删除失败不改变文件保存成功和精确保存点', async () => {
     const store = useDocumentStore()
@@ -237,7 +397,7 @@ describe('DocumentPersistenceController', () => {
   })
 
   it('文件保存失败保持 dirty 和路径，且返回稳定中文错误', async () => {
-    const removed: string[] = []
+    const removed: RemovedRecovery[] = []
     const store = useDocumentStore()
     store.executeCommand(new RenamePageCommand({
       pageId: store.activePageId,

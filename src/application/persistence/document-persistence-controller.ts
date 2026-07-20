@@ -16,6 +16,7 @@ export interface DocumentPersistenceStore {
     filePath: string | null
     dirty: boolean
     revision: number
+    documentEpoch: number
   }
   replaceDocument(document: DiagramDocument, path?: string): void
   markSaved(path: string, revision: number): void
@@ -25,6 +26,7 @@ export interface DocumentPersistenceStore {
 
 interface CapturedSave {
   documentId: string
+  documentEpoch: number
   revision: number
   filePath: string | null
 }
@@ -67,6 +69,7 @@ export class DocumentPersistenceController {
     }
     const captured: CapturedSave = {
       documentId: snapshot.document.id,
+      documentEpoch: snapshot.documentEpoch,
       revision: snapshot.revision,
       filePath: snapshot.filePath,
     }
@@ -77,24 +80,29 @@ export class DocumentPersistenceController {
     })
     if (!result.ok) return result
 
-    if (!this.isCurrent(captured)) {
-      this.retainCurrentRecovery(captured, result.path)
-      return result
+    let current = this.store.snapshot()
+    const sameEpoch = current.documentEpoch === captured.documentEpoch
+    const returnedNewPath = captured.filePath !== result.path
+    if (sameEpoch) {
+      if (current.filePath !== result.path) {
+        this.store.updateFilePath(result.path)
+        current = this.store.snapshot()
+      }
+      if (returnedNewPath && current.dirty) this.scheduleRecovery(current)
     }
+
+    if (!this.isCurrent(captured)) return result
+
+    this.scheduledDocument = snapshot.document
+    this.autosave.schedule(snapshot.document, this.versionToken(captured), result.path)
     await this.autosave.flush()
-    if (!this.isCurrent(captured)) {
-      this.retainCurrentRecovery(captured, result.path)
-      return result
-    }
     try {
-      await this.recovery.remove(captured.documentId)
+      await this.recovery.remove(captured.documentId, this.versionToken(captured))
     } catch {
       // The diagram file is authoritative; recovery metadata cleanup is best-effort.
     }
     if (this.isCurrent(captured)) {
       this.store.markSaved(result.path, captured.revision)
-    } else {
-      this.retainCurrentRecovery(captured, result.path, true)
     }
     return result
   }
@@ -116,23 +124,26 @@ export class DocumentPersistenceController {
       return
     }
     if (snapshot.document === this.scheduledDocument) return
-    this.scheduledDocument = snapshot.document
-    this.autosave.schedule(snapshot.document, snapshot.filePath ?? undefined)
+    this.scheduleRecovery(snapshot)
   }
 
   private isCurrent(captured: CapturedSave): boolean {
     const current = this.store.snapshot()
-    return current.document.id === captured.documentId && current.revision === captured.revision
+    return current.documentEpoch === captured.documentEpoch
+      && current.document.id === captured.documentId
+      && current.revision === captured.revision
   }
 
-  private retainCurrentRecovery(captured: CapturedSave, savedPath: string, force = false): void {
-    let current = this.store.snapshot()
-    if (current.document.id === captured.documentId && current.filePath === captured.filePath) {
-      this.store.updateFilePath(savedPath)
-      current = this.store.snapshot()
-    }
-    if (!current.dirty || (!force && current.document === this.scheduledDocument)) return
-    this.scheduledDocument = current.document
-    this.autosave.schedule(current.document, current.filePath ?? undefined)
+  private scheduleRecovery(snapshot: ReturnType<DocumentPersistenceStore['snapshot']>): void {
+    this.scheduledDocument = snapshot.document
+    this.autosave.schedule(
+      snapshot.document,
+      `${snapshot.documentEpoch}:${snapshot.revision}`,
+      snapshot.filePath ?? undefined,
+    )
+  }
+
+  private versionToken(captured: CapturedSave): string {
+    return `${captured.documentEpoch}:${captured.revision}`
   }
 }

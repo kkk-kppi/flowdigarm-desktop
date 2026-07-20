@@ -28,6 +28,7 @@ import { useSelectionStore } from '@/stores/selection-store'
 
 interface DocumentState {
   document: DiagramDocument
+  documentEpoch: number
   activePageId: string
   filePath: string | null
   dirty: boolean
@@ -167,6 +168,7 @@ export const useDocumentStore = defineStore('document', {
     const document = markRaw(createEmptyDocument())
     return {
       document,
+      documentEpoch: 0,
       activePageId: document.pages[0]?.id ?? '',
       filePath: null,
       dirty: false,
@@ -219,6 +221,7 @@ export const useDocumentStore = defineStore('document', {
     loadDocument(document: DiagramDocument, path?: string) {
       pageManagers.set(this, new PageManager(document))
       this.document = markRaw(document)
+      this.documentEpoch += 1
       this.activePageId = document.pages[0]?.id ?? ''
       this.filePath = path ?? null
       this.dirty = false

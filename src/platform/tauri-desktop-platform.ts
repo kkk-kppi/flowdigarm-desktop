@@ -41,7 +41,10 @@ export const tauriDiagramFileRepository: DiagramFileRepository = {
 export const tauriRecoveryRepository: RecoveryRepository = {
   latest: () => invoke('read_recovery_snapshot'),
   write: (input) => invoke<void>('write_recovery_snapshot', { ...input }),
-  remove: (documentId) => invoke<void>('delete_recovery_snapshot', { documentId }),
+  remove: (documentId, versionToken) => invoke<void>('delete_recovery_snapshot', {
+    documentId,
+    versionToken,
+  }),
 }
 
 export const tauriRecentDocumentRepository: RecentDocumentRepository = {
@@ -77,6 +80,7 @@ function isRecoveryWrite(value: unknown): value is Parameters<RecoveryRepository
   if (typeof value !== 'object' || value === null) return false
   const candidate = value as Record<string, unknown>
   return typeof candidate.documentId === 'string'
+    && typeof candidate.versionToken === 'string'
     && typeof candidate.name === 'string'
     && typeof candidate.json === 'string'
 }

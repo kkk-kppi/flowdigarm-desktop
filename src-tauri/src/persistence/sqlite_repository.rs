@@ -49,6 +49,7 @@ pub struct RecentDocument {
 #[serde(rename_all = "camelCase")]
 pub struct RecoverySnapshotWrite {
     pub document_id: String,
+    pub version_token: String,
     pub name: String,
     #[serde(rename = "json")]
     pub document_json: String,
@@ -250,8 +251,8 @@ impl SqliteRepository {
         let mut connection = self.lock()?;
         let transaction = connection.transaction()?;
         transaction.execute(
-            "INSERT INTO recovery_snapshots(document_id,name,document_json,source_path,updated_at) VALUES(?1,?2,?3,?4,?5) ON CONFLICT(document_id) DO UPDATE SET name=excluded.name,document_json=excluded.document_json,source_path=excluded.source_path,updated_at=excluded.updated_at",
-            params![snapshot.document_id, snapshot.name, snapshot.document_json, snapshot.source_path, snapshot.updated_at],
+            "INSERT INTO recovery_snapshots(document_id,version_token,name,document_json,source_path,updated_at) VALUES(?1,?2,?3,?4,?5,?6) ON CONFLICT(document_id) DO UPDATE SET version_token=excluded.version_token,name=excluded.name,document_json=excluded.document_json,source_path=excluded.source_path,updated_at=excluded.updated_at",
+            params![snapshot.document_id, snapshot.version_token, snapshot.name, snapshot.document_json, snapshot.source_path, snapshot.updated_at],
         )?;
         transaction.commit()?;
         Ok(())
@@ -259,16 +260,24 @@ impl SqliteRepository {
 
     pub fn latest_recovery(&self) -> Result<Option<RecoverySnapshot>, RepositoryError> {
         Ok(self.lock()?.query_row(
-            "SELECT document_id,name,document_json,source_path,updated_at FROM recovery_snapshots ORDER BY updated_at DESC LIMIT 1", [],
-            |row| Ok(RecoverySnapshot { document_id: row.get(0)?, name: row.get(1)?, document_json: row.get(2)?, source_path: row.get(3)?, updated_at: row.get(4)? }),
+            "SELECT document_id,version_token,name,document_json,source_path,updated_at FROM recovery_snapshots ORDER BY updated_at DESC LIMIT 1", [],
+            |row| Ok(RecoverySnapshot { document_id: row.get(0)?, version_token: row.get(1)?, name: row.get(2)?, document_json: row.get(3)?, source_path: row.get(4)?, updated_at: row.get(5)? }),
         ).optional()?)
     }
 
-    pub fn delete_recovery(&self, document_id: &str) -> Result<(), RepositoryError> {
-        self.execute_delete(
-            "DELETE FROM recovery_snapshots WHERE document_id=?1",
-            document_id,
-        )
+    pub fn delete_recovery(
+        &self,
+        document_id: &str,
+        version_token: &str,
+    ) -> Result<(), RepositoryError> {
+        let mut connection = self.lock()?;
+        let transaction = connection.transaction()?;
+        transaction.execute(
+            "DELETE FROM recovery_snapshots WHERE document_id=?1 AND version_token=?2",
+            params![document_id, version_token],
+        )?;
+        transaction.commit()?;
+        Ok(())
     }
 
     pub fn increment_shape_usage(
@@ -537,6 +546,7 @@ mod tests {
         repository
             .upsert_recovery(&RecoverySnapshotWrite {
                 document_id: "doc-1".into(),
+                version_token: "0:1".into(),
                 name: "恢复文档".into(),
                 document_json: "{\"schemaVersion\":1}".into(),
                 source_path: Some("C:/docs/a.flowdiagram".into()),
@@ -547,11 +557,12 @@ mod tests {
             repository.latest_recovery().unwrap().unwrap().document_id,
             "doc-1"
         );
-        repository.delete_recovery("doc-1").unwrap();
+        repository.delete_recovery("doc-1", "0:1").unwrap();
         assert!(repository.latest_recovery().unwrap().is_none());
         assert!(repository
             .upsert_recovery(&RecoverySnapshotWrite {
                 document_id: "bad".into(),
+                version_token: "0:1".into(),
                 name: "bad".into(),
                 document_json: "bad".into(),
                 source_path: None,
@@ -591,9 +602,37 @@ mod tests {
     }
 
     #[test]
+    fn recovery_delete_only_removes_the_matching_version_token() {
+        let repository = repository();
+        let snapshot = |version_token: &str, name: &str| RecoverySnapshotWrite {
+            document_id: "doc-1".into(),
+            version_token: version_token.into(),
+            name: name.into(),
+            document_json: "{\"schemaVersion\":1}".into(),
+            source_path: None,
+            updated_at: 1,
+        };
+        repository
+            .upsert_recovery(&snapshot("1:1", "旧快照"))
+            .unwrap();
+        repository
+            .upsert_recovery(&snapshot("1:2", "新快照"))
+            .unwrap();
+
+        repository.delete_recovery("doc-1", "1:1").unwrap();
+        assert_eq!(
+            repository.latest_recovery().unwrap().unwrap().version_token,
+            "1:2"
+        );
+        repository.delete_recovery("doc-1", "1:2").unwrap();
+        assert!(repository.latest_recovery().unwrap().is_none());
+    }
+
+    #[test]
     fn recovery_snapshot_ipc_uses_json_field_name() {
         let snapshot = RecoverySnapshotWrite {
             document_id: "doc-1".into(),
+            version_token: "4:9".into(),
             name: "恢复文档".into(),
             document_json: "{}".into(),
             source_path: None,
@@ -601,6 +640,7 @@ mod tests {
         };
         let value = serde_json::to_value(snapshot).unwrap();
         assert_eq!(value["json"], "{}");
+        assert_eq!(value["versionToken"], "4:9");
         assert!(value.get("documentJson").is_none());
     }
 
@@ -657,6 +697,7 @@ mod tests {
         assert!(recent_sql.contains("document_id TEXT NOT NULL"));
         assert!(recent_sql.contains("pinned INTEGER NOT NULL DEFAULT 0"));
         assert!(recovery_sql.contains("document_id TEXT PRIMARY KEY"));
+        assert!(recovery_sql.contains("version_token TEXT NOT NULL"));
         assert!(recovery_sql.contains("source_path TEXT"));
     }
 }

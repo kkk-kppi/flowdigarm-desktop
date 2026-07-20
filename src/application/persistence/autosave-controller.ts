@@ -17,11 +17,12 @@ export class AutosaveController {
     private readonly onError: (message: string) => void = () => {},
   ) {}
 
-  schedule(document: DiagramDocument, sourcePath?: string): void {
+  schedule(document: DiagramDocument, versionToken: string, sourcePath?: string): void {
     if (this.disposed) return
     this.cancelTimer()
     this.pending = {
       documentId: document.id,
+      versionToken,
       name: document.name,
       json: serializeDiagramDocument(document),
       ...(sourcePath === undefined ? {} : { sourcePath }),

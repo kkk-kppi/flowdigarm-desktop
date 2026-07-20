@@ -208,3 +208,32 @@ Tests 50 passed (50)
 | `cargo test --manifest-path src-tauri/Cargo.toml` | 未运行：本次未修改 Rust，按二次评审要求可选 |
 
 构建仍仅报告既有单 chunk 超过 500 kB 的非阻断提示（JS 750.44 kB，gzip 220.92 kB）。`opencode.json` 保持未跟踪且未纳入本次修改或提交。
+
+## 三次评审 TOCTOU 修复（2026-07-21）
+
+提交目标：`fix: 使用恢复版本令牌关闭并发删除窗口`
+
+### 修复明细
+
+1. document store 新增单调 `documentEpoch`，每次 new/load/replace 均递增；显式保存捕获 epoch、document id 与 revision，三者共同判定当前实例，避免同 ID、同 revision 的替换文档碰撞。
+2. recovery write/read DTO、Tauri command 与 SQLite `recovery_snapshots` 新增 `versionToken`/`version_token`（`epoch:revision`）。删除改为事务内 `DELETE ... WHERE document_id=? AND version_token=?`，旧 token 删除不能移除后写入的新快照。
+3. 未并发变化的显式保存先写入并 flush 捕获 token，再执行条件删除。延迟删除期间的新编辑继续按原 2 秒防抖写入，不在删除完成后重启防抖。
+4. 并发 Save As 仅在 document epoch 相同时更新路径，并无条件用新 `sourcePath` 替换当前 pending schedule、重启其 2 秒防抖；epoch 已变化时不覆盖替换文档路径。pending 与 in-flight 两类回归均覆盖。
+5. SQLite 仍为 7 张本机元数据表，migration/default/idempotency 与全部 mutation transaction 测试保持通过；数据库不可用不改变真实图文件保存成功。
+
+### TDD RED 证据
+
+- TS focused 首轮：4 files / 9 failures；缺失 epoch/token、adapter 未传条件 token、同 ID/revision 替换被误认、延迟删除与 Save As sourcePath 回归均按预期失败。
+- Rust repository 首轮：因 `RecoverySnapshotWrite.version_token` 与双参数 `delete_recovery` 尚不存在产生 8 个预期编译错误。
+
+### 最终验证
+
+| 命令 | 结果 |
+|---|---|
+| `pnpm vitest run tests/unit/editor/persistence tests/unit/stores` | PASS，7 files / 79 tests |
+| `pnpm vitest run` | PASS，68 files / 626 tests |
+| `cargo test --manifest-path src-tauri/Cargo.toml` | PASS，32 tests / 0 failed |
+| `pnpm build` | PASS，`vue-tsc --noEmit` + Vite production build |
+| `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`、`git diff --check` | PASS（格式修正后；仅工作区 LF/CRLF 提示） |
+
+关注项仍仅为既有 Vite 单 chunk 超过 500 kB 的非阻断提示（JS 750.65 kB，gzip 220.99 kB）。`opencode.json` 保持未跟踪且未读取、修改或纳入提交。
