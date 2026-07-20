@@ -304,6 +304,44 @@ const entries: readonly FeatureHelpEntry[] = [
     limits: '仅本机统计不上传；内置库形状不足 20 个时按内置顺序补足展示。',
     docAnchor: 'user-guide#图元',
   },
+  {
+    id: 'find-replace', title: '查找替换', purpose: '在节点文本与边标签中定位或批量替换内容。',
+    operation: '在右侧查找替换面板输入文本，选择范围、大小写和全词选项；全部替换需预览后确认。',
+    scope: '仅搜索节点文本与边标签，可限定当前页或全部页面。',
+    undoBoundary: '单次替换是一条编辑文本记录；全部替换无论命中多少处都只产生一条记录。',
+    limits: '不搜索链接、业务数据或页面名称；全部替换后的单段文本不能超过长度限制。', docAnchor: 'user-guide#查找替换',
+  },
+  {
+    id: 'menus', title: '应用菜单', purpose: '集中提供文件、编辑、视图、插入、格式、工具与帮助命令。',
+    operation: '单击菜单或使用 Tab、方向键、Enter、Space 与 Esc 操作。', scope: '菜单根据当前文档、选择与视图状态启用命令。',
+    undoBoundary: '编辑命令遵循各自撤销边界；视图与帮助操作不进入撤销历史。', limits: '禁用项目会显示具体原因。', docAnchor: 'interactions#菜单',
+  },
+  {
+    id: 'context-menu', title: '右键菜单', purpose: '按画布空白、节点、连线、多选或容器提供就近操作。',
+    operation: '在画布目标上单击右键，使用方向键选择并按 Enter 执行，Esc 关闭。', scope: '项目由当前上下文生成，执行与主菜单相同的应用命令。',
+    undoBoundary: '右键菜单本身不产生历史，所选编辑命令按其既有边界记录。', limits: '不复制任何编辑业务逻辑。', docAnchor: 'interactions#右键菜单',
+  },
+  {
+    id: 'layer-manager', title: '图层管理', purpose: '查看当前页图元层序并调整前后遮挡关系。',
+    operation: '在工具菜单打开图层管理，选择图元后置顶、置底或逐层移动。', scope: '仅列出当前页节点和连线，按 zIndex 从高到低排列。',
+    undoBoundary: '每次层序调整是一条可撤销记录。', limits: '领域模型没有隐藏字段，因此不提供伪造的可见性开关。', docAnchor: 'user-guide#图层管理',
+  },
+  {
+    id: 'preferences', title: '首选项', purpose: '配置编辑器的应用级偏好。', operation: '从工具菜单选择首选项。',
+    scope: '作用于应用视图和行为设置，不直接修改图元。', undoBoundary: '首选项不进入文档撤销历史。', limits: '实际持久化与对话框由后续桌面接线提供。', docAnchor: 'user-guide#首选项',
+  },
+  {
+    id: 'export', title: '导出', purpose: '将流程图输出为外部格式。', operation: '从文件菜单选择导出并在后续对话框中选择格式。',
+    scope: '导出读取当前文档，不修改文档内容。', undoBoundary: '导出不进入撤销历史。', limits: '文件对话框与平台导出处理器由后续桌面接线提供。', docAnchor: 'user-guide#导出',
+  },
+  {
+    id: 'shortcuts', title: '快捷键列表', purpose: '集中查看编辑器键盘快捷键。', operation: '从帮助菜单选择快捷键列表。',
+    scope: '只显示说明，不修改文档或视图。', undoBoundary: '帮助显示不进入撤销历史。', limits: '文本输入和菜单打开时，部分画布快捷键会暂停。', docAnchor: 'interactions#快捷键',
+  },
+  {
+    id: 'about', title: '关于', purpose: '查看应用名称、版本与基本信息。', operation: '从帮助菜单选择关于。',
+    scope: '只显示应用信息。', undoBoundary: '关于面板不进入撤销历史。', limits: '不包含更新或许可管理功能。', docAnchor: 'user-guide#关于',
+  },
 ]
 
 /** 全部已注册的功能帮助条目，按 id 索引。 */

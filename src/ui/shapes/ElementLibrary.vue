@@ -2,6 +2,7 @@
   <aside class="element-library" data-testid="element-library">
     <div class="library-header">
       <span class="library-title">图元</span>
+      <QuickHelpButton help-id="shape-library" label="形状库" />
       <button
         type="button"
         class="collapse-toggle"
@@ -145,6 +146,7 @@
 // 使用记录经 document-store 注入的 repository；shapeUsageVersion 变化时异步刷新；搜索时隐藏。
 // 拖拽经 X6 Dnd（CanvasArea 注入 shapeDragStartKey）获得画布内拖拽预览；双击/回车直接创建。
 import { computed, inject, onMounted, reactive, ref, watch } from 'vue'
+import QuickHelpButton from '@/ui/help/QuickHelpButton.vue'
 import { shapeRegistry, type ShapeDefinition } from '@/application/shapes/shape-registry'
 import '@/application/shapes/common-shapes' // 模块副作用：注册内置形状
 import { computeTopShapes } from '@/application/shapes/shape-usage-repository'

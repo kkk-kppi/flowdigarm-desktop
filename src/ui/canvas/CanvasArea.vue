@@ -41,6 +41,15 @@
         @close="editingSession = null"
       />
     </div>
+    <CanvasContextMenu
+      v-if="contextMenu"
+      :x="contextMenu.x"
+      :y="contextMenu.y"
+      :items="contextMenu.items"
+      :return-focus="containerRef"
+      @execute="executeContextCommand"
+      @close="contextMenu = null"
+    />
   </div>
 </template>
 
@@ -75,6 +84,7 @@ import { ReconnectEdgeCommand } from '@/application/commands/reconnect-edge'
 import { UpdateEdgeVerticesCommand } from '@/application/commands/update-edge-vertices'
 import { collectDescendantIds } from '@/application/arrangement/descendants'
 import { openCellHyperlink, shouldOpenHyperlink } from '@/application/links/open-hyperlink'
+import { contextMenuItems, type ContextKind } from '@/application/menus/context-menu-model'
 import { usePlatform } from '@/platform/platform-provider'
 import { useAppStore } from '@/stores/app-store'
 import { useDocumentStore } from '@/stores/document-store'
@@ -85,6 +95,11 @@ import PageFrame from './PageFrame.vue'
 import RulerCorner from './RulerCorner.vue'
 import RulerOverlay from './RulerOverlay.vue'
 import TextEditorOverlay from '@/ui/text/TextEditorOverlay.vue'
+import CanvasContextMenu from '@/ui/components/CanvasContextMenu.vue'
+
+interface MenuControllerPort { execute(id: string): void }
+const props = defineProps<{ menuController?: MenuControllerPort }>()
+const emit = defineEmits<{ viewportChange: [state: ViewportState] }>()
 
 const appStore = useAppStore()
 const documentStore = useDocumentStore()
@@ -105,6 +120,7 @@ const viewport = ref<ViewportState>({ zoom: 1, panX: 0, panY: 0 })
 const canvasSize = reactive({ width: 0, height: 0 })
 
 const containerRef = ref<HTMLElement | null>(null)
+const contextMenu = ref<{ x: number; y: number; items: ReturnType<typeof contextMenuItems> } | null>(null)
 let adapter: GraphAdapter | null = null
 let unsubscribeViewport: (() => void) | null = null
 let resizeObserver: ResizeObserver | null = null
@@ -134,9 +150,11 @@ function bindViewport(): void {
   unsubscribeViewport?.()
   const controller = activeController()
   viewport.value = controller.state
+  emit('viewportChange', controller.state)
   adapter?.syncViewport(controller.state)
   unsubscribeViewport = controller.subscribe((state) => {
     viewport.value = state
+    emit('viewportChange', state)
     adapter?.syncViewport(state)
   })
 }
@@ -243,7 +261,63 @@ function createShapeAtViewportCenter(shapeType: string): void {
 function startShapeDrag(shapeType: string, e: MouseEvent): void {
   adapter?.startShapeDrag(shapeType, e)
 }
-defineExpose({ createShapeAtViewportCenter, startShapeDrag })
+function viewportSize(): { width: number; height: number } | null {
+  const rect = containerRef.value?.getBoundingClientRect()
+  return rect && rect.width > 0 && rect.height > 0 ? { width: rect.width, height: rect.height } : null
+}
+function zoomIn(): void { activeController().zoomIn() }
+function zoomOut(): void { activeController().zoomOut() }
+function setZoom(value: number): void { activeController().setZoom(value) }
+function fitPage(): void {
+  const size = viewportSize()
+  if (size && activePage.value) activeController().fitToPage(activePage.value.pageSize, size)
+}
+function bboxFor(ids: string[]): { x: number; y: number; width: number; height: number } | null {
+  const nodes = activePage.value?.nodes.filter((node) => ids.includes(node.id)) ?? []
+  if (nodes.length === 0) return null
+  const minX = Math.min(...nodes.map((node) => node.x)); const minY = Math.min(...nodes.map((node) => node.y))
+  const maxX = Math.max(...nodes.map((node) => node.x + node.width)); const maxY = Math.max(...nodes.map((node) => node.y + node.height))
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+}
+function fitContent(): void {
+  const size = viewportSize(); const page = activePage.value
+  if (!size || !page) return
+  const bbox = bboxFor(page.nodes.map((node) => node.id))
+  if (bbox) activeController().fitToContent(bbox, size); else fitPage()
+}
+function fitSelection(): void {
+  const size = viewportSize(); const bbox = bboxFor(selectionStore.selectedIds)
+  if (size && bbox) activeController().fitToSelection(bbox, size)
+  else documentStore.setNotice('请先选择节点。')
+}
+defineExpose({ createShapeAtViewportCenter, startShapeDrag, zoomIn, zoomOut, setZoom, fitPage, fitContent, fitSelection })
+
+function openContextMenu(args: { kind: 'blank' | 'node' | 'edge'; cellId?: string; x: number; y: number }): void {
+  let kind: ContextKind = args.kind
+  if (args.cellId && selectionStore.selectedIds.includes(args.cellId) && selectionStore.count > 1) {
+    kind = 'multi'
+  } else if (args.kind === 'node' && args.cellId) {
+    const node = activePage.value?.nodes.find((item) => item.id === args.cellId)
+    kind = node?.isContainer || node?.shape === 'group' ? 'container' : 'node'
+    selectionStore.setSelection([args.cellId])
+  } else if (args.kind === 'edge' && args.cellId) {
+    selectionStore.setSelection([args.cellId])
+  }
+  const selectedNodes = activePage.value?.nodes.filter((node) => selectionStore.selectedIds.includes(node.id)) ?? []
+  contextMenu.value = {
+    x: args.x,
+    y: args.y,
+    items: contextMenuItems(kind, {
+      canPaste: documentStore.clipboard !== null,
+      canGroup: selectedNodes.length >= 2,
+      canUngroup: selectedNodes.some((node) => node.shape === 'group' || node.parentId !== undefined),
+    }),
+  }
+}
+function executeContextCommand(id: string): void {
+  if (props.menuController) props.menuController.execute(id)
+  else documentStore.setNotice('右键命令控制器不可用。')
+}
 
 function isEditableTarget(target: EventTarget | null): boolean {
   return (
@@ -376,6 +450,7 @@ onMounted(() => {
         formatPaintStore.cancel()
       }
     },
+    onContextMenu: openContextMenu,
     suppressSelection: (cellId) => {
       // 格式刷模式：全部图元不可选（点击=应用格式）
       if (formatPaintStore.mode !== 'off') {

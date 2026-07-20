@@ -64,6 +64,8 @@ export interface GraphAdapterEvents {
   onEdgeClick?: (edgeId: string, modifiers: { ctrlKey: boolean; metaKey: boolean }) => void
   /** 单击空白（格式刷取消等）。 */
   onBlankClick?: () => void
+  /** 右键菜单请求，坐标为浏览器视口 CSS px。 */
+  onContextMenu?: (args: { kind: 'blank' | 'node' | 'edge'; cellId?: string; x: number; y: number }) => void
   /** 返回 true 时禁止该图元被选中（格式刷/链接打开期间不进入选择逻辑）。 */
   suppressSelection?: (cellId: string) => boolean
 }
@@ -258,6 +260,7 @@ export class GraphAdapter {
     this.bindShapeDrop()
     this.bindDblClickReflow()
     this.bindClickReflow()
+    this.bindContextMenuReflow()
   }
 
   /**
@@ -736,6 +739,21 @@ export class GraphAdapter {
     })
     this.graph.on('blank:click', () => {
       this.events.onBlankClick?.()
+    })
+  }
+
+  private bindContextMenuReflow(): void {
+    this.graph.on('node:contextmenu', ({ node, e }) => {
+      e.preventDefault()
+      this.events.onContextMenu?.({ kind: 'node', cellId: node.id, x: e.clientX, y: e.clientY })
+    })
+    this.graph.on('edge:contextmenu', ({ edge, e }) => {
+      e.preventDefault()
+      this.events.onContextMenu?.({ kind: 'edge', cellId: edge.id, x: e.clientX, y: e.clientY })
+    })
+    this.graph.on('blank:contextmenu', ({ e }) => {
+      e.preventDefault()
+      this.events.onContextMenu?.({ kind: 'blank', x: e.clientX, y: e.clientY })
     })
   }
 

@@ -1,6 +1,5 @@
 // tests/unit/app-shell.test.ts
-// 应用外壳组装：标题栏（应用名+文件名）→ 菜单栏占位 → 紧凑工具栏 → 页面标签 →
-// 主区（图元库/画布/右侧面板）→ 状态栏占位；布局高度一律 tokens 变量。
+// 应用外壳组装：正式标题栏、七菜单、工具栏、页面标签、主区、状态栏与帮助/图层面板。
 // CanvasArea 依赖 X6（jsdom 无法实例化），以 stub 替换。
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
@@ -15,7 +14,9 @@ function mountShell() {
     global: {
       stubs: {
         // X6 画布在 jsdom 无法实例化；其余区域真实渲染
-        CanvasArea: { template: '<div data-testid="canvas-area-stub" />' },
+        CanvasArea: {
+          template: '<button data-testid="canvas-area-stub" @click="$emit(\'viewportChange\', { zoom: 1.5, panX: 3, panY: 4 })" />',
+        },
       },
     },
   })
@@ -23,12 +24,12 @@ function mountShell() {
 }
 
 describe('AppShell 组装', () => {
-  it('按序渲染标题栏/菜单栏占位/紧凑工具栏/页面标签/主区/状态栏', () => {
+  it('按序渲染标题栏/七菜单/紧凑工具栏/页面标签/主区/状态栏', () => {
     const { wrapper } = mountShell()
     expect(wrapper.find('[data-testid="editor-shell"]').exists()).toBe(true)
     const order = [
       'titlebar',
-      'menubar-placeholder',
+      'menubar',
       'compact-toolbar',
       'page-tabs',
       'shell-main',
@@ -55,5 +56,36 @@ describe('AppShell 组装', () => {
   it('状态栏占位显示简单文本', () => {
     const { wrapper } = mountShell()
     expect(wrapper.find('[data-testid="statusbar"]').text().length).toBeGreaterThan(0)
+  })
+
+  it('工具菜单打开查找、图层与帮助视图', async () => {
+    const { wrapper } = mountShell()
+    await wrapper.find('[data-menu-id="tools"]').trigger('click')
+    await wrapper.find('[data-command-id="tool-find"]').trigger('click')
+    expect(wrapper.find('[data-testid="find-query"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="rp-tab-property"]').exists()).toBe(false)
+
+    await wrapper.find('[data-menu-id="tools"]').trigger('click')
+    await wrapper.find('[data-command-id="tool-layers"]').trigger('click')
+    expect(wrapper.find('[data-testid="layer-manager"]').exists()).toBe(true)
+
+    await wrapper.find('[data-menu-id="help"]').trigger('click')
+    await wrapper.find('[data-command-id="help-shortcuts"]').trigger('click')
+    expect(wrapper.find('[aria-label="快捷键列表帮助"]').exists()).toBe(true)
+  })
+
+  it('file and window actions emit typed events without platform or file API calls', async () => {
+    const { wrapper } = mountShell()
+    await wrapper.find('[data-menu-id="file"]').trigger('click')
+    await wrapper.find('[data-command-id="file-open"]').trigger('click')
+    expect(wrapper.emitted('fileCommand')?.[0]).toEqual(['open'])
+    await wrapper.find('[data-testid="title-minimize"]').trigger('click')
+    expect(wrapper.emitted('windowCommand')?.[0]).toEqual(['minimize'])
+  })
+
+  it('accepts viewport snapshots from CanvasArea without reassigning reactive state', async () => {
+    const { wrapper } = mountShell()
+    await wrapper.find('[data-testid="canvas-area-stub"]').trigger('click')
+    expect(wrapper.find<HTMLSelectElement>('[data-testid="status-zoom"]').element.value).toBe('1.5')
   })
 })

@@ -29,7 +29,7 @@
           ×
         </button>
       </div>
-      <template v-if="mode === 'tabs'">
+      <template v-if="actualMode === 'tabs'">
         <div class="panel-tabs" role="tablist">
           <button
             type="button"
@@ -75,14 +75,17 @@ import { useAppStore } from '@/stores/app-store'
 import PageSetupTab from '@/ui/pages/PageSetupTab.vue'
 import PropertyTab from './PropertyTab.vue'
 
-const props = withDefaults(defineProps<{ mode?: 'tabs' | 'find' }>(), { mode: 'tabs' })
+const props = defineProps<{ mode?: 'tabs' | 'find' }>()
 
 const appStore = useAppStore()
 const tab = ref<'property' | 'page'>('property')
 const isFloating = ref(false)
+const actualMode = computed<'tabs' | 'find'>(() =>
+  props.mode ?? (appStore.rightPanelMode === 'find' ? 'find' : 'tabs'),
+)
 
 const title = computed(() => {
-  if (props.mode === 'find') return '查找替换'
+  if (actualMode.value === 'find') return '查找替换'
   return tab.value === 'property' ? '属性' : '页面设置'
 })
 

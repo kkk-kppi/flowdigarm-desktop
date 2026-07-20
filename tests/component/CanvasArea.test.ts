@@ -110,4 +110,36 @@ describe('CanvasArea 超链接点击', () => {
     expect(documentStore.lastNotice).toBeNull()
     wrapper.unmount()
   })
+
+  it('emits the active page viewport immediately for the status bar', () => {
+    const { wrapper } = mountCanvas('https://example.com')
+    expect(wrapper.emitted('viewportChange')?.[0]?.[0]).toEqual({ zoom: 1, panX: 0, panY: 0 })
+    wrapper.unmount()
+  })
+
+  it('按节点/多选/容器上下文生成菜单并只调用菜单控制器', async () => {
+    setActivePinia(createPinia())
+    const documentStore = useDocumentStore()
+    const document = linkedDocument('https://example.com')
+    document.pages[0].nodes[0].isContainer = true
+    documentStore.loadDocument(document)
+    const selectionStore = useSelectionStore()
+    const execute = vi.fn()
+    const wrapper = mount(CanvasArea, {
+      props: { menuController: { execute } },
+      global: { stubs: { PageBreakOverlay: true, PageFrame: true, RulerCorner: true, RulerOverlay: true, TextEditorOverlay: true } },
+    })
+
+    mocks.events!.onContextMenu?.({ kind: 'node', cellId: 'node-1', x: 30, y: 40 })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[role="menu"]').text()).toContain('取消组合或移出容器')
+    await wrapper.find('[data-command-id="edit-copy"]').trigger('click')
+    expect(execute).toHaveBeenCalledWith('edit-copy')
+
+    selectionStore.setSelection(['node-1', 'node-2'])
+    mocks.events!.onContextMenu?.({ kind: 'node', cellId: 'node-1', x: 30, y: 40 })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[role="menu"]').text()).toContain('格式刷')
+    wrapper.unmount()
+  })
 })

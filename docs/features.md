@@ -85,13 +85,13 @@
 
 ## 8. 排列（对齐/等距/层序/组合/容器/自动连线）
 
-- 入口：application 层全部就绪（`src/application/arrangement/*`、`src/application/commands/{group-cells,container-membership}.ts`）；菜单栏/右键菜单入口 Task 8 接线。容器移动时成员一起移动由画布手势层完成（`src/ui/canvas/CanvasArea.vue` onNodeMoved 收集后代 id 并入同一条移动命令）。
+- 入口：顶部「格式/工具」菜单、节点/多选/容器右键菜单与图层管理面板；全部经 `MenuCommandController` 调用 `src/application/arrangement/*` 和既有组合/容器命令。容器移动时成员一起移动由 `CanvasArea.vue` 收集后代并入同一条移动命令。
 - 前置条件：对齐 ≥2 个选中节点；等距 ≥3；自动连线 ≥2（容器除外）；组合 ≥2；加入容器要求目标为 isContainer 节点。
 - 成功结果：对齐以**选择序列第一个图元**为基准（左/水平居中/右/顶/垂直居中/底）；等距按轴几何顺序排序、固定最外两个、相邻边界间空隙相等（`gap=(last.start−first.end−Σmiddle.size)/(n−1)`）；层序四动作（置顶=最大 zIndex+1…/置底/上移一层=相邻交换/下移一层）执行后全页规范化为 1..n；自动连线按选择顺序生成 n−1 条边（页面默认连线类型与箭头，端口为互相对侧最近端口，autoConnectLabel 开时带空标签）；组合创建 group 容器节点（bbox=成员外接矩形，成员 parentId 指向之，ID/数据保留，嵌套允许）；取消组合还原；加入/移出容器显式改变 parentId。
 - 失败反馈：等距 <3 图元抛「等距排列至少需要三个图元。」；间距不足抛「间距不足，无法等距排列。」；非容器目标抛「目标节点不是容器。」；循环成员关系抛「加入容器会形成循环。」；对齐/自动连线/组合有效节点不足时不产生命令（UI 禁用）。
 - 撤销边界：对齐/等距/层序/自动连线/组合/取消组合/加入容器/移出容器各为一条记录（自动连线一次撤销删除全部新边；层序含规范化改号的未选中图元精确还原）。
 - 数据字段：`AlignMode/DistributeMode/ZOrderAction`（`src/application/arrangement/*`）；group 形状定义（`src/application/shapes/common-shapes.ts`，透明填充虚线边框、无端口、不入图元库）；`DiagramNode.parentId/isContainer`（`src/domain/diagram.ts`）；cell-mapper `parentId` 元数据与 `relativePositionFor`（`src/infrastructure/x6/cell-mapper.ts`）。
-- 自动化测试位置：`tests/unit/editor/arrangement/*`（align-cells/distribute-cells/z-order/auto-connect/descendants）、`tests/unit/editor/group-cells.test.ts`、`tests/unit/editor/container-membership.test.ts`、`tests/unit/editor/shapes/shape-registry.test.ts`、`tests/unit/editor/cell-mapper.test.ts`。
+- 自动化测试位置：`tests/unit/editor/arrangement/*`、`tests/unit/editor/menus/*`、`tests/component/{MenuBar,CanvasContextMenu,LayerManager}.test.ts`、`tests/unit/editor/group-cells.test.ts`、`tests/unit/editor/container-membership.test.ts`。
 
 ## 9. 属性和数据（右侧面板/几何显示/业务数据）
 
@@ -105,13 +105,13 @@
 
 ## 10. 发现与帮助（查找替换/右键菜单/tooltip/帮助注册表）
 
-- 入口：实现后补全
-- 前置条件：实现后补全
-- 成功结果：实现后补全
-- 失败反馈：实现后补全
-- 撤销边界：实现后补全
-- 数据字段：实现后补全
-- 自动化测试位置：已实现首批——`tests/unit/editor/help-registry.test.ts`；其余（`tests/unit/editor/search/*`、`tests/component/CanvasContextMenu.test.ts`）实现后补全
+- 入口：顶部 7 项菜单（文件/编辑/视图/插入/格式/工具/帮助）；画布右键；「工具→查找替换/图层管理」；菜单及复杂功能块的 `?` 帮助入口。
+- 前置条件：查找 query 非空；当前页范围要求存在活动页；替换当前项要求已经定位到匹配；禁用菜单项显示中文原因。
+- 成功结果：查找仅遍历节点 `text.value` 与边 `labels[].text.value`，按页→节点→边/标签→文本位置稳定排序；支持当前页/全部页、大小写和 Unicode 全词；下一项跨页循环并选中目标。右键按 blank/node/edge/multi/container 生成；主菜单与右键只传 command id 给 application controller。标题栏显示文件名与脏标记，状态栏显示选择、锚点、页码、缩放、网格/对齐及保存状态。帮助为非模态侧层，显示目的/操作/范围/撤销/限制/文档锚点。
+- 失败反馈：未找到显示「未找到匹配文本。」；替换结果过长提示「替换后的文本长度超出限制。」；不可执行命令显示具体中文通知；尚待 8b2 接线的文件/窗口动作会发 typed event 并明确提示，不静默。
+- 撤销边界：替换当前项一条「编辑文本」；全部替换无论命中数量只产生一条「全部替换」，一次撤销恢复所有原文；菜单/帮助/搜索定位/图层选择与视图开关不进入历史。
+- 数据字段：`FindTextRequest/FindMatch`、`FindController`、`MenuDefinition/MenuItem`、`ContextKind`；app-store 只保存 `rightPanelMode/layerManagerOpen/helpId` 等视图状态。
+- 自动化测试位置：`tests/unit/editor/search/*`、`tests/unit/editor/menus/*`、`tests/unit/editor/help-registry.test.ts`、`tests/component/{FindReplaceTab,MenuBar,CanvasContextMenu,DesktopShellParts,LayerManager,FeatureHelp,ComplexFeatureHelpEntries}.test.ts`。
 
 ## 11. 输出（SVG/PNG/PDF/JSON 导出）
 

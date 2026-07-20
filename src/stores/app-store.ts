@@ -14,6 +14,9 @@ interface AppViewSettings {
   theme: ThemeMode
   /** 右侧面板折叠（视图状态，不入撤销历史）。 */
   rightPanelCollapsed: boolean
+  rightPanelMode: 'properties' | 'find'
+  layerManagerOpen: boolean
+  helpId: string | null
 }
 
 export const useAppStore = defineStore('app', {
@@ -25,6 +28,9 @@ export const useAppStore = defineStore('app', {
     snapToGrid: true,
     theme: 'system',
     rightPanelCollapsed: false,
+    rightPanelMode: 'properties',
+    layerManagerOpen: false,
+    helpId: null,
   }),
   actions: {
     toggleRulers() {
@@ -44,6 +50,26 @@ export const useAppStore = defineStore('app', {
     },
     toggleRightPanel() {
       this.rightPanelCollapsed = !this.rightPanelCollapsed
+    },
+    openFindPanel() {
+      this.rightPanelMode = 'find'
+      this.rightPanelCollapsed = false
+    },
+    showProperties() {
+      this.rightPanelMode = 'properties'
+      this.rightPanelCollapsed = false
+    },
+    openLayerManager() {
+      this.layerManagerOpen = true
+    },
+    closeLayerManager() {
+      this.layerManagerOpen = false
+    },
+    openHelp(helpId: string) {
+      this.helpId = helpId
+    },
+    closeHelp() {
+      this.helpId = null
     },
   },
 })

@@ -1,5 +1,9 @@
 <template>
   <div class="property-tab" data-testid="property-tab">
+    <div class="property-help-links" aria-label="属性功能帮助">
+      <QuickHelpButton help-id="connect" label="连线" />
+      <QuickHelpButton help-id="group-container" label="组合容器" />
+    </div>
     <p v-if="noSelection" class="no-selection" data-testid="no-selection">未选择图元</p>
 
     <template v-else>
@@ -487,6 +491,7 @@
 // 任何控件写入 = 全部选中目标一条命令（before 逐目标从文档实读）。
 // 颜色控件用 @change（取色器关闭/确认时一次提交一条记录；拖动过程的 input 事件不入栈）。
 import { computed, reactive, ref, watch } from 'vue'
+import QuickHelpButton from '@/ui/help/QuickHelpButton.vue'
 import {
   type ConnectorKind,
   type DiagramNode,
@@ -888,6 +893,7 @@ function commitLink(kind: 'node' | 'edge', event: Event): void {
 </script>
 
 <style scoped>
+.property-help-links { display: flex; justify-content: flex-end; gap: 4px; padding: 5px 12px 0; }
 .property-tab {
   display: flex;
   flex-direction: column;

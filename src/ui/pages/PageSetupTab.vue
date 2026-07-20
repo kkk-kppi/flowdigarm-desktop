@@ -1,5 +1,6 @@
 <template>
   <div class="page-setup-tab" data-testid="page-setup-tab">
+    <div class="setup-help"><QuickHelpButton help-id="page-setup" label="页面设置" /></div>
     <fieldset class="setup-section">
       <legend>页面属性</legend>
 
@@ -183,6 +184,7 @@
 // 「应用」把草稿与页面原值打包为一个 UpdatePageCommand 执行（无变化不执行）；
 // 「重置」恢复显示为页面当前值（不产生命令）。单位换算一律经 formatMeasure/unitToPt。
 import { computed, reactive, ref, watch } from 'vue'
+import QuickHelpButton from '@/ui/help/QuickHelpButton.vue'
 import type { ConnectorKind, Orientation, PageUnit } from '@/domain/diagram'
 import { paperSizeFor, type PaperPreset } from '@/domain/paper-presets'
 import { formatMeasure, unitToPt } from '@/domain/measurement'
@@ -364,6 +366,7 @@ function applySettings(): void {
 </script>
 
 <style scoped>
+.setup-help { display: flex; justify-content: flex-end; padding: 4px 12px 0; }
 .page-setup-tab {
   display: flex;
   flex-direction: column;

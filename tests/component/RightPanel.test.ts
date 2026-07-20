@@ -87,4 +87,19 @@ describe('RightPanel', () => {
     expect(wrapper.find('[data-testid="rp-tab-property"]').exists()).toBe(false)
     wrapper.unmount()
   })
+
+  it('由 app-store 正式切换 find 模式并隐藏标签栏', async () => {
+    setWindowWidth(1280)
+    setActivePinia(createPinia())
+    const appStore = useAppStore()
+    appStore.openFindPanel()
+    const wrapper = mount(RightPanel, {
+      slots: { find: '<div data-testid="find-live">查找替换</div>' },
+      attachTo: document.body,
+    })
+    expect(wrapper.find('[data-testid="rp-title"]').text()).toBe('查找替换')
+    expect(wrapper.find('[data-testid="find-live"]').exists()).toBe(true)
+    expect(wrapper.find('[role="tablist"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
 })

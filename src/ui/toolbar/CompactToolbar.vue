@@ -70,6 +70,7 @@
       >
         格式刷
       </button>
+      <QuickHelpButton help-id="format-paint" label="格式刷" />
     </div>
     <div class="toolbar-divider" />
 
@@ -135,6 +136,7 @@
         :value="colorValue(textAgg.style.background, '#000000')"
         @change="writeTextPatch({ style: { background: ($event.target as HTMLInputElement).value } })"
       />
+      <QuickHelpButton help-id="text-style" label="文本格式" />
     </div>
     <div class="toolbar-divider" />
 
@@ -181,6 +183,7 @@
 // 格式刷：单击 armOnce（恰好 1 选中否则禁用）、双击 armContinuous（橙色 continuous 态）、
 // Esc 全局 keydown 取消（输入控件聚焦/文本编辑中不拦截）；应用由 CanvasArea 点击图元触发。
 import { computed, onBeforeUnmount, onMounted } from 'vue'
+import QuickHelpButton from '@/ui/help/QuickHelpButton.vue'
 import type { TextBlock, TextStyle } from '@/domain/diagram'
 import { TextStyleCommand, type TextStylePatch } from '@/application/commands/text-style-command'
 import { aggregateTextStyles, type Aggregate } from '@/application/inspector/aggregate-style'
