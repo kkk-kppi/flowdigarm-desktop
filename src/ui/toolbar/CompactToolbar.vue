@@ -60,9 +60,13 @@
       <button
         type="button"
         data-testid="tb-format-painter"
-        disabled
-        title="格式刷（Task 7 提供）：复制源图元样式到目标图元"
+        :disabled="formatPainterDisabled"
+        :class="{ active: formatPaintStore.mode === 'once', continuous: formatPaintStore.mode === 'continuous' }"
+        :aria-pressed="formatPaintStore.mode !== 'off'"
+        title="格式刷：单击复制一次选中图元的格式（填充/边框/阴影/字体/文本块/段落，不含位置/尺寸/内容/链接）；双击锁定连续刷多个目标；Esc 或点击空白退出"
         aria-label="格式刷"
+        @click="formatPaintStore.armOnce()"
+        @dblclick="formatPaintStore.armContinuous()"
       >
         格式刷
       </button>
@@ -174,8 +178,9 @@
 // 字体与段落对齐经聚合态显示（value→按态、mixed→不定态、none→禁用）；
 // 写入一律 TextStyleCommand（全部选中节点一条；含边选择时边标签同批，经共享模块）。
 // 颜色控件用 @change（取色器关闭/确认时一次提交一条记录；拖动过程的 input 事件不入栈）。
-// 格式刷为 Task 7 禁用占位。
-import { computed } from 'vue'
+// 格式刷：单击 armOnce（恰好 1 选中否则禁用）、双击 armContinuous（橙色 continuous 态）、
+// Esc 全局 keydown 取消（输入控件聚焦/文本编辑中不拦截）；应用由 CanvasArea 点击图元触发。
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import type { TextBlock, TextStyle } from '@/domain/diagram'
 import { TextStyleCommand, type TextStylePatch } from '@/application/commands/text-style-command'
 import { aggregateTextStyles, type Aggregate } from '@/application/inspector/aggregate-style'
@@ -192,10 +197,43 @@ import {
   textContentsForSelection,
 } from '@/application/inspector/text-style-targets'
 import { useDocumentStore } from '@/stores/document-store'
+import { useFormatPaintStore } from '@/stores/format-paint-store'
 import { useSelectionStore } from '@/stores/selection-store'
 
 const documentStore = useDocumentStore()
 const selectionStore = useSelectionStore()
+const formatPaintStore = useFormatPaintStore()
+
+/** 格式刷按钮禁用：off 模式下需恰好 1 个选中图元；armed（once/continuous）时保持可用以显示状态。 */
+const formatPainterDisabled = computed(
+  () => formatPaintStore.mode === 'off' && selectionStore.selectedIds.length !== 1,
+)
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+  )
+}
+
+/** Esc 退出格式刷（全局 keydown；输入控件聚焦/文本编辑中不拦截）。 */
+function onGlobalKeyDown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || isEditableTarget(event.target)) {
+    return
+  }
+  if (formatPaintStore.mode !== 'off') {
+    formatPaintStore.cancel()
+    event.preventDefault()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onGlobalKeyDown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onGlobalKeyDown)
+})
 
 const undoTooltip = computed(() =>
   `撤销${documentStore.undoLabel ? `：${documentStore.undoLabel}` : ''}（Ctrl+Z）`,
@@ -317,6 +355,13 @@ function commitFontSize(event: Event): void {
   border-color: var(--color-primary);
   color: var(--color-primary);
   background: rgba(47, 111, 237, 0.08);
+}
+
+/* 格式刷连续模式：橙色 active 态（与单次蓝色区分） */
+.toolbar-group button.continuous {
+  border-color: #e8890c;
+  color: #e8890c;
+  background: rgba(232, 137, 12, 0.1);
 }
 
 .toolbar-group button.indeterminate {

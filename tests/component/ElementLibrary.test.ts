@@ -1,10 +1,14 @@
 // tests/component/ElementLibrary.test.ts
-// 左侧图元库：分类手风琴 12 格（基本 6 + 流程图 6）、搜索过滤、双击创建、更多形状。
-import { mount } from '@vue/test-utils'
+// 左侧图元库：常用区（Top 20，新用户按内置顺序补足）+ 分类手风琴 12 格（基本 6 + 流程图 6）、
+// 搜索过滤、双击创建、更多形状。
+import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import ElementLibrary from '@/ui/shapes/ElementLibrary.vue'
+import { useDocumentStore } from '@/stores/document-store'
 import '@/application/shapes/common-shapes'
 
 function 挂载() {
+  setActivePinia(createPinia())
   return mount(ElementLibrary)
 }
 
@@ -81,5 +85,70 @@ describe('ElementLibrary', () => {
     await wrapper.find('[data-testid="collapse-toggle"]').trigger('click')
     expect(wrapper.find('input[placeholder="搜索图元..."]').exists()).toBe(false)
     expect(wrapper.findAll('[data-testid="shape-cell"]')).toHaveLength(0)
+  })
+})
+
+describe('ElementLibrary 常用区', () => {
+  it('常用区在顶部分类之前，手风琴默认展开；新用户按内置顺序补足 12 格', async () => {
+    const wrapper = 挂载()
+    await flushPromises()
+    const topHeader = wrapper.find('[data-testid="category-top-header"]')
+    expect(topHeader.exists()).toBe(true)
+    expect(topHeader.text()).toContain('常用')
+    expect(topHeader.attributes('aria-expanded')).toBe('true')
+    // 常用区位于基本形状之前
+    const headers = wrapper.findAll('.category-header')
+    expect(headers[0].text()).toContain('常用')
+    expect(headers[1].text()).toContain('基本形状')
+
+    const topCells = wrapper.findAll('[data-testid="top-shape-cell"]')
+    expect(topCells).toHaveLength(12)
+    // 内置顺序：基本 6 + 流程图 6
+    expect(topCells.map((cell) => cell.attributes('aria-label'))).toEqual([
+      '矩形',
+      '圆角矩形',
+      '圆形',
+      '椭圆',
+      '三角形',
+      '菱形',
+      '流程',
+      '判定',
+      '终止',
+      '子流程',
+      '文档',
+      '数据流',
+    ])
+  })
+
+  it('使用记录驱动排序（次数降序）；与分类格子同一创建交互', async () => {
+    const wrapper = 挂载()
+    const store = useDocumentStore()
+    await flushPromises()
+    await store.recordShapeUsage('decision')
+    await store.recordShapeUsage('decision')
+    await store.recordShapeUsage('rect')
+    await flushPromises()
+
+    const labels = wrapper
+      .findAll('[data-testid="top-shape-cell"]')
+      .map((cell) => cell.attributes('aria-label'))
+    expect(labels[0]).toBe('判定')
+    expect(labels[1]).toBe('矩形')
+    expect(labels).toHaveLength(12)
+
+    // 双击常用区格子与分类格子一样 emit create-request
+    const decision = wrapper.find('[data-testid="top-shape-cell"][aria-label="判定"]')
+    await decision.trigger('dblclick')
+    expect(wrapper.emitted('create-request')).toEqual([['decision']])
+  })
+
+  it('搜索时隐藏常用区（分类过滤保持原行为）', async () => {
+    const wrapper = 挂载()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="category-top-header"]').exists()).toBe(true)
+    const input = wrapper.find('input[placeholder="搜索图元..."]')
+    await input.setValue('矩')
+    expect(wrapper.find('[data-testid="category-top-header"]').exists()).toBe(false)
+    expect(wrapper.findAll('[data-testid="shape-cell"]')).toHaveLength(2)
   })
 })

@@ -21,11 +21,12 @@ const ALL_TYPES = [
 ] as const
 
 describe('内置形状注册', () => {
-  it('14 个内置形状全部注册', () => {
-    expect(shapeRegistry.all()).toHaveLength(14)
+  it('14 个内置形状全部注册（另有 Task 7 组合容器形状 group）', () => {
+    expect(shapeRegistry.all()).toHaveLength(15)
     for (const type of ALL_TYPES) {
       expect(shapeRegistry.has(type), `形状 ${type} 应已注册`).toBe(true)
     }
+    expect(shapeRegistry.has('group')).toBe(true)
   })
 
   it('中文标签逐字正确', () => {
@@ -145,8 +146,12 @@ describe('内置形状注册', () => {
     }
   })
 
-  it('portIds 返回上/右/下/左四个端口', () => {
+  it('portIds 返回上/右/下/左四个端口（group 容器无端口）', () => {
     for (const def of shapeRegistry.all()) {
+      if (def.type === 'group') {
+        expect(shapeRegistry.portIds(def.type)).toEqual([])
+        continue
+      }
       expect(shapeRegistry.portIds(def.type), `形状 ${def.type} 端口`).toEqual([
         'top',
         'right',

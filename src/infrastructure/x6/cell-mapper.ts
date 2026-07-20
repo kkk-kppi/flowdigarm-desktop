@@ -45,6 +45,8 @@ export interface CellMetadata {
   source?: { cell: string; port?: string }
   target?: { cell: string; port?: string }
   vertices?: { x: number; y: number }[]
+  /** 组合/容器成员关系（节点父节点 id）；adapter 据此组装 X6 父子。 */
+  parentId?: string
   style: Record<string, unknown>
   /** X6 cell data（前景页为空；背景页由 background-cells 写入标记）。 */
   data?: Record<string, unknown>
@@ -189,8 +191,17 @@ function nodeToCell(node: DiagramNode): CellMetadata {
     shape: node.shape,
     ports: shapeRegistry.portIds(node.shape),
     bodyMarkup: { ...definition.body },
+    parentId: node.parentId,
     style: { ...nodeStyleOf(node), ...label.style },
   }
+}
+
+/** X6 父子相对坐标：子节点局部坐标 = 节点文档坐标 − 父节点文档坐标（pt，纯函数）。 */
+export function relativePositionFor(
+  node: { x: number; y: number },
+  parent: { x: number; y: number },
+): { x: number; y: number } {
+  return { x: node.x - parent.x, y: node.y - parent.y }
 }
 
 function edgeToCell(edge: DiagramEdge, showLineJumps: boolean): CellMetadata {

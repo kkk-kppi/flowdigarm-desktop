@@ -21,7 +21,7 @@ import { MAX_ZOOM, MIN_ZOOM } from '@/application/viewport/viewport-controller'
 import { shapeRegistry, type ShapeDefinition } from '@/application/shapes/shape-registry'
 import '@/application/shapes/common-shapes' // 模块副作用：注册内置形状
 import { nearestPortId } from '@/application/shapes/nearest-port'
-import { pageToCells, type CellMetadata } from './cell-mapper'
+import { pageToCells, relativePositionFor, type CellMetadata } from './cell-mapper'
 import { isCellInteractable, toBackgroundCell } from './background-cells'
 import { SelectionBridge } from './selection-bridge'
 import { PT_TO_CSS_PX, type ViewportState } from '@/application/viewport/viewport-transform'
@@ -58,6 +58,14 @@ export interface GraphAdapterEvents {
   onNodeDblClick?: (nodeId: string) => void
   /** 双击边（进入边标签文本编辑入口）。 */
   onEdgeDblClick?: (edgeId: string) => void
+  /** 单击节点（携带修饰键状态；格式刷应用/链接打开由调用方判定）。 */
+  onNodeClick?: (nodeId: string, modifiers: { ctrlKey: boolean; metaKey: boolean }) => void
+  /** 单击边。 */
+  onEdgeClick?: (edgeId: string, modifiers: { ctrlKey: boolean; metaKey: boolean }) => void
+  /** 单击空白（格式刷取消等）。 */
+  onBlankClick?: () => void
+  /** 返回 true 时禁止该图元被选中（格式刷/链接打开期间不进入选择逻辑）。 */
+  suppressSelection?: (cellId: string) => boolean
 }
 
 type Unsubscribe = () => void
@@ -203,7 +211,8 @@ export class GraphAdapter {
     })
 
     // 选择：框选、多选、节点选择框（X6 选择仅作视觉与交互，领域真源为 selection-store）
-    // filter 排除背景页图元：背景内容在前景页不可选
+    // filter 排除背景页图元：背景内容在前景页不可选；
+    // suppressSelection（格式刷/链接打开期间）逐图元禁止进入选择
     this.graph.use(
       new Selection({
         enabled: true,
@@ -211,7 +220,8 @@ export class GraphAdapter {
         rubberband: true,
         movable: true,
         showNodeSelectionBox: true,
-        filter: (cell) => isCellInteractable(cell),
+        filter: (cell) =>
+          isCellInteractable(cell) && this.events.suppressSelection?.(cell.id) !== true,
       }),
     )
     this.graph.use(new Snapline({ enabled: true }))
@@ -247,6 +257,7 @@ export class GraphAdapter {
     this.bindEdgeTools()
     this.bindShapeDrop()
     this.bindDblClickReflow()
+    this.bindClickReflow()
   }
 
   /**
@@ -257,13 +268,35 @@ export class GraphAdapter {
    */
   renderPage(page: DiagramPage, backgroundPage?: DiagramPage): void {
     this.graph.clearCells()
+    const nodeMetas: CellMetadata[] = []
     if (backgroundPage) {
       for (const meta of pageToCells(backgroundPage)) {
         this.addCell(toBackgroundCell(meta))
+        if (meta.kind === 'node') nodeMetas.push(meta)
       }
     }
     for (const meta of pageToCells(page)) {
       this.addCell(meta)
+      if (meta.kind === 'node') nodeMetas.push(meta)
+    }
+    this.wireParentChildren(nodeMetas)
+  }
+
+  /** 按 parentId 组装 X6 父子（children 相对坐标 = 子文档坐标 − 父文档坐标，pt）。 */
+  private wireParentChildren(nodeMetas: CellMetadata[]): void {
+    const metaById = new Map(nodeMetas.map((meta) => [meta.id, meta]))
+    for (const meta of nodeMetas) {
+      if (!meta.parentId) continue
+      const parentMeta = metaById.get(meta.parentId)
+      const parentCell = this.graph.getCellById(meta.parentId)
+      const childCell = this.graph.getCellById(meta.id)
+      if (!parentMeta || !parentCell?.isNode() || !childCell?.isNode()) continue
+      ;(parentCell as Node).addChild(childCell as Node)
+      const rel = relativePositionFor(
+        { x: meta.x ?? 0, y: meta.y ?? 0 },
+        { x: parentMeta.x ?? 0, y: parentMeta.y ?? 0 },
+      )
+      ;(childCell as Node).position(rel.x, rel.y)
     }
   }
 
@@ -508,10 +541,21 @@ export class GraphAdapter {
     })
   }
 
+  /** 节点文档绝对位置（pt）：子节点 position() 为父相对坐标，沿父链累加还原。 */
+  private absolutePosition(node: Node): { x: number; y: number } {
+    const position = node.position()
+    const parent = node.getParent()
+    if (parent && parent.isNode()) {
+      const parentAbs = this.absolutePosition(parent as Node)
+      return { x: parentAbs.x + position.x, y: parentAbs.y + position.y }
+    }
+    return { x: position.x, y: position.y }
+  }
+
   /** 节点移动手势合并：mousedown 记录起点，mouseup 对比终点，一次回调。 */
   private bindNodeMoveGesture(): void {
     this.graph.on('node:mousedown', ({ node }) => {
-      const position = node.position()
+      const position = this.absolutePosition(node)
       this.moveGestureBefore = { id: node.id, x: position.x, y: position.y }
     })
     this.graph.on('node:mouseup', ({ node }) => {
@@ -520,7 +564,7 @@ export class GraphAdapter {
       if (!before || before.id !== node.id) {
         return
       }
-      const after = node.position()
+      const after = this.absolutePosition(node)
       if (after.x !== before.x || after.y !== before.y) {
         this.events.onNodeMoved?.(node.id, { x: before.x, y: before.y }, after)
       }
@@ -679,6 +723,19 @@ export class GraphAdapter {
     })
     this.graph.on('edge:dblclick', ({ edge }) => {
       this.events.onEdgeDblClick?.(edge.id)
+    })
+  }
+
+  /** 单击回流：节点/边/空白单击（携带修饰键；格式刷与链接打开由调用方判定）。 */
+  private bindClickReflow(): void {
+    this.graph.on('node:click', ({ node, e }) => {
+      this.events.onNodeClick?.(node.id, { ctrlKey: e.ctrlKey, metaKey: e.metaKey })
+    })
+    this.graph.on('edge:click', ({ edge, e }) => {
+      this.events.onEdgeClick?.(edge.id, { ctrlKey: e.ctrlKey, metaKey: e.metaKey })
+    })
+    this.graph.on('blank:click', () => {
+      this.events.onBlankClick?.()
     })
   }
 

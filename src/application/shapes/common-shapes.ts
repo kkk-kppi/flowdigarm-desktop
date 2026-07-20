@@ -218,6 +218,21 @@ const COMMON_SHAPES: ShapeDefinition[] = [
     isContainer: false,
     keepAspectOnShiftResize: true,
   }),
+  // 组合（Task 7）：由「组合」命令创建的容器节点——透明填充、虚线边框；
+  // category='group' 不入图元库分类；无端口（不可作为连接端点）。
+  def({
+    type: 'group',
+    label: '组合',
+    category: 'group',
+    body: { markup: 'rect' },
+    defaultSize: BASIC_SIZE,
+    minSize: DEFAULT_MIN_SIZE,
+    ports: [],
+    textAreaInset: DEFAULT_INSET,
+    defaultStyle: { ...createDefaultNodeStyle(), fillOpacity: 0, strokeDash: 'dash' },
+    isContainer: true,
+    keepAspectOnShiftResize: false,
+  }),
 ]
 
 let registered = false

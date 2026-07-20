@@ -399,3 +399,39 @@ describe('document-store 剪贴板与创建', () => {
     expect(store.lastNotice).toBeNull()
   })
 })
+
+describe('document-store 常用形状统计', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('默认注入 InMemoryShapeUsageRepository；createNodeFromShape 成功后记录使用', async () => {
+    const store = useDocumentStore()
+    expect(store.shapeUsageVersion).toBe(0)
+    store.createNodeFromShape('rect')
+    store.createNodeFromShape('rect')
+    store.createNodeFromShape('diamond')
+    // recordUsage 异步完成：等待微任务后版本号递增、统计可查
+    await Promise.resolve()
+    await Promise.resolve()
+    const rows = await store.shapeUsageRepository.topUsed(20)
+    expect(rows[0]).toEqual({ shapeType: 'rect', count: 2 })
+    expect(rows[1]).toEqual({ shapeType: 'diamond', count: 1 })
+    expect(store.shapeUsageVersion).toBe(3)
+  })
+
+  it('setShapeUsageRepository 注入替换（Task 8 换 SQLite 的接口点）', async () => {
+    const store = useDocumentStore()
+    const recorded: string[] = []
+    store.setShapeUsageRepository({
+      recordUsage: async (shapeType: string) => {
+        recorded.push(shapeType)
+      },
+      topUsed: async () => [],
+    })
+    store.createNodeFromShape('circle')
+    await Promise.resolve()
+    expect(recorded).toEqual(['circle'])
+    expect(store.shapeUsageVersion).toBe(1)
+  })
+})

@@ -307,3 +307,68 @@ describe('PropertyTab 混合选择', () => {
     expect(store.undoLabel).toBe('文本样式')
   })
 })
+
+describe('PropertyTab 链接', () => {
+  it('单节点显示当前链接；失焦提交一条「设置链接」记录', async () => {
+    const { wrapper, store, selection } = mountTab()
+    await select(wrapper, selection, ['node-1'])
+    const input = wrapper.find('[data-testid="node-link"]')
+    expect(input.exists()).toBe(true)
+    expect((input.element as HTMLInputElement).value).toBe('')
+
+    await input.setValue('https://example.com')
+    await input.trigger('blur')
+    expect(store.document.pages[0].nodes.find((n) => n.id === 'node-1')?.link).toBe(
+      'https://example.com',
+    )
+    expect(store.undoLabel).toBe('设置链接')
+    store.undo()
+    expect(store.document.pages[0].nodes.find((n) => n.id === 'node-1')?.link).toBeUndefined()
+  })
+
+  it('非法协议显示中文错误且不执行命令；改回合法后错误消失', async () => {
+    const { wrapper, store, selection } = mountTab()
+    await select(wrapper, selection, ['node-1'])
+    const input = wrapper.find('[data-testid="node-link"]')
+    await input.setValue('javascript:alert(1)')
+    await input.trigger('blur')
+    expect(wrapper.find('[data-testid="link-error"]').text()).toBe(
+      '仅支持 http、https、mailto 链接。',
+    )
+    expect(store.document.pages[0].nodes.find((n) => n.id === 'node-1')?.link).toBeUndefined()
+    expect(store.canUndo).toBe(false)
+
+    await input.setValue('mailto:a@b.c')
+    await input.trigger('blur')
+    expect(wrapper.find('[data-testid="link-error"]').exists()).toBe(false)
+    expect(store.document.pages[0].nodes.find((n) => n.id === 'node-1')?.link).toBe('mailto:a@b.c')
+  })
+
+  it('清除链接：置空串失焦后 link 为 undefined', async () => {
+    const { wrapper, store, selection } = mountTab()
+    await select(wrapper, selection, ['node-1'])
+    const input = wrapper.find('[data-testid="node-link"]')
+    await input.setValue('https://example.com')
+    await input.trigger('blur')
+    expect(store.document.pages[0].nodes.find((n) => n.id === 'node-1')?.link).toBe(
+      'https://example.com',
+    )
+
+    await input.setValue('')
+    await input.trigger('blur')
+    expect(store.document.pages[0].nodes.find((n) => n.id === 'node-1')?.link).toBeUndefined()
+  })
+
+  it('单条边显示与设置链接', async () => {
+    const { wrapper, store, selection } = mountTab()
+    await select(wrapper, selection, ['edge-1'])
+    const input = wrapper.find('[data-testid="edge-link"]')
+    expect(input.exists()).toBe(true)
+    await input.setValue('http://example.com')
+    await input.trigger('blur')
+    expect(store.document.pages[0].edges.find((e) => e.id === 'edge-1')?.link).toBe(
+      'http://example.com',
+    )
+    expect(store.undoLabel).toBe('设置链接')
+  })
+})

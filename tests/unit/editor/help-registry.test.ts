@@ -146,4 +146,54 @@ describe('功能帮助注册表', () => {
     expect(getFeatureHelp('text-style')?.undoBoundary).toContain('一次控件变更一条记录')
     expect(getFeatureHelp('text-style')?.operation).toContain('多个值')
   })
+
+  it('Task 7 八条目（format-paint/align/distribute/z-order/auto-connect/group-container/hyperlink/top-shapes）均注册且 8 字段非空', () => {
+    const requiredFields = [
+      'id',
+      'title',
+      'purpose',
+      'operation',
+      'scope',
+      'undoBoundary',
+      'limits',
+      'docAnchor',
+    ] as const
+    for (const id of [
+      'format-paint',
+      'align',
+      'distribute',
+      'z-order',
+      'auto-connect',
+      'group-container',
+      'hyperlink',
+      'top-shapes',
+    ]) {
+      const entry = getFeatureHelp(id)
+      expect(entry, `条目 ${id} 应已注册`).toBeTruthy()
+      for (const field of requiredFields) {
+        expect(entry?.[field], `条目 ${id} 字段 ${field}`).toBeTruthy()
+      }
+    }
+  })
+
+  it('format-paint 写明单次/连续/Esc 与复制范围（不复制位置/内容/链接）', () => {
+    const entry = getFeatureHelp('format-paint')
+    expect(entry?.operation).toContain('单击')
+    expect(entry?.operation).toContain('双击')
+    expect(entry?.operation).toContain('Esc')
+    expect(entry?.limits).toContain('位置')
+    expect(entry?.limits).toContain('内容')
+    expect(entry?.limits).toContain('链接')
+  })
+
+  it('align 写明锚点=选择序列第一个图元', () => {
+    expect(getFeatureHelp('align')?.operation).toContain('选择序列第一个')
+  })
+
+  it('hyperlink 写明普通点击=选择、Ctrl/Cmd+点击=打开与白名单限制', () => {
+    const entry = getFeatureHelp('hyperlink')
+    expect(entry?.operation).toContain('Ctrl')
+    expect(entry?.limits).toContain('http')
+    expect(entry?.limits).toContain('mailto')
+  })
 })

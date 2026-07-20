@@ -12,9 +12,14 @@ export interface CellMove {
 
 export class MoveCellsCommand implements EditorCommand {
   readonly id = crypto.randomUUID()
-  readonly label = '移动图元'
+  readonly label: string
 
-  constructor(private readonly moves: CellMove[]) {}
+  constructor(
+    private readonly moves: CellMove[],
+    label = '移动图元',
+  ) {
+    this.label = label
+  }
 
   apply(document: DiagramDocument): DiagramDocument {
     return this.moveAll(document, 'after')

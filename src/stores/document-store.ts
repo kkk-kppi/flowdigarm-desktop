@@ -19,6 +19,10 @@ import { PageManager } from '@/application/pages/page-manager'
 import { copyCells, createPasteCommand, type ClipboardPayload } from '@/application/clipboard/clipboard-service'
 import { shapeRegistry } from '@/application/shapes/shape-registry'
 import '@/application/shapes/common-shapes' // 模块副作用：注册 14 个内置形状
+import {
+  InMemoryShapeUsageRepository,
+  type ShapeUsageRepository,
+} from '@/application/shapes/shape-usage-repository'
 import { useSelectionStore } from '@/stores/selection-store'
 
 interface DocumentState {
@@ -32,10 +36,24 @@ interface DocumentState {
   pasteCount: number
   /** 用户可读通知（toast 机制后续任务接线；UI 读取后调 clearNotice）。 */
   lastNotice: string | null
+  /** 常用形状统计版本号：recordShapeUsage 完成后递增（驱动图元库常用区刷新）。 */
+  shapeUsageVersion: number
 }
 
 // PageManager 含命令栈/视口等可变对象，不走响应式；按 store 实例关联，loadDocument 时重建。
 const pageManagers = new WeakMap<object, PageManager>()
+
+// 常用形状仓库：接口注入（默认 InMemory；Task 8 经 setShapeUsageRepository 换 SQLite 实现）。
+const shapeUsageRepositories = new WeakMap<object, ShapeUsageRepository>()
+
+function shapeUsageRepositoryOf(store: object): ShapeUsageRepository {
+  let repository = shapeUsageRepositories.get(store)
+  if (!repository) {
+    repository = new InMemoryShapeUsageRepository()
+    shapeUsageRepositories.set(store, repository)
+  }
+  return repository
+}
 
 function pageManagerOf(store: object, document: DiagramDocument): PageManager {
   let manager = pageManagers.get(store)
@@ -57,11 +75,16 @@ export const useDocumentStore = defineStore('document', {
       clipboard: null,
       pasteCount: 0,
       lastNotice: null,
+      shapeUsageVersion: 0,
     }
   },
   getters: {
     activePage(state): DiagramPage | undefined {
       return state.document.pages.find((page) => page.id === state.activePageId)
+    },
+    /** 常用形状仓库（非响应式，接口注入；默认 InMemory，Task 8 换 SQLite）。 */
+    shapeUsageRepository(): ShapeUsageRepository {
+      return shapeUsageRepositoryOf(this)
     },
     /** 非响应式 PageManager（文档每次替换都会触发本 getter 重算，保证 loadDocument 后返回新实例）。 */
     pageManager(): PageManager {
@@ -219,6 +242,20 @@ export const useDocumentStore = defineStore('document', {
       }
       this.executeCommand(new CreateCellsCommand({ pageId: page.id, nodes: [node] }))
       useSelectionStore().setSelection([node.id])
+      void this.recordShapeUsage(shapeType)
+    },
+    /** 注入常用形状仓库（Task 8 换 SQLite 实现；测试注入 mock）。 */
+    setShapeUsageRepository(repository: ShapeUsageRepository) {
+      shapeUsageRepositories.set(this, repository)
+    },
+    /** 记录一次形状使用（成功后递增版本号驱动常用区刷新；失败静默——统计不影响编辑）。 */
+    async recordShapeUsage(shapeType: string) {
+      try {
+        await shapeUsageRepositoryOf(this).recordUsage(shapeType)
+        this.shapeUsageVersion += 1
+      } catch {
+        // 统计失败不阻断创建流程
+      }
     },
     /** 设置用户可读通知（如「剪贴板为空。」）。 */
     setNotice(notice: string) {

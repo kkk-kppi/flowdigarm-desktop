@@ -12,7 +12,8 @@ export interface PortDef {
 export interface ShapeDefinition {
   type: string
   label: string // 中文形状名
-  category: 'basic' | 'flowchart' | 'text' | 'image'
+  /** basic/flowchart 入图元库两个分类；text/image 经插入入口；group 由组合命令创建，不入库。 */
+  category: 'basic' | 'flowchart' | 'text' | 'image' | 'group'
   /**
    * 主体几何：rect/ellipse 直接映射 SVG 标签；path 采用「100×100 单位正方形」约定——
    * path 字符串以 0..100 坐标描述形状轮廓，渲染时按节点 bbox 缩放（X6 侧经 refD 实现，

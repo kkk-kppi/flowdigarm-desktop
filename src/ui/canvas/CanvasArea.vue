@@ -19,7 +19,12 @@
     </template>
     <div class="graph-viewport">
       <PageFrame v-if="activePage" :page="activePage" :viewport="viewport" />
-      <div ref="containerRef" class="graph-container" data-testid="x6-canvas" />
+      <div
+        ref="containerRef"
+        class="graph-container"
+        :class="{ 'format-painting': formatPaintStore.mode !== 'off' }"
+        data-testid="x6-canvas"
+      />
       <PageBreakOverlay
         v-if="activePage"
         :page="activePage"
@@ -68,8 +73,12 @@ import { ResizeCellsCommand } from '@/application/commands/resize-cells'
 import { RotateCellsCommand } from '@/application/commands/rotate-cells'
 import { ReconnectEdgeCommand } from '@/application/commands/reconnect-edge'
 import { UpdateEdgeVerticesCommand } from '@/application/commands/update-edge-vertices'
+import { collectDescendantIds } from '@/application/arrangement/descendants'
+import { openCellHyperlink, shouldOpenHyperlink } from '@/application/links/open-hyperlink'
+import { usePlatform } from '@/platform/platform-provider'
 import { useAppStore } from '@/stores/app-store'
 import { useDocumentStore } from '@/stores/document-store'
+import { useFormatPaintStore } from '@/stores/format-paint-store'
 import { useSelectionStore } from '@/stores/selection-store'
 import PageBreakOverlay from './PageBreakOverlay.vue'
 import PageFrame from './PageFrame.vue'
@@ -80,6 +89,11 @@ import TextEditorOverlay from '@/ui/text/TextEditorOverlay.vue'
 const appStore = useAppStore()
 const documentStore = useDocumentStore()
 const selectionStore = useSelectionStore()
+const formatPaintStore = useFormatPaintStore()
+const platform = usePlatform()
+
+/** Ctrl/Cmd 实时状态（链接打开的 Ctrl/Cmd+点击判定与选择抑制）。 */
+const ctrlMetaHeld = ref(false)
 
 const activePage = computed(() => documentStore.activePage)
 const backgroundPage = computed(() =>
@@ -239,13 +253,21 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 /** 画布键盘：Delete/Backspace 删除选择（一条记录）；Ctrl+C/X/V 应用内剪贴板；
- *  F2/Enter（选中单节点）进入文本编辑；文本编辑期间画布快捷键整体挂起。 */
+ *  F2/Enter（选中单节点）进入文本编辑；Esc 退出格式刷；文本编辑期间画布快捷键整体挂起。 */
 function onWindowKeyDown(event: KeyboardEvent): void {
+  if (event.key === 'Control' || event.key === 'Meta') {
+    ctrlMetaHeld.value = true
+  }
   if (isEditableTarget(event.target)) {
     return
   }
   if (editingSession.value) {
     return // 编辑期间挂起画布快捷键（避免 Delete 删节点等）
+  }
+  if (event.key === 'Escape' && formatPaintStore.mode !== 'off') {
+    formatPaintStore.cancel()
+    event.preventDefault()
+    return
   }
   if (event.key === 'F2' || event.key === 'Enter') {
     const ids = selectionStore.selectedIds
@@ -282,6 +304,16 @@ function onWindowKeyDown(event: KeyboardEvent): void {
   }
 }
 
+function onWindowKeyUp(event: KeyboardEvent): void {
+  if (event.key === 'Control' || event.key === 'Meta') {
+    ctrlMetaHeld.value = false
+  }
+}
+
+function onWindowBlur(): void {
+  ctrlMetaHeld.value = false
+}
+
 onMounted(() => {
   const container = containerRef.value
   if (!container) {
@@ -297,9 +329,62 @@ onMounted(() => {
       selectionStore.setSelection(ids)
     },
     onNodeMoved: (id, before, after) => {
-      documentStore.executeCommand(
-        new MoveCellsCommand([{ pageId: documentStore.activePageId, nodeId: id, before, after }]),
-      )
+      // 容器移动时后代一起移动：收集后代 id 一并纳入同一条 MoveCellsCommand（领域为绝对 pt）
+      const page = activePage.value
+      const dx = after.x - before.x
+      const dy = after.y - before.y
+      const moves = [{ pageId: documentStore.activePageId, nodeId: id, before, after }]
+      if (page && (dx !== 0 || dy !== 0)) {
+        for (const descendantId of collectDescendantIds(page, [id])) {
+          const descendant = page.nodes.find((n) => n.id === descendantId)
+          if (!descendant) continue
+          moves.push({
+            pageId: documentStore.activePageId,
+            nodeId: descendant.id,
+            before: { x: descendant.x, y: descendant.y },
+            after: { x: descendant.x + dx, y: descendant.y + dy },
+          })
+        }
+      }
+      documentStore.executeCommand(new MoveCellsCommand(moves))
+    },
+    onNodeClick: (nodeId, modifiers) => {
+      // 格式刷模式：点击图元 = 应用格式（不进入选择逻辑，选择已由 suppressSelection 抑制）
+      if (formatPaintStore.mode !== 'off') {
+        formatPaintStore.applyTo(nodeId)
+        return
+      }
+      // Ctrl/Cmd+点击带链接节点 = 打开链接（普通点击走选择，X6 已处理）
+      const node = activePage.value?.nodes.find((n) => n.id === nodeId)
+      if (node?.link && shouldOpenHyperlink(modifiers)) {
+        void openCellHyperlink(platform, node.link).then((error) => {
+          if (error) {
+            documentStore.setNotice(error)
+          }
+        })
+      }
+    },
+    onEdgeClick: (edgeId) => {
+      if (formatPaintStore.mode !== 'off') {
+        formatPaintStore.applyTo(edgeId)
+      }
+    },
+    onBlankClick: () => {
+      if (formatPaintStore.mode !== 'off') {
+        formatPaintStore.cancel()
+      }
+    },
+    suppressSelection: (cellId) => {
+      // 格式刷模式：全部图元不可选（点击=应用格式）
+      if (formatPaintStore.mode !== 'off') {
+        return true
+      }
+      // Ctrl/Cmd+点击带链接节点 = 打开链接，不改变选择
+      if (ctrlMetaHeld.value) {
+        const node = activePage.value?.nodes.find((n) => n.id === cellId)
+        return node?.link !== undefined
+      }
+      return false
     },
     onCreateEdgeRequest: ({ source, target }) => {
       const page = activePage.value
@@ -396,10 +481,14 @@ onMounted(() => {
   }
 
   window.addEventListener('keydown', onWindowKeyDown)
+  window.addEventListener('keyup', onWindowKeyUp)
+  window.addEventListener('blur', onWindowBlur)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onWindowKeyDown)
+  window.removeEventListener('keyup', onWindowKeyUp)
+  window.removeEventListener('blur', onWindowBlur)
   resizeObserver?.disconnect()
   resizeObserver = null
   unsubscribeViewport?.()
@@ -467,6 +556,11 @@ watch(
 .graph-container {
   position: absolute;
   inset: 0;
+}
+
+/* 格式刷模式游标反馈（mode≠off 时容器加 format-painting 类） */
+.graph-container.format-painting {
+  cursor: crosshair;
 }
 
 .canvas-corner {

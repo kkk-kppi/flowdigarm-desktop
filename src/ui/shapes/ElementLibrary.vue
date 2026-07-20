@@ -22,6 +22,58 @@
         aria-label="搜索图元"
       />
       <div class="library-body">
+        <!-- 常用（Top 20，搜索时隐藏）：与分类格子同一创建交互 -->
+        <section v-if="normalizedQuery === ''" class="category">
+          <button
+            type="button"
+            class="category-header"
+            data-testid="category-top-header"
+            :aria-expanded="topExpanded"
+            @click="topExpanded = !topExpanded"
+          >
+            <span class="category-arrow">{{ topExpanded ? '▾' : '▸' }}</span>
+            常用
+          </button>
+          <div v-if="topExpanded" class="category-grid">
+            <div
+              v-for="shape in topShapes"
+              :key="shape.type"
+              class="shape-cell"
+              data-testid="top-shape-cell"
+              role="button"
+              tabindex="0"
+              :aria-label="shape.label"
+              :title="shape.label"
+              @mousedown="onCellMouseDown(shape.type, $event)"
+              @dblclick="emit('create-request', shape.type)"
+              @keydown.enter="emit('create-request', shape.type)"
+              @keydown.space.prevent="emit('create-request', shape.type)"
+            >
+              <svg class="shape-thumb" viewBox="0 0 100 100" aria-hidden="true">
+                <rect
+                  v-if="shape.body.markup === 'rect'"
+                  x="4"
+                  y="4"
+                  width="92"
+                  height="92"
+                  :rx="thumbRadius(shape)"
+                  :ry="thumbRadius(shape)"
+                  class="thumb-body"
+                />
+                <ellipse
+                  v-else-if="shape.body.markup === 'ellipse'"
+                  cx="50"
+                  cy="50"
+                  rx="46"
+                  ry="46"
+                  class="thumb-body"
+                />
+                <path v-else :d="shape.body.path" class="thumb-body" />
+              </svg>
+              <span class="shape-label">{{ shape.label }}</span>
+            </div>
+          </div>
+        </section>
         <section v-for="section in sections" :key="section.category" class="category">
           <button
             type="button"
@@ -88,11 +140,15 @@
 </template>
 
 <script setup lang="ts">
-// 左侧图元库（220px）：搜索、基本形状/流程图手风琴、3 列缩略图网格。
+// 左侧图元库（220px）：搜索、常用区（Top 20）、基本形状/流程图手风琴、3 列缩略图网格。
+// 常用区：computeTopShapes(20)（次数降序、同次按内置序、新用户按内置序补足），
+// 使用记录经 document-store 注入的 repository；shapeUsageVersion 变化时异步刷新；搜索时隐藏。
 // 拖拽经 X6 Dnd（CanvasArea 注入 shapeDragStartKey）获得画布内拖拽预览；双击/回车直接创建。
-import { computed, inject, reactive, ref } from 'vue'
+import { computed, inject, onMounted, reactive, ref, watch } from 'vue'
 import { shapeRegistry, type ShapeDefinition } from '@/application/shapes/shape-registry'
 import '@/application/shapes/common-shapes' // 模块副作用：注册内置形状
+import { computeTopShapes } from '@/application/shapes/shape-usage-repository'
+import { useDocumentStore } from '@/stores/document-store'
 import { shapeDragStartKey } from './shape-drag-key'
 
 const emit = defineEmits<{
@@ -101,9 +157,40 @@ const emit = defineEmits<{
 }>()
 
 const startShapeDrag = inject(shapeDragStartKey, null)
+const documentStore = useDocumentStore()
 
 const collapsed = ref(false)
 const query = ref('')
+const topExpanded = ref(true)
+
+/** 常用区形状（Top 20 → 库内 12 格）；仅 basic/flowchart 分类可入库展示。 */
+const topShapes = ref<ShapeDefinition[]>([])
+
+/** 图元库内置顺序（基本 → 流程图），即 computeTopShapes 的补足顺序。 */
+function libraryTypes(): string[] {
+  return [
+    ...shapeRegistry.byCategory('basic').map((def) => def.type),
+    ...shapeRegistry.byCategory('flowchart').map((def) => def.type),
+  ]
+}
+
+async function refreshTopShapes(): Promise<void> {
+  const rows = await documentStore.shapeUsageRepository.topUsed(20)
+  topShapes.value = computeTopShapes(rows, libraryTypes(), 20)
+    .map((type) => shapeRegistry.get(type))
+    .filter((def) => def.category === 'basic' || def.category === 'flowchart')
+}
+
+onMounted(() => {
+  void refreshTopShapes()
+})
+
+watch(
+  () => documentStore.shapeUsageVersion,
+  () => {
+    void refreshTopShapes()
+  },
+)
 
 interface CategorySection {
   category: 'basic' | 'flowchart'

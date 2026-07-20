@@ -26,11 +26,11 @@
 
 - 入口：左栏图元库 `src/ui/shapes/ElementLibrary.vue`（220px，搜索/基本形状与流程图手风琴/3 列缩略图）；拖入经 X6 Dnd（`src/infrastructure/x6/graph-adapter.ts` startShapeDrag，拖拽预览与落点 pt）；双击/回车在视口中心创建（`src/ui/canvas/CanvasArea.vue` createShapeAtViewportCenter，经 ViewportTransform 换算）；创建逻辑统一走 document-store `createNodeFromShape`；连接创建经连线手势（端口拖出，落端口或节点主体自动取最近端口）。文本工具/图片导入 Task 6b 及后续补全。
 - 前置条件：存在已打开文档页；形状类型已注册（14 个内置形状，`src/application/shapes/common-shapes.ts`）。
-- 成功结果：新节点按 ShapeDefinition 默认尺寸/样式/角度 0 创建，zIndex 取页面现有最大递增，创建后自动选中；新边使用页面默认连线类型与默认箭头（none/single/double → 无/末端/双端）；落节点主体时按落点 pt 计算最近端口（等距按 top→right→bottom→left）。
+- 成功结果：新节点按 ShapeDefinition 默认尺寸/样式/角度 0 创建，zIndex 取页面现有最大递增，创建后自动选中；新边使用页面默认连线类型与默认箭头（none/single/double → 无/末端/双端）；落节点主体时按落点 pt 计算最近端口（等距按 top→right→bottom→left）；图元库顶部「常用」手风琴默认展开，按本机使用次数降序展示 Top 20（次数相同按内置顺序、新用户按内置顺序补足、搜索时隐藏），创建成功即记录一次使用（`recordShapeUsage` 经 document-store 注入的 repository，Task 8 换 SQLite 实现）。
 - 失败反馈：未知形状类型抛「未知形状类型：{type}」；点击「+ 更多形状...」提示「更多形状将在后续版本提供。」。
 - 撤销边界：一次拖入/双击创建/连接各一条「创建图元」记录；重连一条「重新连接」；拐点编辑一条「编辑拐点」。
-- 数据字段：`ShapeDefinition`（type/label/category/body/defaultSize/minSize/ports/textAreaInset/defaultStyle/isContainer/keepAspectOnShiftResize，`src/application/shapes/shape-registry.ts`）；`DiagramNode`/`DiagramEdge`（`src/domain/diagram.ts`）；端口 id 固定 top/right/bottom/left。
-- 自动化测试位置：`tests/unit/editor/shapes/*`、`tests/unit/editor/commands/create-cells.test.ts`、`tests/unit/editor/commands/reconnect-vertices.test.ts`、`tests/component/ElementLibrary.test.ts`、`tests/unit/editor/cell-mapper.test.ts`。
+- 数据字段：`ShapeDefinition`（type/label/category/body/defaultSize/minSize/ports/textAreaInset/defaultStyle/isContainer/keepAspectOnShiftResize，`src/application/shapes/shape-registry.ts`）；`DiagramNode`/`DiagramEdge`（`src/domain/diagram.ts`）；端口 id 固定 top/right/bottom/left；常用形状统计 `ShapeUsageRepository/computeTopShapes`（`src/application/shapes/shape-usage-repository.ts`）。
+- 自动化测试位置：`tests/unit/editor/shapes/*`（含 shape-usage-repository）、`tests/unit/editor/commands/create-cells.test.ts`、`tests/unit/editor/commands/reconnect-vertices.test.ts`、`tests/component/ElementLibrary.test.ts`、`tests/unit/editor/cell-mapper.test.ts`、`tests/unit/stores/document-store.test.ts`。
 
 ## 4. 图元编辑（选择/拖拽/缩放/旋转/删除/复制粘贴）
 
@@ -60,7 +60,17 @@
 - 失败反馈：提交文本超过 MAX_TEXT_LENGTH（10000）抛「文本长度超出限制。」（通知栏提示，文档不变）。
 - 撤销边界：一次编辑会话一条「编辑文本」记录（未变更不产生）；一次控件变更的全部目标合并为一条「文本样式」记录；编辑期间画布快捷键挂起。
 - 数据字段：`TextContent/TextStyle/TextBlock/TextParagraph`（`src/domain/diagram.ts`）；`EditTextCommand`（`src/application/commands/edit-text.ts`，node 与 edgeLabel 目标，edgeLabel 可追加新标签）；`TextStyleCommand`（`src/application/commands/text-style-command.ts`，style/block/paragraph 三段浅合并）；聚合 `aggregateTextStyles`（`src/application/inspector/aggregate-style.ts`）；目标构建 `buildTextStyleTargets`（`src/application/inspector/text-style-targets.ts`）；渲染布局 `layoutText/textAreaForNode`（`src/infrastructure/x6/text-layout.ts`）。
-- 自动化测试位置：`tests/unit/editor/text/text-session.test.ts`、`tests/unit/editor/commands/edit-text.test.ts`、`tests/unit/editor/commands/text-style-command.test.ts`、`tests/unit/editor/aggregate-style.test.ts`、`tests/unit/editor/text-style-targets.test.ts`、`tests/unit/editor/text-layout.test.ts`、`tests/unit/editor/cell-mapper-text.test.ts`、`tests/component/TextEditorOverlay.test.ts`、`tests/component/CompactToolbar.test.ts`、`tests/component/PropertyTab.test.ts`；格式刷 Task 7 补全（当前为禁用占位按钮）。
+- 自动化测试位置：`tests/unit/editor/text/text-session.test.ts`、`tests/unit/editor/commands/edit-text.test.ts`、`tests/unit/editor/commands/text-style-command.test.ts`、`tests/unit/editor/aggregate-style.test.ts`、`tests/unit/editor/text-style-targets.test.ts`、`tests/unit/editor/text-layout.test.ts`、`tests/unit/editor/cell-mapper-text.test.ts`、`tests/component/TextEditorOverlay.test.ts`、`tests/component/CompactToolbar.test.ts`、`tests/component/PropertyTab.test.ts`、`tests/unit/editor/format-paint.test.ts`、`tests/unit/stores/format-paint-store.test.ts`。
+
+### 6.1 格式刷
+
+- 入口：紧凑工具栏「格式刷」按钮（`src/ui/toolbar/CompactToolbar.vue`）：单击 `armOnce`（恰好 1 个选中图元否则禁用）、双击 `armContinuous`（橙色 continuous 态）、Esc 全局取消（输入控件聚焦/文本编辑中不拦截）；应用到目标由画布点击触发（`src/ui/canvas/CanvasArea.vue`，点击空白或 Esc 取消，mode≠off 时画布容器加 `format-painting` 类、选择被抑制）；状态机 `src/stores/format-paint-store.ts`。
+- 前置条件：源为恰好 1 个选中图元；目标与源同类型（节点→节点、边→边）。
+- 成功结果：复制填充/填充透明度/边框色/边框宽/虚线/圆角/阴影（节点样式全键）与字体/文本块/段落；边复制 EdgeStyle 全键；类型不匹配目标跳过，全部不匹配或无变化不产生命令；once 应用后自动退出，continuous 保持至 Esc/空白点击。
+- 失败反馈：无效目标（类型不匹配/不存在/无变化）不动作且不退模式。
+- 撤销边界：一次应用一条「格式刷」记录（多目标一次应用也只一条），撤销一步全部恢复。
+- 数据字段：`FormatPaintSnapshot { nodeStyle?/edgeStyle?/text? }`（`src/application/commands/apply-format-paint.ts`）；`mode/sourceCellId`（`src/stores/format-paint-store.ts`）。
+- 自动化测试位置：`tests/unit/editor/format-paint.test.ts`、`tests/unit/stores/format-paint-store.test.ts`、`tests/component/CompactToolbar.test.ts`。
 
 ## 7. 形状与边样式（填充/边框/阴影/线型/箭头）
 
@@ -74,13 +84,13 @@
 
 ## 8. 排列（对齐/等距/层序/组合/容器/自动连线）
 
-- 入口：实现后补全
-- 前置条件：实现后补全
-- 成功结果：实现后补全
-- 失败反馈：实现后补全
-- 撤销边界：实现后补全
-- 数据字段：实现后补全
-- 自动化测试位置：实现后补全（规划：`tests/unit/editor/arrangement/*`、`tests/unit/editor/group-cells.test.ts`）
+- 入口：application 层全部就绪（`src/application/arrangement/*`、`src/application/commands/{group-cells,container-membership}.ts`）；菜单栏/右键菜单入口 Task 8 接线。容器移动时成员一起移动由画布手势层完成（`src/ui/canvas/CanvasArea.vue` onNodeMoved 收集后代 id 并入同一条移动命令）。
+- 前置条件：对齐 ≥2 个选中节点；等距 ≥3；自动连线 ≥2（容器除外）；组合 ≥2；加入容器要求目标为 isContainer 节点。
+- 成功结果：对齐以**选择序列第一个图元**为基准（左/水平居中/右/顶/垂直居中/底）；等距按轴几何顺序排序、固定最外两个、相邻边界间空隙相等（`gap=(last.start−first.end−Σmiddle.size)/(n−1)`）；层序四动作（置顶=最大 zIndex+1…/置底/上移一层=相邻交换/下移一层）执行后全页规范化为 1..n；自动连线按选择顺序生成 n−1 条边（页面默认连线类型与箭头，端口为互相对侧最近端口，autoConnectLabel 开时带空标签）；组合创建 group 容器节点（bbox=成员外接矩形，成员 parentId 指向之，ID/数据保留，嵌套允许）；取消组合还原；加入/移出容器显式改变 parentId。
+- 失败反馈：等距 <3 图元抛「等距排列至少需要三个图元。」；间距不足抛「间距不足，无法等距排列。」；非容器目标抛「目标节点不是容器。」；循环成员关系抛「加入容器会形成循环。」；对齐/自动连线/组合有效节点不足时不产生命令（UI 禁用）。
+- 撤销边界：对齐/等距/层序/自动连线/组合/取消组合/加入容器/移出容器各为一条记录（自动连线一次撤销删除全部新边；层序含规范化改号的未选中图元精确还原）。
+- 数据字段：`AlignMode/DistributeMode/ZOrderAction`（`src/application/arrangement/*`）；group 形状定义（`src/application/shapes/common-shapes.ts`，透明填充虚线边框、无端口、不入图元库）；`DiagramNode.parentId/isContainer`（`src/domain/diagram.ts`）；cell-mapper `parentId` 元数据与 `relativePositionFor`（`src/infrastructure/x6/cell-mapper.ts`）。
+- 自动化测试位置：`tests/unit/editor/arrangement/*`（align-cells/distribute-cells/z-order/auto-connect/descendants）、`tests/unit/editor/group-cells.test.ts`、`tests/unit/editor/container-membership.test.ts`、`tests/unit/editor/shapes/shape-registry.test.ts`、`tests/unit/editor/cell-mapper.test.ts`。
 
 ## 9. 属性和数据（右侧面板/几何显示/业务数据）
 

@@ -5,6 +5,7 @@ import { mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import CompactToolbar from '@/ui/toolbar/CompactToolbar.vue'
 import { useDocumentStore } from '@/stores/document-store'
+import { useFormatPaintStore } from '@/stores/format-paint-store'
 import { useSelectionStore } from '@/stores/selection-store'
 import { createDefaultTextContent, type DiagramDocument } from '@/domain/diagram'
 import { createTestDocument } from '../helpers/test-document'
@@ -59,14 +60,14 @@ describe('CompactToolbar 操作组', () => {
 })
 
 describe('CompactToolbar 粘贴板组', () => {
-  it('空选择时复制/剪切禁用；空剪贴板时粘贴禁用；格式刷禁用占位', () => {
+  it('空选择时复制/剪切禁用；空剪贴板时粘贴禁用；格式刷非单选禁用', () => {
     const { wrapper } = mountToolbar()
     expect(wrapper.find('[data-testid="tb-copy"]').attributes('disabled')).toBeDefined()
     expect(wrapper.find('[data-testid="tb-cut"]').attributes('disabled')).toBeDefined()
     expect(wrapper.find('[data-testid="tb-paste"]').attributes('disabled')).toBeDefined()
     const painter = wrapper.find('[data-testid="tb-format-painter"]')
     expect(painter.attributes('disabled')).toBeDefined()
-    expect(painter.attributes('title')).toContain('格式刷（Task 7 提供）')
+    expect(painter.attributes('title')).toContain('格式刷')
   })
 
   it('复制后粘贴可用；粘贴产生一条记录', async () => {
@@ -206,5 +207,78 @@ describe('CompactToolbar 段落对齐组', () => {
     const { wrapper } = mountToolbar()
     expect(wrapper.find('[data-testid="tb-align-left"]').attributes('disabled')).toBeDefined()
     expect(wrapper.find('[data-testid="tb-valign-top"]').attributes('disabled')).toBeDefined()
+  })
+})
+
+describe('CompactToolbar 格式刷', () => {
+  it('非单选禁用；恰好 1 选中时可用；tooltip 含完整说明与 Esc 提示', async () => {
+    const { wrapper, selection } = mountToolbar()
+    const painter = wrapper.find('[data-testid="tb-format-painter"]')
+    expect(painter.attributes('disabled')).toBeDefined()
+
+    await select(wrapper, selection, ['node-1', 'node-2'])
+    expect(wrapper.find('[data-testid="tb-format-painter"]').attributes('disabled')).toBeDefined()
+
+    await select(wrapper, selection, ['node-1'])
+    const enabled = wrapper.find('[data-testid="tb-format-painter"]')
+    expect(enabled.attributes('disabled')).toBeUndefined()
+    expect(enabled.attributes('title')).toContain('单击')
+    expect(enabled.attributes('title')).toContain('双击')
+    expect(enabled.attributes('title')).toContain('Esc')
+  })
+
+  it('单击进入 once 模式（active 态）；应用一次后回 off', async () => {
+    const { wrapper, store, selection } = mountToolbar()
+    const paint = useFormatPaintStore()
+    // 先给源节点一个差异格式（加粗），否则目标无变化、命令为 null
+    await select(wrapper, selection, ['node-1'])
+    await wrapper.find('[data-testid="tb-bold"]').trigger('click')
+    await wrapper.find('[data-testid="tb-format-painter"]').trigger('click')
+    expect(paint.mode).toBe('once')
+    expect(paint.sourceCellId).toBe('node-1')
+    expect(wrapper.find('[data-testid="tb-format-painter"]').classes()).toContain('active')
+
+    // 模拟画布点击目标（CanvasArea 接线外，此处直调 store）
+    expect(paint.applyTo('node-2')).toBe(true)
+    expect(paint.mode).toBe('off')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-testid="tb-format-painter"]').classes()).not.toContain('active')
+    expect(store.undoLabel).toBe('格式刷')
+    expect(store.document.pages[0].nodes.find((n) => n.id === 'node-2')?.text?.style.bold).toBe(
+      true,
+    )
+  })
+
+  it('双击进入 continuous 模式（continuous 橙色态），Esc 退出', async () => {
+    const { wrapper, selection } = mountToolbar()
+    const paint = useFormatPaintStore()
+    await select(wrapper, selection, ['node-1'])
+    await wrapper.find('[data-testid="tb-format-painter"]').trigger('dblclick')
+    expect(paint.mode).toBe('continuous')
+    await wrapper.vm.$nextTick()
+    const painter = wrapper.find('[data-testid="tb-format-painter"]')
+    expect(painter.classes()).toContain('continuous')
+    expect(painter.attributes('disabled')).toBeUndefined()
+
+    // Esc 取消（全局 keydown）
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await wrapper.vm.$nextTick()
+    expect(paint.mode).toBe('off')
+    expect(wrapper.find('[data-testid="tb-format-painter"]').classes()).not.toContain(
+      'continuous',
+    )
+  })
+
+  it('输入框聚焦时 Esc 不拦截', async () => {
+    const { wrapper, selection } = mountToolbar()
+    const paint = useFormatPaintStore()
+    await select(wrapper, selection, ['node-1'])
+    await wrapper.find('[data-testid="tb-format-painter"]').trigger('dblclick')
+    expect(paint.mode).toBe('continuous')
+
+    const input = wrapper.find('[data-testid="tb-font-size"]').element as HTMLElement
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await wrapper.vm.$nextTick()
+    expect(paint.mode).toBe('continuous')
   })
 })

@@ -27,6 +27,18 @@
             <span class="prop-label">ID</span>
             <span class="prop-readonly prop-id" data-testid="node-id">{{ singleNode.id }}</span>
           </div>
+          <label class="prop-row">
+            <span class="prop-label">链接</span>
+            <input
+              type="text"
+              data-testid="node-link"
+              title="链接（http/https/mailto，失焦提交；留空清除；Ctrl/Cmd+点击画布节点打开）"
+              placeholder="https://"
+              :value="singleNode.link ?? ''"
+              @blur="commitLink('node', $event)"
+            />
+          </label>
+          <p v-if="linkError" class="link-error" data-testid="link-error">{{ linkError }}</p>
         </div>
       </section>
 
@@ -449,6 +461,18 @@
               @blur="commitEdgeLabel"
             />
           </label>
+          <label v-if="singleEdge" class="prop-row">
+            <span class="prop-label">链接</span>
+            <input
+              type="text"
+              data-testid="edge-link"
+              title="链接（http/https/mailto，失焦提交；留空清除）"
+              placeholder="https://"
+              :value="singleEdge.link ?? ''"
+              @blur="commitLink('edge', $event)"
+            />
+          </label>
+          <p v-if="singleEdge && linkError" class="link-error" data-testid="link-error">{{ linkError }}</p>
         </div>
       </section>
     </template>
@@ -462,7 +486,7 @@
 // 多选聚合：一致显示值、不一致显示「多个值」（颜色混合标记、布尔按钮不定态）、无文本禁用；
 // 任何控件写入 = 全部选中目标一条命令（before 逐目标从文档实读）。
 // 颜色控件用 @change（取色器关闭/确认时一次提交一条记录；拖动过程的 input 事件不入栈）。
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import {
   type ConnectorKind,
   type DiagramNode,
@@ -478,6 +502,8 @@ import { EditTextCommand } from '@/application/commands/edit-text'
 import { MoveCellsCommand } from '@/application/commands/move-cells'
 import { ResizeCellsCommand } from '@/application/commands/resize-cells'
 import { RotateCellsCommand } from '@/application/commands/rotate-cells'
+import { SetLinkCommand } from '@/application/commands/set-link'
+import { validateHyperlink } from '@/application/links/hyperlink-validator'
 import {
   TextStyleCommand,
   type TextStylePatch,
@@ -820,6 +846,45 @@ function commitEdgeLabel(event: Event): void {
     }),
   )
 }
+
+// ---------- 链接 ----------
+
+/** 链接校验错误（null=无错误）；切换选择时清零。 */
+const linkError = ref<string | null>(null)
+
+watch(
+  () => selectionStore.selectedIds,
+  () => {
+    linkError.value = null
+  },
+)
+
+/** 链接失焦提交：非法协议显示中文错误（不执行命令）；空串 = 清除。 */
+function commitLink(kind: 'node' | 'edge', event: Event): void {
+  const pageId = page.value?.id
+  const cell = kind === 'node' ? singleNode.value : singleEdge.value
+  if (!cell || !pageId) return
+  const value = (event.target as HTMLInputElement).value
+  const before = cell.link ?? ''
+  if (value === before) {
+    linkError.value = null
+    return
+  }
+  const error = validateHyperlink(value)
+  if (error) {
+    linkError.value = error
+    return
+  }
+  linkError.value = null
+  documentStore.executeCommand(
+    new SetLinkCommand({
+      pageId,
+      target: { kind, cellId: cell.id },
+      before: cell.link,
+      after: value === '' ? undefined : value,
+    }),
+  )
+}
 </script>
 
 <style scoped>
@@ -921,6 +986,12 @@ function commitEdgeLabel(event: Event): void {
   border: 1px dashed var(--color-border);
   border-radius: 3px;
   padding: 1px 4px;
+}
+
+.link-error {
+  margin: 6px 0 0 72px;
+  font-size: 11px;
+  color: #d4380d;
 }
 
 .button-group {

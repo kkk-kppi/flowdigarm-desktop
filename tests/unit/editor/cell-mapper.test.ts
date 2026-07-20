@@ -6,7 +6,7 @@ import {
   createDefaultTextContent,
   type DiagramPage,
 } from '@/domain/diagram'
-import { pageToCells, type CellMetadata } from '@/infrastructure/x6/cell-mapper'
+import { pageToCells, relativePositionFor, type CellMetadata } from '@/infrastructure/x6/cell-mapper'
 import { x6ConnectorName } from '@/infrastructure/x6/edge-connector-map'
 import { shapeRegistry } from '@/application/shapes/shape-registry'
 import '@/application/shapes/common-shapes'
@@ -290,5 +290,27 @@ describe('x6ConnectorName 连线映射', () => {
       edges: [createTestEdge({ id: 'edge-1', connector: 'orthogonal' })],
     })
     expect(cellsOf(普通页).edges[0].connectorName).toBe('orth')
+  })
+})
+
+describe('容器支持（parentId 与相对坐标）', () => {
+  it('节点 parentId 写入元数据；无 parentId 时为 undefined', () => {
+    const page = createEmptyPage({
+      nodes: [
+        createTestNode({ id: 'group-1', shape: 'group', isContainer: true }),
+        createTestNode({ id: 'node-1', parentId: 'group-1' }),
+        createTestNode({ id: 'node-2' }),
+      ],
+    })
+    const { nodes } = cellsOf(page)
+    expect(nodes.find((n) => n.id === 'node-1')?.parentId).toBe('group-1')
+    expect(nodes.find((n) => n.id === 'node-2')?.parentId).toBeUndefined()
+  })
+
+  it('relativePositionFor：子节点相对父节点坐标 = 各自 x/y 之差（纯函数）', () => {
+    expect(
+      relativePositionFor({ x: 130, y: 90 }, { x: 100, y: 40 }),
+    ).toEqual({ x: 30, y: 50 })
+    expect(relativePositionFor({ x: 0, y: 0 }, { x: 100, y: 40 })).toEqual({ x: -100, y: -40 })
   })
 })
