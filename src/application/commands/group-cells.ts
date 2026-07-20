@@ -152,13 +152,14 @@ export class UngroupCellsCommand implements EditorCommand {
       ...document,
       pages: document.pages.map((p) => {
         if (p.id !== this.pageId) return p
-        // 按原下标升序逐个插回（同批已插回的排在各自原位之前，恢复原数组序）
+        // 过滤全部组合后按原下标升序插回；先插回的组合已补齐后续组合前缺失的槽位，
+        // 因此后续快照直接使用原下标，不能再叠加偏移。
         const ordered = [...this.snapshots].sort((a, b) => a.index - b.index)
         let nodes = p.nodes.map((node) =>
           parentById.has(node.id) ? { ...node, parentId: parentById.get(node.id) } : node,
         )
-        ordered.forEach((snapshot, offset) => {
-          const at = Math.min(snapshot.index + offset, nodes.length)
+        ordered.forEach((snapshot) => {
+          const at = Math.min(snapshot.index, nodes.length)
           nodes = [
             ...nodes.slice(0, at),
             structuredClone(snapshot.group),

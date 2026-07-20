@@ -194,4 +194,55 @@ describe('createUngroupCommand', () => {
     expect(next.pages[0].nodes).toHaveLength(3)
     expect(next.pages[0].nodes.every((n) => n.parentId === undefined)).toBe(true)
   })
+
+  it('多个嵌套组合撤销时精确恢复完整节点顺序与数据，重复撤销重做稳定', () => {
+    const page = createEmptyPage({
+      id: 'page-1',
+      nodes: [
+        createTestNode({ id: 'before', x: 1, data: { order: 0 } }),
+        createTestNode({
+          id: 'group-a',
+          shape: 'group',
+          x: 10,
+          width: 120,
+          style: { ...shapeRegistry.get('group').defaultStyle, stroke: '#AA0000' },
+          isContainer: true,
+          parentId: 'group-b',
+          data: { order: 1, nested: true },
+        }),
+        createTestNode({ id: 'a-1', x: 20, parentId: 'group-a', data: { order: 2 } }),
+        createTestNode({ id: 'between', x: 30, data: { order: 3 } }),
+        createTestNode({
+          id: 'group-b',
+          shape: 'group',
+          x: 40,
+          width: 220,
+          style: { ...shapeRegistry.get('group').defaultStyle, stroke: '#0000AA' },
+          isContainer: true,
+          data: { order: 4, nested: false },
+        }),
+        createTestNode({ id: 'b-1', x: 50, parentId: 'group-b', data: { order: 5 } }),
+        createTestNode({ id: 'after', x: 60, data: { order: 6 } }),
+      ],
+    })
+    const originalDocument = { ...createTestDocument(), pages: [page] }
+    const command = createUngroupCommand(page, ['group-b', 'group-a'])!
+    const history = new CommandHistory()
+
+    const ungrouped = history.execute(command, originalDocument)
+    expect(ungrouped.pages[0].nodes.map((node) => node.id)).toEqual([
+      'before',
+      'a-1',
+      'between',
+      'b-1',
+      'after',
+    ])
+
+    const restoredOnce = history.undo(ungrouped)!
+    expect(restoredOnce).toEqual(originalDocument)
+    const redone = history.redo(restoredOnce)!
+    expect(redone).toEqual(ungrouped)
+    const restoredTwice = history.undo(redone)!
+    expect(restoredTwice).toEqual(originalDocument)
+  })
 })

@@ -361,6 +361,8 @@ onMounted(() => {
           if (error) {
             documentStore.setNotice(error)
           }
+        }).catch(() => {
+          documentStore.setNotice('无法打开链接，请检查系统默认应用。')
         })
       }
     },

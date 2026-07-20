@@ -31,52 +31,63 @@ export interface FormatPaintTarget {
   after: FormatPaintSnapshot
 }
 
-/** 节点样式全键（详细设计 §14.2：填充/填充透明度/边框/虚线/圆角/阴影）。 */
-const NODE_STYLE_KEYS = [
-  'fill',
-  'fillOpacity',
-  'stroke',
-  'strokeWidth',
-  'strokeDash',
-  'cornerRadius',
-  'shadow',
-] as const satisfies readonly (keyof NodeStyle)[]
+function typedKeys<T extends object>(record: Record<keyof T, true>): (keyof T)[] {
+  return Object.keys(record) as (keyof T)[]
+}
 
-const EDGE_STYLE_KEYS = [
-  'stroke',
-  'strokeWidth',
-  'opacity',
-  'dash',
-  'sourceArrow',
-  'targetArrow',
-] as const satisfies readonly (keyof EdgeStyle)[]
+/** Record 保证领域样式新增字段时必须在此显式决定格式刷复制范围。 */
+const NODE_STYLE_KEY_MAP = {
+  fill: true,
+  fillOpacity: true,
+  stroke: true,
+  strokeWidth: true,
+  strokeDash: true,
+  cornerRadius: true,
+  shadow: true,
+} satisfies Record<keyof NodeStyle, true>
+const NODE_STYLE_KEYS = typedKeys<NodeStyle>(NODE_STYLE_KEY_MAP)
+
+const EDGE_STYLE_KEY_MAP = {
+  stroke: true,
+  strokeWidth: true,
+  opacity: true,
+  dash: true,
+  sourceArrow: true,
+  targetArrow: true,
+} satisfies Record<keyof EdgeStyle, true>
+const EDGE_STYLE_KEYS = typedKeys<EdgeStyle>(EDGE_STYLE_KEY_MAP)
 
 // 文本三段全键：全键捕获（缺失键显式 undefined），merge 时才能覆盖/清除目标原有值，
 // revert 才能精确还原（缺键浅合并会残留 apply 写入的键）。
-const TEXT_STYLE_KEYS = [
-  'fontFamily',
-  'fontSize',
-  'bold',
-  'italic',
-  'underline',
-  'strikethrough',
-  'color',
-  'background',
-] as const satisfies readonly (keyof TextStyle)[]
+const TEXT_STYLE_KEY_MAP = {
+  fontFamily: true,
+  fontSize: true,
+  bold: true,
+  italic: true,
+  underline: true,
+  strikethrough: true,
+  color: true,
+  background: true,
+} satisfies Record<keyof TextStyle, true>
+const TEXT_STYLE_KEYS = typedKeys<TextStyle>(TEXT_STYLE_KEY_MAP)
 
-const TEXT_BLOCK_KEYS = [
-  'horizontalAlign',
-  'verticalAlign',
-  'direction',
-  'marginTop',
-  'marginRight',
-  'marginBottom',
-  'marginLeft',
-] as const satisfies readonly (keyof TextBlock)[]
+const TEXT_BLOCK_KEY_MAP = {
+  horizontalAlign: true,
+  verticalAlign: true,
+  direction: true,
+  marginTop: true,
+  marginRight: true,
+  marginBottom: true,
+  marginLeft: true,
+} satisfies Record<keyof TextBlock, true>
+const TEXT_BLOCK_KEYS = typedKeys<TextBlock>(TEXT_BLOCK_KEY_MAP)
 
-const TEXT_PARAGRAPH_KEYS = ['before', 'after', 'lineHeight'] as const satisfies readonly (
-  keyof TextParagraph
-)[]
+const TEXT_PARAGRAPH_KEY_MAP = {
+  before: true,
+  after: true,
+  lineHeight: true,
+} satisfies Record<keyof TextParagraph, true>
+const TEXT_PARAGRAPH_KEYS = typedKeys<TextParagraph>(TEXT_PARAGRAPH_KEY_MAP)
 
 function cloneStyleSection<T extends object>(style: T, keys: readonly (keyof T)[]): Partial<T> {
   const snapshot: Partial<T> = {}

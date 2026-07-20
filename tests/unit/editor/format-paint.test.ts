@@ -9,6 +9,11 @@ import {
   createDefaultTextContent,
   createEmptyPage,
   type DiagramPage,
+  type EdgeStyle,
+  type NodeStyle,
+  type TextBlock,
+  type TextParagraph,
+  type TextStyle,
 } from '@/domain/diagram'
 import { CommandHistory } from '@/application/commands/command-history'
 import {
@@ -25,7 +30,17 @@ const SOURCE_STYLE = {
   strokeDash: 'dash' as const,
   cornerRadius: 6,
   shadow: { color: '#0000FF', opacity: 0.4, offsetX: 3, offsetY: 4, blur: 8 },
-}
+} satisfies NodeStyle
+
+const TARGET_STYLE = {
+  fill: '#101010',
+  fillOpacity: 0.25,
+  stroke: '#202020',
+  strokeWidth: 7,
+  strokeDash: 'dot',
+  cornerRadius: 12,
+  shadow: { color: '#303030', opacity: 0.8, offsetX: 9, offsetY: 10, blur: 11 },
+} satisfies NodeStyle
 
 function sourceText() {
   const text = createDefaultTextContent('源文本')
@@ -70,6 +85,8 @@ function paintPage(): DiagramPage {
         link: 'https://example.com',
         data: { 业务: '源数据' },
         parentId: 'some-container',
+        isContainer: true,
+        imageHref: 'https://example.com/source.png',
       }),
       createTestNode({
         id: 'target-1',
@@ -77,8 +94,16 @@ function paintPage(): DiagramPage {
         y: 400,
         width: 60,
         height: 30,
+        angle: 75,
         zIndex: 1,
+        shape: 'ellipse',
+        style: structuredClone(TARGET_STYLE),
         text: createDefaultTextContent('目标文本'),
+        link: 'mailto:target@example.com',
+        data: { 业务: '目标数据', 保留: true },
+        parentId: 'target-container',
+        isContainer: false,
+        imageHref: 'https://example.com/target.png',
       }),
       createTestNode({ id: 'target-2', x: 500, y: 600, zIndex: 2 }), // 无文本节点
     ],
@@ -87,6 +112,9 @@ function paintPage(): DiagramPage {
         id: 'edge-source',
         source: { nodeId: 'source', port: 'right' },
         target: { nodeId: 'target-1', port: 'left' },
+        connector: 'curved',
+        vertices: [{ x: 20, y: 30 }],
+        labels: [{ text: createDefaultTextContent('源边标签'), position: 0.25 }],
         style: {
           stroke: '#111111',
           strokeWidth: 5,
@@ -94,14 +122,18 @@ function paintPage(): DiagramPage {
           dash: 'dot',
           sourceArrow: 'arrow',
           targetArrow: 'none',
-        },
+        } satisfies EdgeStyle,
         link: 'mailto:a@b.c',
         zIndex: 3,
       }),
       createTestEdge({
         id: 'edge-target',
-        source: { nodeId: 'target-1' },
-        target: { nodeId: 'target-2' },
+        source: { nodeId: 'target-1', port: 'bottom' },
+        target: { nodeId: 'target-2', port: 'top' },
+        connector: 'straight',
+        vertices: [{ x: 410, y: 420 }],
+        labels: [{ text: createDefaultTextContent('目标边标签'), position: 0.75 }],
+        link: 'https://target.example.com',
         zIndex: 4,
       }),
     ],
@@ -109,6 +141,27 @@ function paintPage(): DiagramPage {
 }
 
 describe('captureFormatPaintSource', () => {
+  it('样式字段集合覆盖 NodeStyle/EdgeStyle/TextStyle/TextBlock/TextParagraph 当前全部键', () => {
+    const page = paintPage()
+    const node = captureFormatPaintSource(page.nodes.find((cell) => cell.id === 'source')!)
+    const edge = captureFormatPaintSource(page.edges.find((cell) => cell.id === 'edge-source')!)
+    expect(Object.keys(node.nodeStyle!).sort()).toEqual([
+      'cornerRadius', 'fill', 'fillOpacity', 'shadow', 'stroke', 'strokeDash', 'strokeWidth',
+    ])
+    expect(Object.keys(edge.edgeStyle!).sort()).toEqual([
+      'dash', 'opacity', 'sourceArrow', 'stroke', 'strokeWidth', 'targetArrow',
+    ])
+    expect(Object.keys(node.text!.style!).sort()).toEqual([
+      'background', 'bold', 'color', 'fontFamily', 'fontSize', 'italic', 'strikethrough', 'underline',
+    ] satisfies (keyof TextStyle)[])
+    expect(Object.keys(node.text!.block!).sort()).toEqual([
+      'direction', 'horizontalAlign', 'marginBottom', 'marginLeft', 'marginRight', 'marginTop', 'verticalAlign',
+    ] satisfies (keyof TextBlock)[])
+    expect(Object.keys(node.text!.paragraph!).sort()).toEqual([
+      'after', 'before', 'lineHeight',
+    ] satisfies (keyof TextParagraph)[])
+  })
+
   it('节点：捕获节点样式全键与文本 style/block/paragraph', () => {
     const page = paintPage()
     const source = page.nodes.find((n) => n.id === 'source')!
@@ -143,24 +196,27 @@ describe('createFormatPaintCommand 节点→节点', () => {
 
   it('不复制位置/尺寸/旋转/文本内容/链接/业务数据/形状类型/结构关系（逐键断言）', () => {
     const page = paintPage()
+    const targetBefore = structuredClone(page.nodes.find((n) => n.id === 'target-1')!)
     const command = createFormatPaintCommand(page, 'source', ['target-1'])!
     const next = command.apply({ ...createTestDocument(), pages: [page] }).pages[0]
     const target = next.nodes.find((n) => n.id === 'target-1')!
     // 几何
-    expect(target.x).toBe(300)
-    expect(target.y).toBe(400)
-    expect(target.width).toBe(60)
-    expect(target.height).toBe(30)
-    expect(target.angle).toBe(0)
+    expect(target.x).toBe(targetBefore.x)
+    expect(target.y).toBe(targetBefore.y)
+    expect(target.width).toBe(targetBefore.width)
+    expect(target.height).toBe(targetBefore.height)
+    expect(target.angle).toBe(targetBefore.angle)
+    expect(target.zIndex).toBe(targetBefore.zIndex)
     // 内容与标识
-    expect(target.id).toBe('target-1')
-    expect(target.text?.value).toBe('目标文本')
-    expect(target.shape).toBe('rect')
+    expect(target.id).toBe(targetBefore.id)
+    expect(target.text?.value).toBe(targetBefore.text?.value)
+    expect(target.shape).toBe(targetBefore.shape)
     // 链接/业务数据/结构关系/图片
-    expect(target.link).toBeUndefined()
-    expect(target.data).toBeUndefined()
-    expect(target.parentId).toBeUndefined()
-    expect(target.imageHref).toBeUndefined()
+    expect(target.link).toBe(targetBefore.link)
+    expect(target.data).toEqual(targetBefore.data)
+    expect(target.parentId).toBe(targetBefore.parentId)
+    expect(target.isContainer).toBe(targetBefore.isContainer)
+    expect(target.imageHref).toBe(targetBefore.imageHref)
   })
 
   it('目标无文本时以默认 TextContent 为底合并（不产生文本内容）', () => {
@@ -185,7 +241,7 @@ describe('createFormatPaintCommand 节点→节点', () => {
     const reverted = history.undo(next)!
     const t1 = reverted.pages[0].nodes.find((n) => n.id === 'target-1')!
     const t2 = reverted.pages[0].nodes.find((n) => n.id === 'target-2')!
-    expect(t1.style).toEqual(createDefaultNodeStyle())
+    expect(t1.style).toEqual(TARGET_STYLE)
     expect(t1.text?.style).toEqual(createDefaultTextContent('目标文本').style)
     expect(t2.style).toEqual(createDefaultNodeStyle())
     expect(t2.text).toBeUndefined()
@@ -196,16 +252,21 @@ describe('createFormatPaintCommand 边→边与类型匹配', () => {
   it('边→边复制 EdgeStyle 全键；不复制连接关系/拐点/标签/链接', () => {
     const page = paintPage()
     const command = createFormatPaintCommand(page, 'edge-source', ['edge-target'])!
+    const targetBefore = structuredClone(page.edges.find((e) => e.id === 'edge-target')!)
     const next = command.apply({ ...createTestDocument(), pages: [page] }).pages[0]
     const target = next.edges.find((e) => e.id === 'edge-target')!
     expect(target.style).toEqual(page.edges.find((e) => e.id === 'edge-source')!.style)
     // 结构与内容不变
-    expect(target.source).toEqual({ nodeId: 'target-1' })
-    expect(target.target).toEqual({ nodeId: 'target-2' })
-    expect(target.connector).toBe('orthogonal')
-    expect(target.vertices).toEqual([])
-    expect(target.labels).toEqual([])
-    expect(target.link).toBeUndefined()
+    expect(target.id).toBe(targetBefore.id)
+    expect(target.source).toEqual(targetBefore.source)
+    expect(target.source.port).toBe(targetBefore.source.port)
+    expect(target.target).toEqual(targetBefore.target)
+    expect(target.target.port).toBe(targetBefore.target.port)
+    expect(target.connector).toBe(targetBefore.connector)
+    expect(target.vertices).toEqual(targetBefore.vertices)
+    expect(target.labels).toEqual(targetBefore.labels)
+    expect(target.link).toBe(targetBefore.link)
+    expect(target.zIndex).toBe(targetBefore.zIndex)
     expect(target.style).not.toEqual(createDefaultEdgeStyle())
   })
 
