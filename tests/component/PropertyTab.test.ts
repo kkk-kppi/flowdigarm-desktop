@@ -97,12 +97,35 @@ describe('PropertyTab 单节点', () => {
   it('填充色写入一条「应用样式」记录；撤销恢复原值', async () => {
     const { wrapper, store, selection } = mountTab()
     await select(wrapper, selection, ['node-1'])
-    await wrapper.find('[data-testid="style-fill"]').setValue('#FF0000')
+    const input = wrapper.find('[data-testid="style-fill"]')
+    // 一次取色手势 = 一次 change（VTU setValue 会同时派发 input+change，这里显式单次 change）
+    ;(input.element as HTMLInputElement).value = '#FF0000'
+    await input.trigger('change')
     // 原生 color 控件值规范化为小写十六进制
     expect(store.document.pages[0].nodes[0].style.fill).toBe('#ff0000')
     expect(store.undoLabel).toBe('应用样式')
     store.undo()
     expect(store.document.pages[0].nodes[0].style.fill).toBe('#FFFFFF')
+    expect(store.canUndo).toBe(false)
+  })
+
+  it('颜色拖动（多次 input）不产生命令；change 一次提交一条记录', async () => {
+    const { wrapper, store, selection } = mountTab()
+    await select(wrapper, selection, ['node-1'])
+    const input = wrapper.find('[data-testid="style-fill"]')
+    // 拖动序列：多次 input 事件均不写入
+    for (const color of ['#ff0000', '#00ff00', '#0000ff']) {
+      ;(input.element as HTMLInputElement).value = color
+      await input.trigger('input')
+    }
+    expect(store.document.pages[0].nodes[0].style.fill).toBe('#FFFFFF')
+    expect(store.canUndo).toBe(false)
+    // 取色器确认：一次 change 提交一条记录
+    ;(input.element as HTMLInputElement).value = '#0000ff'
+    await input.trigger('change')
+    expect(store.document.pages[0].nodes[0].style.fill).toBe('#0000ff')
+    expect(store.undoLabel).toBe('应用样式')
+    store.undo()
     expect(store.canUndo).toBe(false)
   })
 
@@ -162,7 +185,9 @@ describe('PropertyTab 多选聚合', () => {
     expect(wrapper.find('[data-testid="style-fill-mixed"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="style-fill-mixed"]').text()).toContain('多个值')
 
-    await wrapper.find('[data-testid="style-fill"]').setValue('#0000FF')
+    const fillInput = wrapper.find('[data-testid="style-fill"]')
+    ;(fillInput.element as HTMLInputElement).value = '#0000FF'
+    await fillInput.trigger('change')
     const [a, b] = store.document.pages[0].nodes
     expect(a.style.fill).toBe('#0000ff')
     expect(b.style.fill).toBe('#0000ff')
@@ -225,7 +250,9 @@ describe('PropertyTab 边选中', () => {
     const { wrapper, store, selection } = mountTab()
     await select(wrapper, selection, ['edge-1'])
     expect(wrapper.find('[data-testid="section-edge"]').exists()).toBe(true)
-    await wrapper.find('[data-testid="edge-stroke"]').setValue('#FF0000')
+    const strokeInput = wrapper.find('[data-testid="edge-stroke"]')
+    ;(strokeInput.element as HTMLInputElement).value = '#FF0000'
+    await strokeInput.trigger('change')
     expect(store.document.pages[0].edges[0].style.stroke).toBe('#ff0000')
     expect(store.undoLabel).toBe('应用样式')
   })

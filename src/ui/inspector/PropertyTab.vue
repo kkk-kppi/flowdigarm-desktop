@@ -63,7 +63,7 @@
               data-testid="style-fill"
               title="填充色"
               :value="colorValue(nodeAgg.fill)"
-              @input="writeNodeStyle({ fill: colorOf($event) })"
+              @change="writeNodeStyle({ fill: colorOf($event) })"
             />
             <span v-if="nodeAgg.fill.kind === 'mixed'" class="mixed-mark" data-testid="style-fill-mixed">多个值</span>
           </div>
@@ -85,7 +85,7 @@
               data-testid="style-stroke"
               title="边框色"
               :value="colorValue(nodeAgg.stroke)"
-              @input="writeNodeStyle({ stroke: colorOf($event) })"
+              @change="writeNodeStyle({ stroke: colorOf($event) })"
             />
             <span v-if="nodeAgg.stroke.kind === 'mixed'" class="mixed-mark" data-testid="style-stroke-mixed">多个值</span>
           </div>
@@ -133,7 +133,7 @@
               data-testid="shadow-color"
               title="阴影颜色"
               :value="shadowField('color') ?? '#000000'"
-              @input="writeShadow({ color: colorOf($event) })"
+              @change="writeShadow({ color: colorOf($event) })"
             />
             <span v-if="nodeAgg.shadow.kind === 'mixed'" class="mixed-mark" data-testid="shadow-mixed">多个值</span>
           </div>
@@ -248,7 +248,7 @@
               title="字体颜色"
               :value="colorValue(textAgg.style.color)"
               :disabled="textAgg.style.color.kind === 'none'"
-              @input="writeTextPatch({ style: { color: colorOf($event) } })"
+              @change="writeTextPatch({ style: { color: colorOf($event) } })"
             />
             <span v-if="textAgg.style.color.kind === 'mixed'" class="mixed-mark" data-testid="text-color-mixed">多个值</span>
           </div>
@@ -260,7 +260,7 @@
               title="字体背景色"
               :value="colorValue(textAgg.style.background)"
               :disabled="textAgg.style.background.kind === 'none'"
-              @input="writeTextPatch({ style: { background: colorOf($event) } })"
+              @change="writeTextPatch({ style: { background: colorOf($event) } })"
             />
             <span v-if="textAgg.style.background.kind === 'mixed'" class="mixed-mark">多个值</span>
           </div>
@@ -358,7 +358,7 @@
               data-testid="edge-stroke"
               title="线条颜色"
               :value="colorValue(edgeAgg.stroke)"
-              @input="writeEdgeStyle({ stroke: colorOf($event) })"
+              @change="writeEdgeStyle({ stroke: colorOf($event) })"
             />
             <span v-if="edgeAgg.stroke.kind === 'mixed'" class="mixed-mark">多个值</span>
           </div>
@@ -461,7 +461,7 @@
 // 文本样式（文本样式）、文本值与名称（编辑文本）、连线类型（连线类型）。
 // 多选聚合：一致显示值、不一致显示「多个值」（颜色混合标记、布尔按钮不定态）、无文本禁用；
 // 任何控件写入 = 全部选中目标一条命令（before 逐目标从文档实读）。
-// 颜色控件用 @input（取色器每次选择一条记录；@change 在 jsdom 测试与原生拖动中均覆盖）。
+// 颜色控件用 @change（取色器关闭/确认时一次提交一条记录；拖动过程的 input 事件不入栈）。
 import { computed, reactive } from 'vue'
 import {
   type ConnectorKind,
@@ -490,7 +490,16 @@ import {
   type Aggregate,
 } from '@/application/inspector/aggregate-style'
 import {
+  alignPressed,
+  boolPressed,
+  colorValue,
+  numberValue,
+  toggledStyleBool,
+} from '@/application/inspector/aggregate-display'
+import { fontFamilies, fontSizes } from '@/application/inspector/font-presets'
+import {
   buildTextStyleTargets,
+  pickPatch,
   textContentsForSelection,
 } from '@/application/inspector/text-style-targets'
 import { shapeRegistry } from '@/application/shapes/shape-registry'
@@ -546,31 +555,12 @@ const connectorAgg = computed(() => aggregateField(selectedEdges.value.map((e) =
 
 // ---------- 显示辅助 ----------
 
-function colorValue(agg: Aggregate<unknown>): string {
-  return agg.kind === 'value' && typeof agg.value === 'string' ? agg.value : '#FFFFFF'
-}
-
-function numberValue(agg: Aggregate<unknown>): string | number {
-  return agg.kind === 'value' && agg.value !== null ? String(agg.value) : ''
-}
-
 function textValue(agg: Aggregate<unknown>): string | null {
   return agg.kind === 'value' && agg.value !== null ? String(agg.value) : null
 }
 
-function boolPressed(agg: Aggregate<unknown>): 'true' | 'false' | 'mixed' {
-  if (agg.kind === 'mixed') return 'mixed'
-  if (agg.kind === 'value' && agg.value === true) return 'true'
-  return 'false'
-}
-
 function isTrue(agg: Aggregate<unknown>): boolean {
   return agg.kind === 'value' && agg.value === true
-}
-
-function alignPressed(agg: Aggregate<unknown>, option: string): 'true' | 'false' | 'mixed' {
-  if (agg.kind === 'mixed') return 'mixed'
-  return agg.kind === 'value' && agg.value === option ? 'true' : 'false'
 }
 
 const dashValue = computed(() =>
@@ -612,9 +602,6 @@ function numberCommit(event: Event, write: (value: number) => void): void {
 }
 
 // ---------- 静态选项 ----------
-
-const fontFamilies = ['微软雅黑', '宋体', '黑体', 'Arial', 'Times New Roman']
-const fontSizes = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
 
 const styleButtons: { key: 'bold' | 'italic' | 'underline' | 'strikethrough'; label: string; title: string }[] = [
   { key: 'bold', label: 'B', title: '加粗' },
@@ -742,14 +729,6 @@ function commitNodeName(event: Event): void {
 
 // ---------- 样式写入（节点/边） ----------
 
-function pickPatch<T extends object>(current: T, patch: Partial<T>): Partial<T> {
-  const before: Partial<T> = {}
-  for (const key of Object.keys(patch) as (keyof T)[]) {
-    before[key] = current[key] as never
-  }
-  return before
-}
-
 function writeNodeStyle(patch: Partial<NodeStyle>): void {
   const pageId = page.value?.id
   if (!pageId || selectedNodes.value.length === 0) return
@@ -803,10 +782,9 @@ function writeTextPatch(patch: TextStylePatch): void {
   documentStore.executeCommand(new TextStyleCommand({ pageId: current.id, targets }))
 }
 
-/** 字形布尔切换：mixed 或不全为 true → 全部置 true；全 true → 全部置 false。 */
+/** 字形布尔切换：下一值经共享纯函数（mixed 或不全 true → true；全 true → false）。 */
 function toggleStyleBool(key: 'bold' | 'italic' | 'underline' | 'strikethrough'): void {
-  const agg = textAgg.value.style[key]
-  const next = !(agg.kind === 'value' && agg.value === true)
+  const next = toggledStyleBool(textAgg.value.style[key])
   writeTextPatch({ style: { [key]: next } as Partial<TextStyle> })
 }
 

@@ -91,7 +91,7 @@
         min="1"
         list="tb-font-size-options"
         :disabled="textAgg.style.fontSize.kind === 'none'"
-        :value="inputValue(textAgg.style.fontSize)"
+        :value="numberValue(textAgg.style.fontSize)"
         :placeholder="textAgg.style.fontSize.kind === 'mixed' ? '多个值' : ''"
         @change="commitFontSize"
       />
@@ -119,8 +119,8 @@
         title="文字颜色：设置选中文本的颜色"
         aria-label="文字颜色"
         :disabled="textAgg.style.color.kind === 'none'"
-        :value="colorValue(textAgg.style.color)"
-        @input="writeTextPatch({ style: { color: ($event.target as HTMLInputElement).value } })"
+        :value="colorValue(textAgg.style.color, '#000000')"
+        @change="writeTextPatch({ style: { color: ($event.target as HTMLInputElement).value } })"
       />
       <input
         type="color"
@@ -128,8 +128,8 @@
         title="文字背景色：设置选中文本的背景色"
         aria-label="文字背景色"
         :disabled="textAgg.style.background.kind === 'none'"
-        :value="colorValue(textAgg.style.background)"
-        @input="writeTextPatch({ style: { background: ($event.target as HTMLInputElement).value } })"
+        :value="colorValue(textAgg.style.background, '#000000')"
+        @change="writeTextPatch({ style: { background: ($event.target as HTMLInputElement).value } })"
       />
     </div>
     <div class="toolbar-divider" />
@@ -173,11 +173,20 @@
 // 撤销/重做 disabled 绑定 canUndo/canRedo，tooltip 含 undoLabel/redoLabel；
 // 字体与段落对齐经聚合态显示（value→按态、mixed→不定态、none→禁用）；
 // 写入一律 TextStyleCommand（全部选中节点一条；含边选择时边标签同批，经共享模块）。
+// 颜色控件用 @change（取色器关闭/确认时一次提交一条记录；拖动过程的 input 事件不入栈）。
 // 格式刷为 Task 7 禁用占位。
 import { computed } from 'vue'
 import type { TextBlock, TextStyle } from '@/domain/diagram'
 import { TextStyleCommand, type TextStylePatch } from '@/application/commands/text-style-command'
 import { aggregateTextStyles, type Aggregate } from '@/application/inspector/aggregate-style'
+import {
+  alignPressed,
+  boolPressed,
+  colorValue,
+  numberValue,
+  toggledStyleBool,
+} from '@/application/inspector/aggregate-display'
+import { fontFamilies, fontSizes } from '@/application/inspector/font-presets'
 import {
   buildTextStyleTargets,
   textContentsForSelection,
@@ -201,9 +210,6 @@ const textAgg = computed(() => {
   if (!page) return aggregateTextStyles([])
   return aggregateTextStyles(textContentsForSelection(page, selectionStore.selectedIds))
 })
-
-const fontFamilies = ['微软雅黑', '宋体', '黑体', 'Arial', 'Times New Roman']
-const fontSizes = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
 
 const styleButtons: {
   key: 'bold' | 'italic' | 'underline' | 'strikethrough'
@@ -233,30 +239,12 @@ function selectValue(agg: Aggregate<unknown>): string {
   return agg.kind === 'value' && agg.value !== null ? String(agg.value) : ''
 }
 
-function inputValue(agg: Aggregate<unknown>): string {
-  return agg.kind === 'value' && agg.value !== null ? String(agg.value) : ''
-}
-
-function colorValue(agg: Aggregate<unknown>): string {
-  return agg.kind === 'value' && typeof agg.value === 'string' ? agg.value : '#000000'
-}
-
 function isActive(agg: Aggregate<unknown>): boolean {
   return agg.kind === 'value' && agg.value === true
 }
 
 function isActiveValue(agg: Aggregate<unknown>, option: string): boolean {
   return agg.kind === 'value' && agg.value === option
-}
-
-function boolPressed(agg: Aggregate<unknown>): 'true' | 'false' | 'mixed' {
-  if (agg.kind === 'mixed') return 'mixed'
-  return isActive(agg) ? 'true' : 'false'
-}
-
-function alignPressed(agg: Aggregate<unknown>, option: string): 'true' | 'false' | 'mixed' {
-  if (agg.kind === 'mixed') return 'mixed'
-  return isActiveValue(agg, option) ? 'true' : 'false'
 }
 
 /** 文本样式写入：全部选中节点 + 选中边首标签，一次控件变更一条记录。 */
@@ -268,9 +256,9 @@ function writeTextPatch(patch: TextStylePatch): void {
   documentStore.executeCommand(new TextStyleCommand({ pageId: page.id, targets }))
 }
 
-/** 字形布尔切换：mixed 或不全为 true → 全部置 true；全 true → 全部置 false。 */
+/** 字形布尔切换：下一值经共享纯函数（mixed 或不全 true → true；全 true → false）。 */
 function toggleStyleBool(key: 'bold' | 'italic' | 'underline' | 'strikethrough'): void {
-  const next = !isActive(textAgg.value.style[key])
+  const next = toggledStyleBool(textAgg.value.style[key])
   writeTextPatch({ style: { [key]: next } as Partial<TextStyle> })
 }
 

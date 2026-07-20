@@ -11,7 +11,8 @@ export interface TextStyleTargetEntry {
   after: TextStylePatch
 }
 
-function pickPatch<T extends object>(current: T, patch: Partial<T>): Partial<T> {
+/** before 子补丁：仅取 patch 涉及的键，值取 current 当前真实值（面板样式写入共用）。 */
+export function pickPatch<T extends object>(current: T, patch: Partial<T>): Partial<T> {
   const before: Partial<T> = {}
   for (const key of Object.keys(patch) as (keyof T)[]) {
     before[key] = current[key] as never

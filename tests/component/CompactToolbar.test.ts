@@ -168,6 +168,26 @@ describe('CompactToolbar 字体组聚合态', () => {
     expect(store.document.pages[0].nodes[0].text?.style.fontFamily).toBe('宋体')
     expect(store.undoLabel).toBe('文本样式')
   })
+
+  it('文字颜色拖动（多次 input）不产生命令；change 一次提交一条记录', async () => {
+    const { wrapper, store, selection } = mountToolbar()
+    await select(wrapper, selection, ['node-1'])
+    const input = wrapper.find('[data-testid="tb-text-color"]')
+    // 拖动序列：多次 input 事件均不写入
+    for (const color of ['#ff0000', '#00ff00', '#0000ff']) {
+      ;(input.element as HTMLInputElement).value = color
+      await input.trigger('input')
+    }
+    expect(store.document.pages[0].nodes[0].text?.style.color).toBe('#000000')
+    expect(store.canUndo).toBe(false)
+    // 取色器确认：一次 change 提交一条记录
+    ;(input.element as HTMLInputElement).value = '#0000ff'
+    await input.trigger('change')
+    expect(store.document.pages[0].nodes[0].text?.style.color).toBe('#0000ff')
+    expect(store.undoLabel).toBe('文本样式')
+    store.undo()
+    expect(store.canUndo).toBe(false)
+  })
 })
 
 describe('CompactToolbar 段落对齐组', () => {
