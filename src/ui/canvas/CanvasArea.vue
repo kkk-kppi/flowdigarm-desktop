@@ -99,9 +99,10 @@ function fitPageIfFirst(): void {
   if (!page || !container || fittedPageIds.has(pageId)) {
     return
   }
-  fittedPageIds.add(pageId)
   const rect = container.getBoundingClientRect()
   if (rect.width > 0 && rect.height > 0) {
+    // 确认容器有尺寸后再标记：零尺寸时不得把首显页永久标记为已 fit
+    fittedPageIds.add(pageId)
     activeController().fitToPage(page.pageSize, { width: rect.width, height: rect.height })
   }
 }

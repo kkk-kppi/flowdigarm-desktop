@@ -25,6 +25,8 @@ export interface CellMetadata {
   target?: { cell: string; port?: string }
   vertices?: { x: number; y: number }[]
   style: Record<string, unknown>
+  /** X6 cell data（前景页为空；背景页由 background-cells 写入标记）。 */
+  data?: Record<string, unknown>
 }
 
 /** X6 block 箭头 marker（边端箭头唯一形态）。 */

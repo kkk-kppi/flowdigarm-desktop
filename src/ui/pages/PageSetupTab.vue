@@ -272,7 +272,22 @@ function resetDraft(): void {
   draft.backgroundPageId = page.backgroundPageId ?? ''
 }
 
-watch(() => documentStore.activePageId, resetDraft, { immediate: true })
+const applyError = ref('')
+
+// 切页：重置草稿并清除滞留的应用错误
+watch(
+  () => documentStore.activePageId,
+  () => {
+    applyError.value = ''
+    resetDraft()
+  },
+  { immediate: true },
+)
+
+// 草稿任何编辑后清除滞留的应用错误
+watch(draft, () => {
+  applyError.value = ''
+})
 
 /** 预设切换：非自定义时按当前方向写入预设尺寸。 */
 function onPresetChange(): void {
@@ -313,10 +328,10 @@ function onCustomSizeChange(kind: 'width' | 'height', event: Event): void {
 function fitPage(): void {
   if (fitCommand.value) {
     documentStore.executeCommand(fitCommand.value)
+    // 命令已改写页面尺寸/方向：同步草稿，避免后续「应用」打包旧值静默回退 fit
+    resetDraft()
   }
 }
-
-const applyError = ref('')
 
 /** 「应用」：草稿与页面原值打包为一个 UpdatePageCommand；无变化不执行。 */
 function applySettings(): void {

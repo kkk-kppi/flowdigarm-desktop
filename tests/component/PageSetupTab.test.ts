@@ -161,4 +161,86 @@ describe('PageSetupTab', () => {
     expect(page.orientation).toBe('landscape')
     expect(store.undoLabel).toBe('自动调整页面大小')
   })
+
+  it('自动调整后草稿同步：再点「应用」不回退 fit 结果', async () => {
+    const document: DiagramDocument = {
+      ...createEmptyDocument(),
+      pages: [
+        createEmptyPage({
+          id: 'page-1',
+          name: '页面 1',
+          nodes: [
+            createTestNode({ id: 'n-1', x: 10, y: 20, width: 80, height: 40 }),
+            createTestNode({ id: 'n-2', x: 110, y: 20, width: 80, height: 40 }),
+          ],
+        }),
+      ],
+    }
+    const { wrapper, store } = mountTab(document)
+    await wrapper.find('[data-testid="fit-page"]').trigger('click')
+    expect(store.document.pages[0].pageSize.width).toBe(252)
+
+    // fit 后仅改其他设置（单位），再应用：pageSize 不得残留 fit 前的 A4 纵向旧值
+    await wrapper.find('[data-testid="page-unit"]').setValue('cm')
+    await wrapper.find('[data-testid="apply-settings"]').trigger('click')
+
+    const page = store.document.pages[0]
+    expect(page.pageSize.width).toBe(252)
+    expect(page.pageSize.height).toBe(112)
+    expect(page.orientation).toBe('landscape')
+    expect(page.unit).toBe('cm')
+    expect(store.undoLabel).toBe('页面设置')
+
+    // 撤销仅回退单位变更；页面尺寸保持 fit 结果，栈顶回到「自动调整页面大小」
+    store.undo()
+    const reverted = store.document.pages[0]
+    expect(reverted.pageSize.width).toBe(252)
+    expect(reverted.pageSize.height).toBe(112)
+    expect(reverted.orientation).toBe('landscape')
+    expect(reverted.unit).toBe('mm')
+    expect(store.undoLabel).toBe('自动调整页面大小')
+  })
+
+  it('编辑背景页时，背景下拉排除自身', () => {
+    const document: DiagramDocument = {
+      ...createEmptyDocument(),
+      pages: [
+        createEmptyPage({ id: 'bg-a', name: '背景 A', type: 'background' }),
+        createEmptyPage({ id: 'bg-b', name: '背景 B', type: 'background' }),
+      ],
+    }
+    const { wrapper } = mountTab(document)
+    const optionTexts = wrapper
+      .find('[data-testid="background-page"]')
+      .findAll('option')
+      .map((option) => option.text())
+    expect(optionTexts).toEqual(['无', '背景 B'])
+  })
+
+  it('「应用」报错后：编辑草稿或切页清除错误提示', async () => {
+    const document: DiagramDocument = {
+      ...createEmptyDocument(),
+      pages: [
+        createEmptyPage({ id: 'fg-1', name: '页面 1' }),
+        createEmptyPage({ id: 'fg-2', name: '页面 2' }),
+        // bg-1 反向引用 fg-1：选它作 fg-1 背景会成环，命令抛「背景页设置无效。」
+        createEmptyPage({ id: 'bg-1', name: '背景', type: 'background', backgroundPageId: 'fg-1' }),
+      ],
+    }
+    const { wrapper, store } = mountTab(document)
+    await wrapper.find('[data-testid="background-page"]').setValue('bg-1')
+    await wrapper.find('[data-testid="apply-settings"]').trigger('click')
+    expect(wrapper.find('.setup-error').exists()).toBe(true)
+
+    // 草稿编辑清除错误
+    await wrapper.find('[data-testid="page-unit"]').setValue('cm')
+    expect(wrapper.find('.setup-error').exists()).toBe(false)
+
+    // 再次报错后切页清除错误
+    await wrapper.find('[data-testid="apply-settings"]').trigger('click')
+    expect(wrapper.find('.setup-error').exists()).toBe(true)
+    store.switchPage('fg-2')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.setup-error').exists()).toBe(false)
+  })
 })
