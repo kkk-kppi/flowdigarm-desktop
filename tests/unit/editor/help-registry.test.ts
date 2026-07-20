@@ -87,4 +87,33 @@ describe('功能帮助注册表', () => {
   it('background-page 限制条件写明背景页内容不可在前景页选择', () => {
     expect(getFeatureHelp('background-page')?.limits).toContain('不可在前景页直接选择')
   })
+
+  it('图元/连接/剪贴板/删除条目（shape-library/connect/clipboard/delete-cells）均已注册且 8 字段非空', () => {
+    const requiredFields = [
+      'id',
+      'title',
+      'purpose',
+      'operation',
+      'scope',
+      'undoBoundary',
+      'limits',
+      'docAnchor',
+    ] as const
+    for (const id of ['shape-library', 'connect', 'clipboard', 'delete-cells']) {
+      const entry = getFeatureHelp(id)
+      expect(entry, `条目 ${id} 应已注册`).toBeTruthy()
+      for (const field of requiredFields) {
+        expect(entry?.[field], `条目 ${id} 字段 ${field}`).toBeTruthy()
+      }
+    }
+  })
+
+  it('clipboard 撤销边界写明一次粘贴只产生一条记录', () => {
+    expect(getFeatureHelp('clipboard')?.undoBoundary).toContain('一次粘贴')
+    expect(getFeatureHelp('clipboard')?.undoBoundary).toContain('一条记录')
+  })
+
+  it('delete-cells 撤销边界写明一次删除多个图元只产生一条记录', () => {
+    expect(getFeatureHelp('delete-cells')?.undoBoundary).toContain('一条记录')
+  })
 })

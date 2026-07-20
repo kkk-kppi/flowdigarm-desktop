@@ -132,6 +132,51 @@ const entries: readonly FeatureHelpEntry[] = [
     limits: '背景页内容不可在前景页直接选择；背景页引用不允许形成循环；被引用的背景页不能删除。',
     docAnchor: 'user-guide#文件',
   },
+  {
+    id: 'shape-library',
+    title: '图元库',
+    purpose: '从内置形状库快速创建图元：搜索、按分类浏览，拖入画布或双击直接创建。',
+    operation:
+      '左栏图元库顶部搜索框按名称过滤；「基本形状」「流程图」分类可折叠；按住格子拖入画布放置，或双击/回车在视口中心创建。',
+    scope: '内置 14 个形状中的 12 个（基本形状 6 + 流程图 6）；文本框与图片经插入入口创建。',
+    undoBoundary: '一次创建一条记录：单次拖入、双击创建或粘贴均各自产生一条可撤销记录。',
+    limits: '更多形状将在后续版本提供；缩略图按形状默认比例绘制。',
+    docAnchor: 'user-guide#图元',
+  },
+  {
+    id: 'connect',
+    title: '连接',
+    purpose: '在图元之间建立连线，表达流程走向；连线锚定在形状四边中点端口上。',
+    operation:
+      '悬停节点显示端口，从端口拖出连线，落到目标端口或目标节点主体（自动选择最近端口）；选中边后拖动两端箭头手柄重连、拖动拐点调整路径。',
+    scope: '作用于当前页的边；新边使用页面设置的默认连线类型与默认箭头。',
+    undoBoundary: '一次手势一条记录：单次连接、重连或拐点编辑各产生一条可撤销记录。',
+    limits: '不允许自环与悬空端点；容器节点不可作为连接端点；跳线仅视觉跨越，不改变连接关系。',
+    docAnchor: 'user-guide#图元',
+  },
+  {
+    id: 'clipboard',
+    title: '复制粘贴',
+    shortcut: 'Ctrl+C/X/V',
+    purpose: '复制、剪切、粘贴选中图元；粘贴时图元获得新 ID 并逐次偏移，避免与原图元重叠。',
+    operation:
+      'Ctrl+C 复制、Ctrl+X 剪切、Ctrl+V 粘贴（macOS 为 Cmd）；同一内容连续粘贴逐次偏移 12pt。',
+    scope: '作用于当前页选中图元；仅保留源与目标都在复制集内的边（跨集边不随复制）。',
+    undoBoundary: '一次粘贴一条记录（含多个图元）；剪切为一条删除记录。',
+    limits: '使用应用内剪贴板，不访问系统剪贴板；剪贴板为空时粘贴仅提示「剪贴板为空。」。',
+    docAnchor: 'user-guide#编辑',
+  },
+  {
+    id: 'delete-cells',
+    title: '删除图元',
+    shortcut: 'Delete/Backspace',
+    purpose: '删除选中的节点与边；删除节点时其相连边一并删除，保持图面无悬空连线。',
+    operation: '选中图元后按 Delete 或 Backspace；多选时一次删除全部选中项。',
+    scope: '作用于当前页选中图元；与被选节点相连的边连带删除。',
+    undoBoundary: '一次删除多个图元只产生一条记录，撤销一步恢复全部。',
+    limits: '删除即生效，可通过撤销恢复；无其他限制。',
+    docAnchor: 'user-guide#编辑',
+  },
 ]
 
 /** 全部已注册的功能帮助条目，按 id 索引。 */

@@ -1,11 +1,15 @@
 // tests/unit/editor/cell-mapper.test.ts
 // 文档 → X6 Cell 元数据映射：坐标直接用 pt 数值，样式映射为 X6 attrs 路径键。
+// 本任务增补：节点端口/主体几何元数据、连线 connector 名称映射（含跳线）。
 import {
   createDefaultNodeStyle,
   createDefaultTextContent,
   type DiagramPage,
 } from '@/domain/diagram'
 import { pageToCells, type CellMetadata } from '@/infrastructure/x6/cell-mapper'
+import { x6ConnectorName } from '@/infrastructure/x6/edge-connector-map'
+import { shapeRegistry } from '@/application/shapes/shape-registry'
+import '@/application/shapes/common-shapes'
 import { createEmptyPage } from '@/domain/diagram'
 import { createTestEdge, createTestNode } from '../../helpers/test-document'
 
@@ -220,5 +224,71 @@ describe('pageToCells 边映射', () => {
     })
     const cells = pageToCells(page)
     expect(cells.map((cell) => cell.id)).toEqual(['node-1', 'node-2', 'edge-1'])
+  })
+})
+
+describe('pageToCells 端口与主体几何元数据', () => {
+  it('节点元数据写入注册表 portIds 与 bodyMarkup', () => {
+    const page = createEmptyPage({ nodes: [createTestNode({ id: 'node-1', shape: 'diamond' })] })
+    const meta = cellsOf(page).nodes[0]
+    expect(meta.ports).toEqual(['top', 'right', 'bottom', 'left'])
+    expect(meta.bodyMarkup).toEqual(shapeRegistry.get('diamond').body)
+  })
+
+  it('rect/ellipse/path 三类主体几何均可序列化', () => {
+    const page = createEmptyPage({
+      nodes: [
+        createTestNode({ id: 'node-1', shape: 'rect' }),
+        createTestNode({ id: 'node-2', shape: 'circle' }),
+        createTestNode({ id: 'node-3', shape: 'triangle' }),
+      ],
+    })
+    const { nodes } = cellsOf(page)
+    expect(nodes[0].bodyMarkup).toEqual({ markup: 'rect' })
+    expect(nodes[1].bodyMarkup).toEqual({ markup: 'ellipse' })
+    expect(nodes[2].bodyMarkup?.markup).toBe('path')
+    expect(nodes[2].bodyMarkup?.path).toBeTruthy()
+  })
+
+  it('未知形状类型抛「未知形状类型：」', () => {
+    const page = createEmptyPage({ nodes: [createTestNode({ id: 'node-1', shape: '幽灵形状' })] })
+    expect(() => pageToCells(page)).toThrow('未知形状类型：幽灵形状')
+  })
+})
+
+describe('x6ConnectorName 连线映射', () => {
+  it('三种 connector 映射：straight→normal、orthogonal→orth、curved→smooth', () => {
+    expect(x6ConnectorName('straight', false)).toBe('normal')
+    expect(x6ConnectorName('orthogonal', false)).toBe('orth')
+    expect(x6ConnectorName('curved', false)).toBe('smooth')
+  })
+
+  it('showLineJumps 开：straight/orthogonal 改用 jumpover；curved 除外仍为 smooth', () => {
+    expect(x6ConnectorName('straight', true)).toBe('jumpover')
+    expect(x6ConnectorName('orthogonal', true)).toBe('jumpover')
+    expect(x6ConnectorName('curved', true)).toBe('smooth')
+  })
+
+  it('边元数据 connectorName 随页面 showLineJumps 变化；跳线不写入 data（仅视觉跨越）', () => {
+    const 跳线页 = createEmptyPage({
+      showLineJumps: true,
+      nodes: [createTestNode({ id: 'node-1' }), createTestNode({ id: 'node-2' })],
+      edges: [
+        createTestEdge({ id: 'edge-1', connector: 'straight' }),
+        createTestEdge({ id: 'edge-2', connector: 'curved' }),
+      ],
+    })
+    const { edges } = cellsOf(跳线页)
+    expect(edges[0].connectorName).toBe('jumpover')
+    expect(edges[1].connectorName).toBe('smooth')
+    expect(edges[0].data).toBeUndefined()
+    expect(edges[1].data).toBeUndefined()
+
+    const 普通页 = createEmptyPage({
+      showLineJumps: false,
+      nodes: [createTestNode({ id: 'node-1' }), createTestNode({ id: 'node-2' })],
+      edges: [createTestEdge({ id: 'edge-1', connector: 'orthogonal' })],
+    })
+    expect(cellsOf(普通页).edges[0].connectorName).toBe('orth')
   })
 })

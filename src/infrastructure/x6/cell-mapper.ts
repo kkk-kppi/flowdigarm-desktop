@@ -2,12 +2,17 @@
 // 文档页 → X6 Cell 元数据的纯函数映射（无 Graph 实例，可在 jsdom 中直接测试）。
 // 坐标直接使用 pt 数值（X6 Cell 以 pt 为逻辑单位）；样式映射为 X6 attrs 路径键，
 // 由 graph-adapter 展开后写入 Cell。
+// 节点端口与主体几何来自形状注册表（供 adapter 动态注册 X6 节点）；
+// 连线 connector 名称经 edge-connector-map 计算（跳线仅视觉，不改拓扑）。
 import type {
   ConnectorKind,
   DiagramEdge,
   DiagramNode,
   DiagramPage,
 } from '@/domain/diagram'
+import { shapeRegistry, type ShapeDefinition } from '@/application/shapes/shape-registry'
+import '@/application/shapes/common-shapes' // 模块副作用：保证内置形状已注册
+import { x6ConnectorName } from './edge-connector-map'
 
 export interface CellMetadata {
   id: string
@@ -21,6 +26,12 @@ export interface CellMetadata {
   label?: string
   shape: string
   connector?: ConnectorKind
+  /** X6 连接器名称（normal/orth/smooth/jumpover），由 connector + 页面跳线开关算出。 */
+  connectorName?: string
+  /** 节点端口 id 列表（来自 ShapeDefinition，四边中点）。 */
+  ports?: string[]
+  /** 节点主体几何（ShapeDefinition.body 序列化），供 adapter 注册/创建 X6 节点。 */
+  bodyMarkup?: ShapeDefinition['body']
   source?: { cell: string; port?: string }
   target?: { cell: string; port?: string }
   vertices?: { x: number; y: number }[]
@@ -96,6 +107,8 @@ function edgeStyleOf(edge: DiagramEdge): Record<string, unknown> {
 }
 
 function nodeToCell(node: DiagramNode): CellMetadata {
+  // 未知形状在此抛出「未知形状类型：xxx」（注册表为唯一形状真源）
+  const definition = shapeRegistry.get(node.shape)
   return {
     id: node.id,
     kind: 'node',
@@ -107,11 +120,13 @@ function nodeToCell(node: DiagramNode): CellMetadata {
     zIndex: node.zIndex,
     label: node.text?.value,
     shape: node.shape,
+    ports: shapeRegistry.portIds(node.shape),
+    bodyMarkup: { ...definition.body },
     style: nodeStyleOf(node),
   }
 }
 
-function edgeToCell(edge: DiagramEdge): CellMetadata {
+function edgeToCell(edge: DiagramEdge, showLineJumps: boolean): CellMetadata {
   return {
     id: edge.id,
     kind: 'edge',
@@ -119,6 +134,7 @@ function edgeToCell(edge: DiagramEdge): CellMetadata {
     label: edge.labels[0]?.text.value,
     shape: 'edge',
     connector: edge.connector,
+    connectorName: x6ConnectorName(edge.connector, showLineJumps),
     source: { cell: edge.source.nodeId, port: edge.source.port },
     target: { cell: edge.target.nodeId, port: edge.target.port },
     vertices: edge.vertices.map((vertex) => ({ ...vertex })),
@@ -128,5 +144,8 @@ function edgeToCell(edge: DiagramEdge): CellMetadata {
 
 /** 将文档页映射为 X6 可消费的 Cell 元数据列表：先节点后边。 */
 export function pageToCells(page: DiagramPage): CellMetadata[] {
-  return [...page.nodes.map(nodeToCell), ...page.edges.map(edgeToCell)]
+  return [
+    ...page.nodes.map(nodeToCell),
+    ...page.edges.map((edge) => edgeToCell(edge, page.showLineJumps)),
+  ]
 }

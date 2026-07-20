@@ -24,33 +24,33 @@
 
 ## 3. 图元创建（库拖入/双击创建/文本与连接工具/图片导入）
 
-- 入口：实现后补全
-- 前置条件：实现后补全
-- 成功结果：实现后补全
-- 失败反馈：实现后补全
-- 撤销边界：实现后补全
-- 数据字段：实现后补全
-- 自动化测试位置：实现后补全（规划：`tests/unit/editor/shapes/*`、`tests/component/ElementLibrary.test.ts`）
+- 入口：左栏图元库 `src/ui/shapes/ElementLibrary.vue`（220px，搜索/基本形状与流程图手风琴/3 列缩略图）；拖入经 X6 Dnd（`src/infrastructure/x6/graph-adapter.ts` startShapeDrag，拖拽预览与落点 pt）；双击/回车在视口中心创建（`src/ui/canvas/CanvasArea.vue` createShapeAtViewportCenter，经 ViewportTransform 换算）；创建逻辑统一走 document-store `createNodeFromShape`；连接创建经连线手势（端口拖出，落端口或节点主体自动取最近端口）。文本工具/图片导入 Task 6b 及后续补全。
+- 前置条件：存在已打开文档页；形状类型已注册（14 个内置形状，`src/application/shapes/common-shapes.ts`）。
+- 成功结果：新节点按 ShapeDefinition 默认尺寸/样式/角度 0 创建，zIndex 取页面现有最大递增，创建后自动选中；新边使用页面默认连线类型与默认箭头（none/single/double → 无/末端/双端）；落节点主体时按落点 pt 计算最近端口（等距按 top→right→bottom→left）。
+- 失败反馈：未知形状类型抛「未知形状类型：{type}」；点击「+ 更多形状...」提示「更多形状将在后续版本提供。」。
+- 撤销边界：一次拖入/双击创建/连接各一条「创建图元」记录；重连一条「重新连接」；拐点编辑一条「编辑拐点」。
+- 数据字段：`ShapeDefinition`（type/label/category/body/defaultSize/minSize/ports/textAreaInset/defaultStyle/isContainer/keepAspectOnShiftResize，`src/application/shapes/shape-registry.ts`）；`DiagramNode`/`DiagramEdge`（`src/domain/diagram.ts`）；端口 id 固定 top/right/bottom/left。
+- 自动化测试位置：`tests/unit/editor/shapes/*`、`tests/unit/editor/commands/create-cells.test.ts`、`tests/unit/editor/commands/reconnect-vertices.test.ts`、`tests/component/ElementLibrary.test.ts`、`tests/unit/editor/cell-mapper.test.ts`。
 
 ## 4. 图元编辑（选择/拖拽/缩放/旋转/删除/复制粘贴）
 
-- 入口：实现后补全
-- 前置条件：实现后补全
-- 成功结果：实现后补全
-- 失败反馈：实现后补全
-- 撤销边界：实现后补全
-- 数据字段：实现后补全
-- 自动化测试位置：实现后补全（规划：`tests/unit/editor/commands/*`）
+- 入口：画布直接交互——单击/框选/Ctrl 多选（X6 Selection，`src/infrastructure/x6/graph-adapter.ts`）；拖动移动；Transform 手柄缩放/旋转；Delete/Backspace 删除；选中边后拖动端点重连、拖动拐点编辑路径。选择真源 `src/stores/selection-store.ts`（保序，首元素为锚点）。
+- 前置条件：图元已存在于当前页；背景页图元不可在前景页选择/交互。
+- 成功结果：移动/缩放/旋转手势结束各产生一条命令（down→up 合并）；缩放最小尺寸按 ShapeDefinition.minSize 钳制（X6 Transform 部件级）；Shift 缩放在 keepAspectOnShiftResize 形状（图片/椭圆）上保持纵横比；旋转角度规范化 0≤a<360；删除节点连带删除其全部关联边；切换页自动清空选择。
+- 失败反馈：命令目标不存在时抛「命令目标不存在。」（文档与历史均不变）。
+- 撤销边界：一次拖拽/缩放手势/旋转手势/重连/拐点/删除各一条记录；一次删除多个图元只产生一条「删除图元」记录。
+- 数据字段：`CellMove`/`CellResize`/`CellRotate` before/after（`src/application/commands/{move-cells,resize-cells,rotate-cells}.ts`）；删除快照（`src/application/commands/delete-cells.ts`）；`selectedIds`（`src/stores/selection-store.ts`）。
+- 自动化测试位置：`tests/unit/editor/commands/*`（move-cells/resize-rotate/delete-cells/reconnect-vertices）、`tests/unit/stores/selection-store.test.ts`、`tests/unit/stores/document-store.test.ts`。
 
 ## 5. 剪贴板（应用内复制/剪切/粘贴）
 
-- 入口：实现后补全
-- 前置条件：实现后补全
-- 成功结果：实现后补全
-- 失败反馈：实现后补全
-- 撤销边界：实现后补全
-- 数据字段：实现后补全
-- 自动化测试位置：实现后补全（规划：`tests/unit/editor/clipboard/*`）
+- 入口：Ctrl+C/X/V（macOS Cmd；`src/ui/canvas/CanvasArea.vue` 键盘接线）→ document-store `copySelection`/`cutSelection`/`pasteClipboard`；纯函数层 `src/application/clipboard/clipboard-service.ts`。
+- 前置条件：复制/剪切需存在选中图元；粘贴需应用内剪贴板非空。
+- 成功结果：复制保留源与目标均在复制集内的边（详细设计 §10.3）；剪切 = 复制 + 一条「删除图元」命令；粘贴生成全部新 UUID、边端点按旧→新 ID 映射重写、整体偏移 12pt×粘贴序号（同一 payload 连续粘贴逐次偏移）、落在页面最上层。
+- 失败反馈：剪贴板为空时粘贴仅提示「剪贴板为空。」（document-store lastNotice；toast 机制后续）。
+- 撤销边界：一次粘贴一条「粘贴图元」记录（含多个图元）；剪切为一条删除记录；复制不产生命令。
+- 数据字段：`ClipboardPayload { nodes, edges }`（深拷贝，仅内部边）；document-store `clipboard`/`pasteCount`/`lastNotice`。
+- 自动化测试位置：`tests/unit/editor/clipboard/clipboard-service.test.ts`、`tests/unit/stores/document-store.test.ts`。
 
 ## 6. 文字与样式（标签输入/字体样式/对齐/格式刷）
 

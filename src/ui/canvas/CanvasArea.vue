@@ -32,17 +32,31 @@
 
 <script setup lang="ts">
 // 画布区：左上标尺角、顶部/左侧标尺、页面边界（PageFrame）、X6 画布、分页符叠层。
-// 文档真源为 document-store（activePage + 背景页）；视口控制器按页取自 PageManager，
-// 切换页时重渲染并应用该页视口状态（每页首次显示时 fitToPage 居中）。
+// 文档真源为 document-store（activePage + 背景页）；选择真源为 selection-store；
+// 视口控制器按页取自 PageManager，切换页时重渲染并应用该页视口状态（每页首次显示时 fitToPage 居中）。
 // 本文件不写 pt↔px 换算公式（一律经 ViewportController/ViewportTransform）。
+// X6 手势回流一律转为命令经 document-store.executeCommand 执行（一次手势一条记录）。
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import type { PageUnit } from '@/domain/diagram'
+import {
+  createDefaultEdgeStyle,
+  type DiagramEdge,
+  type PageUnit,
+} from '@/domain/diagram'
 import type { ViewportController } from '@/application/viewport/viewport-controller'
-import type { ViewportState } from '@/application/viewport/viewport-transform'
+import { ViewportTransform, type ViewportState } from '@/application/viewport/viewport-transform'
 import { resolveBackgroundPage } from '@/application/pages/background-page-resolver'
-import { GraphAdapter } from '@/infrastructure/x6/graph-adapter'
+import { GraphAdapter, type EdgeEndpointRef } from '@/infrastructure/x6/graph-adapter'
+import { shapeRegistry } from '@/application/shapes/shape-registry'
+import '@/application/shapes/common-shapes' // 模块副作用：注册内置形状
+import { CreateCellsCommand } from '@/application/commands/create-cells'
+import { MoveCellsCommand } from '@/application/commands/move-cells'
+import { ResizeCellsCommand } from '@/application/commands/resize-cells'
+import { RotateCellsCommand } from '@/application/commands/rotate-cells'
+import { ReconnectEdgeCommand } from '@/application/commands/reconnect-edge'
+import { UpdateEdgeVerticesCommand } from '@/application/commands/update-edge-vertices'
 import { useAppStore } from '@/stores/app-store'
 import { useDocumentStore } from '@/stores/document-store'
+import { useSelectionStore } from '@/stores/selection-store'
 import PageBreakOverlay from './PageBreakOverlay.vue'
 import PageFrame from './PageFrame.vue'
 import RulerCorner from './RulerCorner.vue'
@@ -50,6 +64,7 @@ import RulerOverlay from './RulerOverlay.vue'
 
 const appStore = useAppStore()
 const documentStore = useDocumentStore()
+const selectionStore = useSelectionStore()
 
 const activePage = computed(() => documentStore.activePage)
 const backgroundPage = computed(() =>
@@ -77,6 +92,8 @@ function renderActivePage(): void {
     return
   }
   adapter.renderPage(page, backgroundPage.value)
+  // 重建后恢复领域选择（已删除图元由 syncSelection 自动过滤）
+  adapter.syncSelection(selectionStore.selectedIds)
 }
 
 /** 绑定当前页视口控制器：应用其持久状态并重订阅后续变更。 */
@@ -107,6 +124,67 @@ function fitPageIfFirst(): void {
   }
 }
 
+/** 当前页中的边（命令 before 值从文档读取，响应式代理在此展开为纯值）。 */
+function findEdge(edgeId: string): DiagramEdge | undefined {
+  return activePage.value?.edges.find((edge) => edge.id === edgeId)
+}
+
+/** 双击创建入口（App 转发）：以视口中心为放置点（px→pt 经 ViewportTransform）。 */
+function createShapeAtViewportCenter(shapeType: string): void {
+  const container = containerRef.value
+  if (!container) {
+    return
+  }
+  const rect = container.getBoundingClientRect()
+  const centerPt = new ViewportTransform(viewport.value).pointToDocument({
+    x: rect.width / 2,
+    y: rect.height / 2,
+  })
+  documentStore.createNodeFromShape(shapeType, centerPt)
+}
+
+/** 图元库拖拽起点（App 经 shapeDragStartKey 转发）：X6 Dnd 拖拽预览。 */
+function startShapeDrag(shapeType: string, e: MouseEvent): void {
+  adapter?.startShapeDrag(shapeType, e)
+}
+defineExpose({ createShapeAtViewportCenter, startShapeDrag })
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+  )
+}
+
+/** 画布键盘：Delete/Backspace 删除选择（一条记录）；Ctrl+C/X/V 应用内剪贴板。 */
+function onWindowKeyDown(event: KeyboardEvent): void {
+  if (isEditableTarget(event.target)) {
+    return
+  }
+  if (event.key === 'Delete' || event.key === 'Backspace') {
+    if (selectionStore.hasSelection) {
+      documentStore.deleteSelection()
+      event.preventDefault()
+    }
+    return
+  }
+  if (!(event.ctrlKey || event.metaKey)) {
+    return
+  }
+  const key = event.key.toLowerCase()
+  if (key === 'c') {
+    documentStore.copySelection()
+  } else if (key === 'x') {
+    documentStore.cutSelection()
+  } else if (key === 'v') {
+    if (documentStore.clipboard) {
+      documentStore.pasteClipboard()
+    } else {
+      documentStore.setNotice('剪贴板为空。')
+    }
+  }
+}
+
 onMounted(() => {
   const container = containerRef.value
   if (!container) {
@@ -116,6 +194,85 @@ onMounted(() => {
     // X6 手势回流：整体写回当前页控制器，单次通知（同步会再经订阅回到 adapter.syncViewport，值相同自然收敛）
     onViewportChanged: (state) => {
       activeController().setViewport(state)
+    },
+    // 选择回流：X6 选择顺序即领域选择顺序（首元素为锚点）
+    onSelectionChanged: (ids) => {
+      selectionStore.setSelection(ids)
+    },
+    onNodeMoved: (id, before, after) => {
+      documentStore.executeCommand(
+        new MoveCellsCommand([{ pageId: documentStore.activePageId, nodeId: id, before, after }]),
+      )
+    },
+    onCreateEdgeRequest: ({ source, target }) => {
+      const page = activePage.value
+      if (!page) {
+        return
+      }
+      // 页面默认连线类型与箭头：none→无箭头；single→末端箭头；double→双端箭头
+      const style = createDefaultEdgeStyle()
+      style.sourceArrow = page.defaultArrow === 'double' ? 'arrow' : 'none'
+      style.targetArrow = page.defaultArrow === 'none' ? 'none' : 'arrow'
+      const edge: Omit<DiagramEdge, 'zIndex'> & { zIndex?: number } = {
+        id: crypto.randomUUID(),
+        source: { nodeId: source.nodeId, port: source.port },
+        target: { nodeId: target.nodeId, port: target.port },
+        connector: page.defaultConnector,
+        vertices: [],
+        labels: [],
+        style,
+        zIndex: undefined,
+      }
+      documentStore.executeCommand(new CreateCellsCommand({ pageId: page.id, edges: [edge] }))
+    },
+    onReconnectRequest: ({ edgeId, end, endpoint }: { edgeId: string; end: 'source' | 'target'; endpoint: EdgeEndpointRef }) => {
+      const edge = findEdge(edgeId)
+      if (!edge) {
+        return
+      }
+      documentStore.executeCommand(
+        new ReconnectEdgeCommand({
+          pageId: documentStore.activePageId,
+          edgeId,
+          end,
+          before: { ...edge[end] },
+          after: { nodeId: endpoint.nodeId, port: endpoint.port },
+        }),
+      )
+    },
+    onVerticesChanged: ({ edgeId, vertices }) => {
+      const edge = findEdge(edgeId)
+      if (!edge) {
+        return
+      }
+      documentStore.executeCommand(
+        new UpdateEdgeVerticesCommand({
+          pageId: documentStore.activePageId,
+          edgeId,
+          before: edge.vertices.map((v) => ({ ...v })),
+          after: vertices,
+        }),
+      )
+    },
+    onResizeGesture: ({ nodeId, before, after }) => {
+      documentStore.executeCommand(
+        new ResizeCellsCommand([
+          { pageId: documentStore.activePageId, nodeId, before, after },
+        ]),
+      )
+    },
+    onRotateGesture: ({ nodeId, before, after }) => {
+      documentStore.executeCommand(
+        new RotateCellsCommand([{ pageId: documentStore.activePageId, nodeId, before, after }]),
+      )
+    },
+    onShapeDropped: ({ shapeType, topLeftPt }) => {
+      // 放置点为节点左上角；createNodeFromShape 以中心定位，按默认尺寸换算
+      const def = shapeRegistry.get(shapeType)
+      documentStore.createNodeFromShape(shapeType, {
+        x: topLeftPt.x + def.defaultSize.width / 2,
+        y: topLeftPt.y + def.defaultSize.height / 2,
+      })
     },
   })
   renderActivePage()
@@ -134,9 +291,12 @@ onMounted(() => {
     })
     resizeObserver.observe(container)
   }
+
+  window.addEventListener('keydown', onWindowKeyDown)
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onWindowKeyDown)
   resizeObserver?.disconnect()
   resizeObserver = null
   unsubscribeViewport?.()
@@ -160,6 +320,14 @@ watch(
   () => documentStore.document,
   () => {
     renderActivePage()
+  },
+)
+
+// 领域选择变化 → 同步到 X6（X6 → 领域的回声由 adapter.syncSelection 相等抑制）
+watch(
+  () => selectionStore.selectedIds,
+  (ids) => {
+    adapter?.syncSelection(ids)
   },
 )
 
@@ -214,9 +382,16 @@ watch(
 
 .canvas-ruler-v {
   position: absolute;
-  left: 0;
+  left: var(--ruler-size);
   top: var(--ruler-size);
   bottom: 0;
   z-index: 2;
+}
+</style>
+
+<!-- 端口圆点默认隐藏（X6 attrs 内联 style），悬停节点时显示；连线吸附高亮由 X6 highlighter 绘制 -->
+<style>
+.x6-node:hover .x6-port circle {
+  visibility: visible !important;
 }
 </style>
