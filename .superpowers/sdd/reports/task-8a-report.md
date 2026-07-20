@@ -151,3 +151,35 @@ Tests 50 passed (50)
 - Vite 构建仍报告单个约 741 kB chunk 超过 500 kB；这是非阻断性能提示，不属于 Task 8a 持久化范围。
 - 原子故障通过确定性的替换回调注入覆盖；未进行拔电/进程强杀的破坏性系统测试。
 - 菜单、恢复提示/选择与最近文件 UI 按要求留给 Task 8b；Task 8a 只提供 ports、commands 和 use cases。
+
+## 评审修复（2026-07-21）
+
+提交目标：`fix: 隔离数据库故障并接通自动恢复生命周期`
+
+### 修复明细
+
+1. Rust 启动改为管理 `PersistenceState { repository: Option<SqliteRepository>, initialization_error }`。应用数据目录创建、SQLite 打开或迁移失败只记录内部详情并以降级状态启动；移除 `.expect` 启动 panic。所有数据库 commands 统一返回 `本机数据库暂时不可用，图文件不受影响。`，不暴露 rusqlite/英文错误。
+2. `save_diagram` 和 `read_diagram` 都先完成真实图文件操作，再 best-effort upsert 最近文件。使用真实失败初始化状态（把目录作为 SQLite 文件路径）验证数据库不可用时原子保存仍成功；打开合法文件在数据库可用时写 recent，不可用时仍返回文档。
+3. 新增 `DocumentPersistenceController`：订阅 document store；dirty 文档变化调度 2 秒恢复快照；clean/load 取消；`dispose` 解除订阅并清 timer。协调保存按“文件成功 -> 等待 autosave -> best-effort 删除 recovery -> `markSaved`”执行，失败保持 store 不变并返回精确 `无法保存，原文件未被覆盖。`。`main.ts` 使用 Tauri 文件/recovery repository 初始化控制器，并在 Vue unmount/window unload 时释放。
+4. `AutosaveController` 改为单一串行写循环。timer 和 `flush()` 复用同一运行 Promise；旧写入进行中时只保留最新 pending，旧写入完成后再写，`flush()` 等待两者；repository 与 `onError` 异常均不会产生未处理 rejection。两个 deferred-promise 测试覆盖 in-flight flush 和最终快照顺序。
+5. document store 删除每命令 `JSON.stringify`/指纹 Map，改用单调 revision token 与每页并行 `{ undo, redo }` transition 栈。execute 记录 `{beforeRevision, afterRevision}`；undo/redo 仅在当前 token 匹配端点时恢复旧 token，否则为跨页/分支生成新 token；每页元数据与 `COMMAND_HISTORY_LIMIT=100` 同步裁剪。覆盖保存后 undo/redo、相同 JSON 分支、跨页撤销和 100 条上限。
+6. 原子替换成功后父目录 sync 改为 best-effort：失败只记录内部日志并返回保存成功，因为替换已不可回滚；替换前失败仍保持原文件。注入父目录 sync 失败测试断言目标内容已更新且临时文件清理。
+7. 扩展名契约统一：前端/Rust 无扩展名追加 `.flowdiagram`，任意大小写 `.FLOWDIAGRAM` 接受，已有 `.json` 等其他扩展名拒绝，不再生成 `.json.flowdiagram`。前端 helper 与 Rust path 测试覆盖三类。
+8. SQLite 默认设置测试精确比较全部 10 个 key/value。事务回滚测试通过 `upsert_recent` 的第二步 prune trigger 失败，证明同一 repository operation 的第一步 insert 被回滚，不再直接演示裸 transaction。打开失败测试通过真实 `DocumentPersistenceController` + Pinia store 断言 document/path/dirty/activePageId 全部不变。
+
+### TDD RED 证据
+
+- `pnpm vitest run tests/unit/editor/persistence tests/unit/stores/document-store.test.ts tests/unit/platform/tauri-desktop-platform.test.ts`：预期 RED；controller 模块缺失，扩展 helper 3 项失败，autosave 两项并发/flush 失败，精确保存错误失败，相同 JSON 分支 dirty 失败。
+- `cargo test --manifest-path src-tauri/Cargo.toml`：预期编译 RED；缺少 `PersistenceState`、`read_diagram_with_state`、`save_diagram_with_state` 和 `atomic_write_with_operations`。
+- `cargo test --manifest-path src-tauri/Cargo.toml commands::file_commands::tests::repository_failures_map_to_stable_chinese_at_the_command_boundary`：预期编译 RED；缺少 command boundary `database_result` mapper。
+
+### 最终验证
+
+| 命令 | 结果 |
+|---|---|
+| `pnpm vitest run tests/unit/editor/persistence tests/unit/stores/document-store.test.ts tests/unit/platform/tauri-desktop-platform.test.ts` | PASS，5 files / 52 tests |
+| `pnpm vitest run` | PASS，68 files / 612 tests |
+| `cargo test --manifest-path src-tauri/Cargo.toml`（timeout 900000 ms） | PASS，31 tests / 0 failed |
+| `pnpm build` | PASS，`vue-tsc --noEmit` + Vite production build |
+
+构建仍仅报告既有单 chunk 超过 500 kB 的非阻断提示（JS 748.96 kB，gzip 220.57 kB）；本次未改构建拆包。`opencode.json` 未读取、修改或纳入提交。

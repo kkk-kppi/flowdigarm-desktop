@@ -3,12 +3,14 @@
 import type { DiagramDocument } from '@/domain/diagram'
 import type { EditorCommand } from './editor-command'
 
+export const COMMAND_HISTORY_LIMIT = 100
+
 export class CommandHistory {
   private undoStack: EditorCommand[] = []
   private redoStack: EditorCommand[] = []
   private readonly listeners = new Set<() => void>()
 
-  constructor(private readonly limit = 100) {}
+  constructor(private readonly limit = COMMAND_HISTORY_LIMIT) {}
 
   execute(command: EditorCommand, document: DiagramDocument): DiagramDocument {
     const next = command.apply(document) // apply 抛错时文档与两栈均不变，错误透传

@@ -13,6 +13,14 @@ function repository(writes: RecoverySnapshotWrite[], reject = false): RecoveryRe
   }
 }
 
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void
+  const promise = new Promise<void>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
 describe('AutosaveController', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
@@ -62,5 +70,65 @@ describe('AutosaveController', () => {
     controller.schedule(createEmptyDocument())
     await vi.advanceTimersByTimeAsync(2000)
     expect(errors).toEqual(['自动恢复快照保存失败，图文件不受影响。'])
+  })
+
+  it('flush 等待进行中的 timer 写入，并继续写入更新的待处理快照', async () => {
+    const firstWrite = deferred()
+    const writes: string[] = []
+    const recovery = repository([], false)
+    const write = vi.spyOn(recovery, 'write')
+      .mockImplementationOnce(async (input) => {
+        writes.push(input.name)
+        await firstWrite.promise
+      })
+      .mockImplementationOnce(async (input) => {
+        writes.push(input.name)
+      })
+    const controller = new AutosaveController(recovery, 2000)
+
+    const first = createEmptyDocument('旧快照')
+    controller.schedule(first)
+    await vi.advanceTimersByTimeAsync(2000)
+    controller.schedule({ ...first, name: '新快照' })
+
+    let flushed = false
+    const flushing = controller.flush().then(() => {
+      flushed = true
+    })
+    await Promise.resolve()
+    expect(flushed).toBe(false)
+    expect(writes).toEqual(['旧快照'])
+
+    firstWrite.resolve()
+    await flushing
+    expect(writes).toEqual(['旧快照', '新快照'])
+    expect(write).toHaveBeenCalledTimes(2)
+  })
+
+  it('旧写入未完成时不并发写新快照，最终存储的一定是新快照', async () => {
+    const firstWrite = deferred()
+    let stored = ''
+    let calls = 0
+    const controller = new AutosaveController({
+      latest: async () => null,
+      write: async (input) => {
+        calls += 1
+        if (calls === 1) await firstWrite.promise
+        stored = input.name
+      },
+      remove: async () => {},
+    })
+    const first = createEmptyDocument('旧快照')
+
+    controller.schedule(first)
+    await vi.advanceTimersByTimeAsync(2000)
+    controller.schedule({ ...first, name: '最终快照' })
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(calls).toBe(1)
+
+    firstWrite.resolve()
+    await controller.flush()
+    expect(calls).toBe(2)
+    expect(stored).toBe('最终快照')
   })
 })

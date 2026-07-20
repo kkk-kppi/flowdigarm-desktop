@@ -9,8 +9,8 @@ use tauri::State;
 use crate::persistence::{
     atomic_file::atomic_write,
     sqlite_repository::{
-        unix_millis, RecentDocument, RecoverySnapshot, RecoverySnapshotWrite, ShapeUsage,
-        SqliteRepository,
+        unix_millis, PersistenceState, RecentDocument, RecoverySnapshot, RecoverySnapshotWrite,
+        RepositoryError, ShapeUsage, SqliteRepository, DATABASE_UNAVAILABLE,
     },
 };
 
@@ -46,7 +46,7 @@ fn normalize_save_path(path: &Path) -> Result<PathBuf, String> {
     validate_read_path(path)?;
     match path.extension().and_then(|extension| extension.to_str()) {
         None => Ok(path.with_extension("flowdiagram")),
-        Some("flowdiagram") => Ok(path.to_owned()),
+        Some(extension) if extension.eq_ignore_ascii_case("flowdiagram") => Ok(path.to_owned()),
         Some(_) => Err("只能保存为 .flowdiagram 文件。".into()),
     }
 }
@@ -70,6 +70,7 @@ fn save_diagram_file(path: &Path, document_json: &str) -> Result<PathBuf, String
     Ok(path)
 }
 
+#[cfg(test)]
 fn save_diagram_with_recent<F>(
     path: &Path,
     document_json: &str,
@@ -86,101 +87,139 @@ where
     Ok(saved_path)
 }
 
+fn recent_document(path: &Path, value: &Value) -> RecentDocument {
+    RecentDocument {
+        path: path.to_string_lossy().into_owned(),
+        document_id: value
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned(),
+        name: value
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned(),
+        last_opened_at: unix_millis(),
+        pinned: false,
+    }
+}
+
+fn update_recent_best_effort(state: &PersistenceState, path: &Path, value: &Value) {
+    match state.repository() {
+        Ok(repository) => {
+            if let Err(error) = repository.upsert_recent(&recent_document(path, value)) {
+                eprintln!("图文件操作成功，但最近文件更新失败：{error}");
+            }
+        }
+        Err(_) => {
+            if let Some(error) = state.initialization_error() {
+                eprintln!("图文件操作成功，但本机数据库初始化失败：{error}");
+            }
+        }
+    }
+}
+
+fn read_diagram_with_state(path: &Path, state: &PersistenceState) -> Result<String, String> {
+    let document_json = read_diagram_file(path)?;
+    let value = validate_document_json(&document_json)?;
+    update_recent_best_effort(state, path, &value);
+    Ok(document_json)
+}
+
+fn save_diagram_with_state(
+    path: &Path,
+    document_json: &str,
+    state: &PersistenceState,
+) -> Result<PathBuf, String> {
+    let value = validate_document_json(document_json)?;
+    let saved_path = save_diagram_file(path, document_json)?;
+    update_recent_best_effort(state, &saved_path, &value);
+    Ok(saved_path)
+}
+
+fn database_repository(state: &PersistenceState) -> Result<&SqliteRepository, String> {
+    state
+        .repository()
+        .map_err(|_| DATABASE_UNAVAILABLE.to_owned())
+}
+
+fn database_result<T>(result: Result<T, RepositoryError>) -> Result<T, String> {
+    result.map_err(|_| DATABASE_UNAVAILABLE.to_owned())
+}
+
 #[tauri::command]
-pub fn read_diagram(path: String) -> Result<String, String> {
-    read_diagram_file(Path::new(&path))
+pub fn read_diagram(
+    path: String,
+    repository: State<'_, PersistenceState>,
+) -> Result<String, String> {
+    read_diagram_with_state(Path::new(&path), &repository)
 }
 
 #[tauri::command]
 pub fn save_diagram(
     path: String,
     document_json: String,
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, PersistenceState>,
 ) -> Result<String, String> {
-    let saved_path = save_diagram_with_recent(Path::new(&path), &document_json, |path, value| {
-        repository
-            .upsert_recent(&RecentDocument {
-                path: path.to_string_lossy().into_owned(),
-                document_id: value
-                    .get("id")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_owned(),
-                name: value
-                    .get("name")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_owned(),
-                last_opened_at: unix_millis(),
-                pinned: false,
-            })
-            .map_err(|error| error.to_string())
-    })?;
+    let saved_path = save_diagram_with_state(Path::new(&path), &document_json, &repository)?;
     Ok(saved_path.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
 pub fn read_recovery_snapshot(
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, PersistenceState>,
 ) -> Result<Option<RecoverySnapshot>, String> {
-    repository
-        .latest_recovery()
-        .map_err(|error| error.to_string())
+    database_result(database_repository(&repository)?.latest_recovery())
 }
 
 #[tauri::command]
 pub fn write_recovery_snapshot(
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, PersistenceState>,
     document_id: String,
     name: String,
     json: String,
     source_path: Option<String>,
 ) -> Result<(), String> {
-    repository
-        .upsert_recovery(&RecoverySnapshotWrite {
+    database_result(
+        database_repository(&repository)?.upsert_recovery(&RecoverySnapshotWrite {
             document_id,
             name,
             document_json: json,
             source_path,
             updated_at: unix_millis(),
-        })
-        .map_err(|error| error.to_string())
+        }),
+    )
 }
 
 #[tauri::command]
 pub fn delete_recovery_snapshot(
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, PersistenceState>,
     document_id: String,
 ) -> Result<(), String> {
-    repository
-        .delete_recovery(&document_id)
-        .map_err(|error| error.to_string())
+    database_result(database_repository(&repository)?.delete_recovery(&document_id))
 }
 
 #[tauri::command]
 pub fn list_recent_documents(
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, PersistenceState>,
 ) -> Result<Vec<RecentDocument>, String> {
-    repository.list_recent().map_err(|error| error.to_string())
+    database_result(database_repository(&repository)?.list_recent())
 }
 
 #[tauri::command]
 pub fn remove_recent_document(
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, PersistenceState>,
     path: String,
 ) -> Result<(), String> {
-    repository
-        .remove_recent(&path)
-        .map_err(|error| error.to_string())
+    database_result(database_repository(&repository)?.remove_recent(&path))
 }
 
 #[tauri::command]
 pub fn get_settings(
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, PersistenceState>,
 ) -> Result<std::collections::HashMap<String, Value>, String> {
-    repository
-        .get_settings()
-        .map_err(|error| error.to_string())?
+    database_result(database_repository(&repository)?.get_settings())?
         .into_iter()
         .map(|(key, value)| {
             serde_json::from_str(&value)
@@ -192,33 +231,29 @@ pub fn get_settings(
 
 #[tauri::command]
 pub fn set_setting(
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, PersistenceState>,
     key: String,
     value_json: String,
 ) -> Result<(), String> {
-    repository
-        .set_setting(&key, &value_json)
-        .map_err(|error| error.to_string())
+    database_result(database_repository(&repository)?.set_setting(&key, &value_json))
 }
 
 #[tauri::command]
 pub fn record_shape_usage(
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, PersistenceState>,
     shape_type: String,
 ) -> Result<(), String> {
-    repository
-        .increment_shape_usage(&shape_type, unix_millis())
-        .map_err(|error| error.to_string())
+    database_result(
+        database_repository(&repository)?.increment_shape_usage(&shape_type, unix_millis()),
+    )
 }
 
 #[tauri::command]
 pub fn top_shape_usage(
-    repository: State<'_, SqliteRepository>,
+    repository: State<'_, PersistenceState>,
     limit: u32,
 ) -> Result<Vec<ShapeUsage>, String> {
-    repository
-        .top_shape_usage(limit)
-        .map_err(|error| error.to_string())
+    database_result(database_repository(&repository)?.top_shape_usage(limit))
 }
 
 #[cfg(test)]
@@ -228,9 +263,11 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        normalize_save_path, read_diagram_file, save_diagram_file, save_diagram_with_recent,
-        validate_document_json,
+        database_repository, database_result, normalize_save_path, read_diagram_file,
+        read_diagram_with_state, save_diagram_file, save_diagram_with_recent,
+        save_diagram_with_state, validate_document_json,
     };
+    use crate::persistence::sqlite_repository::{PersistenceState, DATABASE_UNAVAILABLE};
 
     const VALID: &str = r#"{"schemaVersion":1,"id":"doc-1","name":"流程","pages":[]}"#;
 
@@ -262,6 +299,10 @@ mod tests {
         );
         assert!(normalize_save_path(&std::path::PathBuf::from("relative.flowdiagram")).is_err());
         assert!(normalize_save_path(&std::env::temp_dir().join("bad.json")).is_err());
+        assert_eq!(
+            normalize_save_path(&std::env::temp_dir().join("upper.FLOWDIAGRAM")).unwrap(),
+            std::env::temp_dir().join("upper.FLOWDIAGRAM")
+        );
         assert!(
             normalize_save_path(&std::path::PathBuf::from("C:\\bad\0name.flowdiagram")).is_err()
         );
@@ -306,5 +347,53 @@ mod tests {
         .unwrap();
 
         assert_eq!(fs::read_to_string(saved).unwrap(), VALID);
+    }
+
+    #[test]
+    fn unavailable_database_state_still_saves_the_real_diagram_file() {
+        let dir = tempdir().unwrap();
+        let state = PersistenceState::initialize(dir.path());
+        assert_eq!(state.repository().err(), Some(DATABASE_UNAVAILABLE));
+        assert_eq!(
+            database_repository(&state).err().as_deref(),
+            Some(DATABASE_UNAVAILABLE)
+        );
+
+        let saved = save_diagram_with_state(
+            dir.path()
+                .join("database-unavailable.flowdiagram")
+                .as_path(),
+            VALID,
+            &state,
+        )
+        .unwrap();
+
+        assert_eq!(fs::read_to_string(saved).unwrap(), VALID);
+    }
+
+    #[test]
+    fn repository_failures_map_to_stable_chinese_at_the_command_boundary() {
+        let repository =
+            crate::persistence::sqlite_repository::SqliteRepository::in_memory().unwrap();
+        let result = database_result(repository.set_setting("invalid", "not-json"));
+        assert_eq!(result.unwrap_err(), DATABASE_UNAVAILABLE);
+    }
+
+    #[test]
+    fn open_updates_recent_metadata_best_effort() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("opened.flowdiagram");
+        fs::write(&path, VALID).unwrap();
+        let state = PersistenceState::available(
+            crate::persistence::sqlite_repository::SqliteRepository::in_memory().unwrap(),
+        );
+
+        assert_eq!(read_diagram_with_state(&path, &state).unwrap(), VALID);
+        let recent = state.repository().unwrap().list_recent().unwrap();
+        assert_eq!(recent.len(), 1);
+        assert_eq!(recent[0].path, path.to_string_lossy());
+
+        let unavailable = PersistenceState::initialize(dir.path());
+        assert_eq!(read_diagram_with_state(&path, &unavailable).unwrap(), VALID);
     }
 }

@@ -189,6 +189,48 @@ describe('document-store', () => {
     store.executeCommand(new RenamePageCommand({ pageId, before: original, after: '另一分支' }))
     expect(store.dirty).toBe(true)
   })
+
+  it('撤销后分支重新创建与保存版本相同的 JSON 仍保持 dirty', () => {
+    const store = useDocumentStore()
+    const pageId = store.activePageId
+    const original = store.activePage!.name
+    store.executeCommand(new RenamePageCommand({ pageId, before: original, after: '保存版本' }))
+    store.markSaved('D:/diagrams/savepoint.flowdiagram')
+    store.undo()
+    store.executeCommand(new RenamePageCommand({ pageId, before: original, after: '保存版本' }))
+    expect(store.activePage?.name).toBe('保存版本')
+    expect(store.dirty).toBe(true)
+  })
+
+  it('跨页撤销不把不相邻的旧 revision 错认成保存点', () => {
+    const store = useDocumentStore()
+    store.loadDocument(twoPageDocument())
+    store.executeCommand(new RenamePageCommand({ pageId: 'page-a', before: '页面 1', after: 'A1' }))
+    store.markSaved('D:/diagrams/savepoint.flowdiagram')
+    store.switchPage('page-b')
+    store.executeCommand(new RenamePageCommand({ pageId: 'page-b', before: '页面 2', after: 'B1' }))
+    store.switchPage('page-a')
+    store.undo()
+    expect(store.activePage?.name).toBe('页面 1')
+    expect(store.dirty).toBe(true)
+  })
+
+  it('revision 转换元数据与 100 条命令历史一起裁剪', () => {
+    const store = useDocumentStore()
+    const pageId = store.activePageId
+    store.markSaved('D:/diagrams/initial.flowdiagram')
+    for (let index = 0; index < 101; index += 1) {
+      store.executeCommand(new RenamePageCommand({
+        pageId,
+        before: store.activePage!.name,
+        after: `版本 ${index}`,
+      }))
+    }
+    for (let index = 0; index < 100; index += 1) store.undo()
+    expect(store.canUndo).toBe(false)
+    expect(store.activePage?.name).toBe('版本 0')
+    expect(store.dirty).toBe(true)
+  })
 })
 
 describe('document-store 剪贴板与创建', () => {

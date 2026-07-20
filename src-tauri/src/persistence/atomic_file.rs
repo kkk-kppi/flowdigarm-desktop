@@ -38,6 +38,19 @@ fn atomic_write_with_replacer<F>(
 where
     F: FnOnce(&Path, &Path) -> io::Result<()>,
 {
+    atomic_write_with_operations(path, bytes, replacer, sync_parent_directory)
+}
+
+fn atomic_write_with_operations<F, S>(
+    path: &Path,
+    bytes: &[u8],
+    replacer: F,
+    sync_parent: S,
+) -> Result<(), AtomicFileError>
+where
+    F: FnOnce(&Path, &Path) -> io::Result<()>,
+    S: FnOnce(&Path) -> io::Result<()>,
+{
     let parent = path
         .parent()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "目标路径没有父目录"))?;
@@ -63,7 +76,10 @@ where
 
     replacer(&temporary.path, path)?;
     temporary.moved = true;
-    sync_parent_directory(parent)?;
+    // Replacement is already committed and cannot be rolled back; directory sync is best-effort.
+    if let Err(error) = sync_parent(parent) {
+        eprintln!("图文件已替换，但父目录同步失败：{error}");
+    }
     Ok(())
 }
 
@@ -176,6 +192,29 @@ mod tests {
 
         assert!(result.is_err());
         assert_eq!(fs::read(path).unwrap(), b"old");
+        assert!(temporary_files(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn parent_sync_failure_after_replace_is_best_effort_success() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("diagram.flowdiagram");
+        fs::write(&path, b"old").unwrap();
+
+        let result = super::atomic_write_with_operations(
+            &path,
+            b"new",
+            |temporary, target| fs::rename(temporary, target),
+            |_parent| {
+                Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "injected directory sync failure",
+                ))
+            },
+        );
+
+        assert!(result.is_ok());
+        assert_eq!(fs::read(path).unwrap(), b"new");
         assert!(temporary_files(dir.path()).is_empty());
     }
 }

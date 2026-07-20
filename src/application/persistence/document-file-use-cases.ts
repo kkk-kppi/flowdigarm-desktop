@@ -45,7 +45,7 @@ export async function saveDiagram(
       ? { ok: true, path: savedPath }
       : { ok: false, error: '已取消保存。' }
   } catch {
-    return { ok: false, error: '保存文件失败，原文件未被覆盖。' }
+    return { ok: false, error: '无法保存，原文件未被覆盖。' }
   }
 }
 

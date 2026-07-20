@@ -83,7 +83,7 @@ describe('document file use cases', () => {
     const document = validDocument()
     const before = structuredClone(document)
     await expect(saveDiagram(repository({ save: async () => null }), document)).resolves.toEqual({ ok: false, error: '已取消保存。' })
-    await expect(saveDiagram(repository({ save: async () => { throw new Error('disk') } }), document)).resolves.toEqual({ ok: false, error: '保存文件失败，原文件未被覆盖。' })
+    await expect(saveDiagram(repository({ save: async () => { throw new Error('disk') } }), document)).resolves.toEqual({ ok: false, error: '无法保存，原文件未被覆盖。' })
     expect(document).toEqual(before)
   })
 })

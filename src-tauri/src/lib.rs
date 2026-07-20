@@ -2,7 +2,7 @@
 
 use tauri::Manager;
 
-use persistence::sqlite_repository::SqliteRepository;
+use persistence::sqlite_repository::PersistenceState;
 
 pub mod commands;
 pub mod persistence;
@@ -10,19 +10,22 @@ pub mod security;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    if let Err(error) = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            let app_data = app
-                .path()
-                .app_data_dir()
-                .map_err(|error| error.to_string())?;
-            std::fs::create_dir_all(&app_data)?;
-            let repository = SqliteRepository::open(app_data.join("flowchart-editor.db"))
-                .map_err(|error| error.to_string())?;
-            app.manage(repository);
+            let state = match app.path().app_data_dir() {
+                Ok(app_data) => match std::fs::create_dir_all(&app_data) {
+                    Ok(()) => PersistenceState::initialize(app_data.join("flowchart-editor.db")),
+                    Err(error) => PersistenceState::unavailable(error.to_string()),
+                },
+                Err(error) => PersistenceState::unavailable(error.to_string()),
+            };
+            if let Some(error) = state.initialization_error() {
+                eprintln!("本机数据库初始化失败，应用将以降级模式启动：{error}");
+            }
+            app.manage(state);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -40,5 +43,7 @@ pub fn run() {
             commands::file_commands::top_shape_usage
         ])
         .run(tauri::generate_context!())
-        .expect("启动流程图编辑器失败");
+    {
+        eprintln!("应用运行失败：{error}");
+    }
 }

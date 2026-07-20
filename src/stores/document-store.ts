@@ -13,6 +13,7 @@ import {
   type DiagramPage,
 } from '@/domain/diagram'
 import type { EditorCommand } from '@/application/commands/editor-command'
+import { COMMAND_HISTORY_LIMIT } from '@/application/commands/command-history'
 import { CreateCellsCommand } from '@/application/commands/create-cells'
 import { createDeleteCellsCommand } from '@/application/commands/delete-cells'
 import { PageManager } from '@/application/pages/page-manager'
@@ -50,42 +51,78 @@ interface RevisionTracker {
   next: number
   current: number
   saved: number
-  revisions: Map<string, number>
+  pages: Map<string, RevisionTransitions>
 }
 
 const revisionTrackers = new WeakMap<object, RevisionTracker>()
 
-function documentFingerprint(document: DiagramDocument): string {
-  return JSON.stringify(document)
+interface RevisionTransition {
+  beforeRevision: number
+  afterRevision: number
 }
 
-function revisionTrackerOf(store: object, document: DiagramDocument): RevisionTracker {
+interface RevisionTransitions {
+  undo: RevisionTransition[]
+  redo: RevisionTransition[]
+}
+
+function revisionTrackerOf(store: object): RevisionTracker {
   let tracker = revisionTrackers.get(store)
   if (!tracker) {
-    tracker = { next: 0, current: 0, saved: 0, revisions: new Map([[documentFingerprint(document), 0]]) }
+    tracker = { next: 0, current: 0, saved: 0, pages: new Map() }
     revisionTrackers.set(store, tracker)
   }
   return tracker
 }
 
-function advanceRevision(store: object, document: DiagramDocument): boolean {
-  const tracker = revisionTrackerOf(store, document)
-  const fingerprint = documentFingerprint(document)
-  let revision = tracker.revisions.get(fingerprint)
-  if (revision === undefined) {
-    revision = ++tracker.next
-    tracker.revisions.set(fingerprint, revision)
+function transitionsFor(tracker: RevisionTracker, pageId: string): RevisionTransitions {
+  let transitions = tracker.pages.get(pageId)
+  if (!transitions) {
+    transitions = { undo: [], redo: [] }
+    tracker.pages.set(pageId, transitions)
   }
-  tracker.current = revision
+  return transitions
+}
+
+function recordExecuteRevision(store: object, pageId: string, beforeRevision: number): boolean {
+  const tracker = revisionTrackerOf(store)
+  const transitions = transitionsFor(tracker, pageId)
+  const afterRevision = ++tracker.next
+  transitions.undo.push({ beforeRevision, afterRevision })
+  if (transitions.undo.length > COMMAND_HISTORY_LIMIT) transitions.undo.shift()
+  transitions.redo = []
+  tracker.current = afterRevision
   return tracker.current !== tracker.saved
 }
 
-function resetRevision(store: object, document: DiagramDocument): void {
+function recordUndoRevision(store: object, pageId: string): boolean {
+  const tracker = revisionTrackerOf(store)
+  const transitions = transitionsFor(tracker, pageId)
+  const transition = transitions.undo.pop()
+  if (transition) transitions.redo.push(transition)
+  tracker.current = transition && tracker.current === transition.afterRevision
+    ? transition.beforeRevision
+    : ++tracker.next
+  return tracker.current !== tracker.saved
+}
+
+function recordRedoRevision(store: object, pageId: string): boolean {
+  const tracker = revisionTrackerOf(store)
+  const transitions = transitionsFor(tracker, pageId)
+  const transition = transitions.redo.pop()
+  if (transition) transitions.undo.push(transition)
+  tracker.current = transition && tracker.current === transition.beforeRevision
+    ? transition.afterRevision
+    : ++tracker.next
+  return tracker.current !== tracker.saved
+}
+
+function resetRevision(store: object): void {
   revisionTrackers.set(store, {
     next: 0,
     current: 0,
     saved: 0,
-    revisions: new Map([[documentFingerprint(document), 0]]),
+    pages: new Map(),
   })
 }
 
@@ -163,39 +200,43 @@ export const useDocumentStore = defineStore('document', {
       this.activePageId = document.pages[0]?.id ?? ''
       this.filePath = path ?? null
       this.dirty = false
-      resetRevision(this, document)
+      resetRevision(this)
     },
     replaceDocument(document: DiagramDocument, path?: string) {
       this.loadDocument(document, path)
     },
     /** 在当前页命令栈执行命令并置 dirty；apply 抛错时文档与栈不变。 */
     executeCommand(command: EditorCommand) {
-      revisionTrackerOf(this, this.document)
+      const tracker = revisionTrackerOf(this)
+      const beforeRevision = tracker.current
+      const pageId = this.activePageId
       const manager = pageManagerOf(this, this.document)
-      const history = manager.historyFor(this.activePageId)
+      const history = manager.historyFor(pageId)
       this.document = markRaw(history.execute(command, this.document))
       manager.syncFromDocument(this.document)
       this.activePageId = manager.activePageId
-      this.dirty = advanceRevision(this, this.document)
+      this.dirty = recordExecuteRevision(this, pageId, beforeRevision)
     },
     undo() {
+      const pageId = this.activePageId
       const manager = pageManagerOf(this, this.document)
-      const next = manager.historyFor(this.activePageId).undo(this.document)
+      const next = manager.historyFor(pageId).undo(this.document)
       if (next) {
         this.document = markRaw(next)
         manager.syncFromDocument(next)
         this.activePageId = manager.activePageId
-        this.dirty = advanceRevision(this, this.document)
+        this.dirty = recordUndoRevision(this, pageId)
       }
     },
     redo() {
+      const pageId = this.activePageId
       const manager = pageManagerOf(this, this.document)
-      const next = manager.historyFor(this.activePageId).redo(this.document)
+      const next = manager.historyFor(pageId).redo(this.document)
       if (next) {
         this.document = markRaw(next)
         manager.syncFromDocument(next)
         this.activePageId = manager.activePageId
-        this.dirty = advanceRevision(this, this.document)
+        this.dirty = recordRedoRevision(this, pageId)
       }
     },
     /** 切换活动页：视图行为，不产生命令、不进入历史；同时清空选择（选择按页隔离）。 */
@@ -207,7 +248,7 @@ export const useDocumentStore = defineStore('document', {
     /** 保存成功后调用：清 dirty 并记录文件路径。 */
     markSaved(path: string) {
       this.filePath = path
-      const tracker = revisionTrackerOf(this, this.document)
+      const tracker = revisionTrackerOf(this)
       tracker.saved = tracker.current
       this.dirty = false
     },

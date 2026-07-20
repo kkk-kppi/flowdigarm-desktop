@@ -23,6 +23,8 @@ const DEFAULT_SETTINGS: [(&str, &str); 10] = [
     ("export.pngDpi", "150"),
 ];
 
+pub const DATABASE_UNAVAILABLE: &str = "本机数据库暂时不可用，图文件不受影响。";
+
 #[derive(Debug, Error)]
 pub enum RepositoryError {
     #[error("数据库操作失败：{0}")]
@@ -88,6 +90,42 @@ pub struct UserTemplate {
 
 pub struct SqliteRepository {
     connection: Mutex<Connection>,
+}
+
+pub struct PersistenceState {
+    repository: Option<SqliteRepository>,
+    initialization_error: Option<String>,
+}
+
+impl PersistenceState {
+    pub fn initialize(path: impl AsRef<Path>) -> Self {
+        match SqliteRepository::open(path) {
+            Ok(repository) => Self::available(repository),
+            Err(error) => Self::unavailable(error.to_string()),
+        }
+    }
+
+    pub fn available(repository: SqliteRepository) -> Self {
+        Self {
+            repository: Some(repository),
+            initialization_error: None,
+        }
+    }
+
+    pub fn unavailable(error: impl Into<String>) -> Self {
+        Self {
+            repository: None,
+            initialization_error: Some(error.into()),
+        }
+    }
+
+    pub fn repository(&self) -> Result<&SqliteRepository, &'static str> {
+        self.repository.as_ref().ok_or(DATABASE_UNAVAILABLE)
+    }
+
+    pub fn initialization_error(&self) -> Option<&str> {
+        self.initialization_error.as_deref()
+    }
 }
 
 impl SqliteRepository {
@@ -345,7 +383,7 @@ pub fn unix_millis() -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::collections::{HashMap, HashSet};
 
     use tempfile::tempdir;
 
@@ -419,15 +457,22 @@ mod tests {
     fn initializes_defaults_without_overwriting_existing_values() {
         let repository = repository();
         assert_eq!(
-            repository.get_setting("theme.mode").unwrap().as_deref(),
-            Some("\"system\"")
-        );
-        assert_eq!(
-            repository
-                .get_setting("editor.showRulers")
-                .unwrap()
-                .as_deref(),
-            Some("true")
+            repository.get_settings().unwrap(),
+            HashMap::from([
+                ("theme.mode".to_owned(), "\"system\"".to_owned()),
+                ("editor.showRulers".to_owned(), "true".to_owned()),
+                ("editor.showGrid".to_owned(), "false".to_owned()),
+                ("editor.showGuides".to_owned(), "true".to_owned()),
+                ("editor.showPageBreaks".to_owned(), "false".to_owned()),
+                ("editor.defaultZoom".to_owned(), "1".to_owned()),
+                ("editor.defaultPageUnit".to_owned(), "\"mm\"".to_owned()),
+                (
+                    "editor.defaultConnector".to_owned(),
+                    "\"orthogonal\"".to_owned()
+                ),
+                ("editor.recentLimit".to_owned(), "50".to_owned()),
+                ("export.pngDpi".to_owned(), "150".to_owned()),
+            ])
         );
         repository.set_setting("theme.mode", "\"dark\"").unwrap();
         repository.migrate().unwrap();
@@ -560,29 +605,35 @@ mod tests {
     }
 
     #[test]
-    fn failed_explicit_transaction_rolls_back_all_writes() {
+    fn failing_repository_operation_rolls_back_its_earlier_write() {
         let repository = repository();
-        let mut connection = repository.connection.lock().unwrap();
-        let transaction = connection.transaction().unwrap();
-        transaction
-            .execute("INSERT INTO app_settings VALUES ('temporary','true',1)", [])
-            .unwrap();
-        let failure = transaction.execute(
-            "INSERT INTO app_settings VALUES ('temporary','false',2)",
-            [],
-        );
+        for index in 0..50 {
+            repository
+                .upsert_recent(&RecentDocument {
+                    path: format!("C:/docs/{index}.flowdiagram"),
+                    document_id: format!("doc-{index}"),
+                    name: format!("文档 {index}"),
+                    last_opened_at: index,
+                    pinned: false,
+                })
+                .unwrap();
+        }
+        repository.connection.lock().unwrap().execute_batch(
+            "CREATE TRIGGER fail_recent_prune BEFORE DELETE ON recent_documents BEGIN SELECT RAISE(ABORT, 'injected prune failure'); END;",
+        ).unwrap();
+
+        let failure = repository.upsert_recent(&RecentDocument {
+            path: "C:/docs/new.flowdiagram".into(),
+            document_id: "new".into(),
+            name: "应回滚".into(),
+            last_opened_at: 100,
+            pinned: false,
+        });
+
         assert!(failure.is_err());
-        transaction.rollback().unwrap();
-        assert_eq!(
-            connection
-                .query_row(
-                    "SELECT COUNT(*) FROM app_settings WHERE setting_key='temporary'",
-                    [],
-                    |row| row.get::<_, i64>(0)
-                )
-                .unwrap(),
-            0
-        );
+        let rows = repository.list_recent().unwrap();
+        assert_eq!(rows.len(), 50);
+        assert!(!rows.iter().any(|row| row.document_id == "new"));
     }
 
     #[test]

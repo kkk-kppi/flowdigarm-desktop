@@ -10,6 +10,14 @@ import type { DesktopPlatform } from './desktop-platform'
 
 const diagramFilter = [{ name: '流程图文件 (*.flowdiagram)', extensions: ['flowdiagram'] }]
 
+export function normalizeDiagramSavePath(path: string): string {
+  const fileName = path.slice(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1)
+  const extensionIndex = fileName.lastIndexOf('.')
+  if (extensionIndex <= 0) return `${path}.flowdiagram`
+  if (fileName.slice(extensionIndex).toLowerCase() === '.flowdiagram') return path
+  throw new Error('只能保存为 .flowdiagram 文件。')
+}
+
 export const tauriDiagramFileRepository: DiagramFileRepository = {
   async open() {
     const path = await open({ multiple: false, directory: false, filters: diagramFilter })
@@ -25,7 +33,7 @@ export const tauriDiagramFileRepository: DiagramFileRepository = {
       path = await save({ defaultPath: input.suggestedName, filters: diagramFilter }) ?? undefined
     }
     if (!path) return null
-    if (!path.toLowerCase().endsWith('.flowdiagram')) path += '.flowdiagram'
+    path = normalizeDiagramSavePath(path)
     return invoke<string>('save_diagram', { path, documentJson: input.json })
   },
 }
