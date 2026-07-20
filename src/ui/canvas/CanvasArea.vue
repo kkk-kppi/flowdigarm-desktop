@@ -24,6 +24,9 @@
         class="graph-container"
         :class="{ 'format-painting': formatPaintStore.mode !== 'off' }"
         data-testid="x6-canvas"
+        tabindex="0"
+        aria-label="流程图画布"
+        @pointerdown="focusCanvas"
       />
       <PageBreakOverlay
         v-if="activePage"
@@ -48,7 +51,7 @@
       :items="contextMenu.items"
       :return-focus="containerRef"
       @execute="executeContextCommand"
-      @close="contextMenu = null"
+      @close="closeContextMenu"
     />
   </div>
 </template>
@@ -353,6 +356,13 @@ function openContextMenu(args: { kind: 'blank' | 'node' | 'edge'; cellId?: strin
 function executeContextCommand(id: string): void {
   if (props.menuController) props.menuController.execute(id, { trigger: containerRef.value })
   else documentStore.setNotice('右键命令控制器不可用。')
+}
+function focusCanvas(): void {
+  containerRef.value?.focus()
+}
+function closeContextMenu(): void {
+  contextMenu.value = null
+  focusCanvas()
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {

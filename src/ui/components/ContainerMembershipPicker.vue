@@ -1,5 +1,5 @@
 <template>
-  <div class="membership-backdrop" data-testid="membership-backdrop" @click.self="emit('cancel')">
+  <div class="membership-backdrop" data-testid="membership-backdrop" @click.self="emit('cancel')" @keydown="onKeydown">
     <section
       ref="dialog"
       class="membership-picker"
@@ -35,7 +35,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import type { ContainerMembershipSelection, ContainerPickerRequest } from '@/application/menus/menu-command-controller'
 
 const props = defineProps<{ request: ContainerPickerRequest; error?: string }>()
@@ -56,6 +56,7 @@ function focusableElements(): HTMLElement[] {
 function onKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') {
     event.preventDefault()
+    event.stopPropagation()
     emit('cancel')
     return
   }
@@ -78,10 +79,8 @@ function onKeydown(event: KeyboardEvent): void {
   }
 }
 onMounted(() => {
-  document.addEventListener('keydown', onKeydown)
   dialog.value?.querySelector<HTMLElement>('input, button')?.focus()
 })
-onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 </script>
 
 <style scoped>

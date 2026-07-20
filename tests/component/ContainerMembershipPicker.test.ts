@@ -21,7 +21,7 @@ describe('ContainerMembershipPicker', () => {
     wrapper.unmount()
   })
 
-  it('requires explicit member selection and closes with document Escape', async () => {
+  it('requires explicit member selection and contains Escape within the picker', async () => {
     const wrapper = mount(ContainerMembershipPicker, {
       props: {
         request: {
@@ -35,8 +35,14 @@ describe('ContainerMembershipPicker', () => {
     await wrapper.find<HTMLInputElement>('[value="n2"]').setValue(true)
     await wrapper.find('[data-testid="membership-confirm"]').trigger('click')
     expect(wrapper.emitted('confirm')?.[0]).toEqual([{ containerId: 'c1', memberIds: ['n2'] }])
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    const escapedDocument = vi.fn()
+    document.addEventListener('keydown', escapedDocument)
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    wrapper.find<HTMLInputElement>('[value="n2"]').element.dispatchEvent(event)
     expect(wrapper.emitted('cancel')).toBeTruthy()
+    expect(event.defaultPrevented).toBe(true)
+    expect(escapedDocument).not.toHaveBeenCalled()
+    document.removeEventListener('keydown', escapedDocument)
     wrapper.unmount()
   })
 
@@ -57,10 +63,10 @@ describe('ContainerMembershipPicker', () => {
     expect(document.activeElement).toBe(input.element)
     await input.setValue(true)
     buttons.at(-1)!.element.focus()
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }))
+    buttons.at(-1)!.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }))
     expect(document.activeElement).toBe(input.element)
     input.element.focus()
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }))
+    input.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }))
     expect(document.activeElement).toBe(buttons.at(-1)!.element)
     await wrapper.find('[data-testid="membership-backdrop"]').trigger('click')
     expect(wrapper.emitted('cancel')).toBeTruthy()

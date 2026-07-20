@@ -76,4 +76,21 @@ describe('contextMenuItems', () => {
     })
     expect(mixed.find((item) => item.id === 'ungroup-or-remove')?.disabledReason).toBe('不能同时取消组合和移出容器。')
   })
+
+  it('exposes ungroup-or-remove only in eligible node and multi contexts', () => {
+    expect(contextMenuItems('node', unavailable).some((item) => item.id === 'ungroup-or-remove')).toBe(false)
+    expect(contextMenuItems('node', {
+      ...unavailable, selectedTargetCount: 1, selectedNodeCount: 1, selectedParentedNodeCount: 1,
+    }).find((item) => item.id === 'ungroup-or-remove')).toMatchObject({ disabledReason: undefined })
+
+    expect(contextMenuItems('multi', {
+      ...unavailable, selectedTargetCount: 2, selectedNodeCount: 2, selectedGroupCount: 2,
+    }).find((item) => item.id === 'ungroup-or-remove')).toMatchObject({ disabledReason: undefined })
+    expect(contextMenuItems('multi', {
+      ...unavailable, selectedTargetCount: 2, selectedNodeCount: 2, selectedParentedNodeCount: 2,
+    }).find((item) => item.id === 'ungroup-or-remove')).toMatchObject({ disabledReason: undefined })
+    expect(contextMenuItems('multi', {
+      ...unavailable, selectedTargetCount: 2, selectedNodeCount: 2, selectedParentedNodeCount: 1,
+    }).some((item) => item.id === 'ungroup-or-remove')).toBe(false)
+  })
 })

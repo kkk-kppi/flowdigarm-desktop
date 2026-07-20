@@ -88,3 +88,12 @@ Implemented search/replace, seven application menus, contextual menus, title/sta
 - Focused verification: `pnpm vitest run tests/unit/editor/menus tests/unit/stores/format-paint-store.test.ts tests/unit/editor/format-paint.test.ts tests/component/ContainerMembershipPicker.test.ts tests/component/CanvasContextMenu.test.ts tests/component/MenuBar.test.ts tests/component/CanvasArea.test.ts tests/unit/app-shell.test.ts` PASS, 11 files / 81 tests.
 - Full verification: `pnpm vitest run` PASS, 84 files / 712 tests.
 - Build verification: `pnpm build` PASS (`vue-tsc --noEmit`, Vite 1122 modules); existing chunk-size warning remains (`830.57 kB`, gzip `247.15 kB`).
+
+## Reachability And Focus Follow-up (2026-07-21)
+
+- Exposed `ungroup-or-remove` from a parented ordinary node context and from homogeneous multi-selections of groups or parented ordinary members. CanvasArea integration tests execute the command from both node and multi context menus; the model and controller continue to share `ungroupOrRemoveDisabledReason`.
+- Made the real X6 graph container keyboard-focusable with an accessible name, focused it on pointer interaction and context close, and verified a canvas-opened membership picker restores focus to that exact element.
+- Scoped picker keyboard handling to the picker DOM and stopped/prevented Escape before it reaches document-level help handling. A stacked AppShell test verifies the first Escape closes only the picker and restores its trigger, while the second closes FeatureHelp.
+- Focused verification: `pnpm vitest run tests/unit/editor/menus/context-menu-model.test.ts tests/unit/editor/menus/menu-command-controller.test.ts tests/component/CanvasArea.test.ts tests/component/ContainerMembershipPicker.test.ts tests/unit/app-shell.test.ts` PASS, 5 files / 50 tests.
+- Full verification: `pnpm vitest run` PASS, 84 files / 717 tests.
+- Build verification: `pnpm build` PASS (`vue-tsc --noEmit`, Vite 1122 modules); existing chunk-size warning remains (`830.70 kB`, gzip `247.25 kB`).

@@ -6,6 +6,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createDefaultTextContent, type DiagramDocument } from '@/domain/diagram'
 import type { GraphAdapterEvents } from '@/infrastructure/x6/graph-adapter'
 import CanvasArea from '@/ui/canvas/CanvasArea.vue'
+import AppShell from '@/ui/shell/AppShell.vue'
 import type { CanvasController } from '@/application/canvas/canvas-controller'
 import { useDocumentStore } from '@/stores/document-store'
 import { useSelectionStore } from '@/stores/selection-store'
@@ -52,12 +53,13 @@ function linkedDocument(link: string): DiagramDocument {
   }
 }
 
-function mountCanvas(link: string) {
+function mountCanvas(link: string, attachToBody = false) {
   setActivePinia(createPinia())
   const documentStore = useDocumentStore()
   documentStore.loadDocument(linkedDocument(link))
   const selectionStore = useSelectionStore()
   const wrapper = mount(CanvasArea, {
+    ...(attachToBody ? { attachTo: document.body } : {}),
     global: {
       stubs: {
         PageBreakOverlay: true,
@@ -152,6 +154,79 @@ describe('CanvasArea 超链接点击', () => {
     mocks.events!.onContextMenu?.({ kind: 'node', cellId: 'node-1', x: 30, y: 40 })
     await wrapper.vm.$nextTick()
     expect(wrapper.find('[role="menu"]').text()).toContain('格式刷')
+    wrapper.unmount()
+  })
+
+  it('从真实节点与多选右键菜单执行取消组合或移出容器', async () => {
+    setActivePinia(createPinia())
+    const documentStore = useDocumentStore()
+    const document = linkedDocument('https://example.com')
+    document.pages[0].nodes[0].parentId = 'node-3'
+    document.pages[0].nodes[2].isContainer = true
+    documentStore.loadDocument(document)
+    const selectionStore = useSelectionStore()
+    const execute = vi.fn()
+    const wrapper = mount(CanvasArea, {
+      props: { menuController: { execute } },
+      global: { stubs: { PageBreakOverlay: true, PageFrame: true, RulerCorner: true, RulerOverlay: true, TextEditorOverlay: true } },
+    })
+
+    mocks.events!.onContextMenu?.({ kind: 'node', cellId: 'node-1', x: 30, y: 40 })
+    await wrapper.vm.$nextTick()
+    await wrapper.find('[data-command-id="ungroup-or-remove"]').trigger('click')
+    expect(execute).toHaveBeenLastCalledWith('ungroup-or-remove', { trigger: wrapper.find('[data-testid="x6-canvas"]').element })
+
+    documentStore.activePage!.nodes[0].shape = 'group'
+    documentStore.activePage!.nodes[0].isContainer = true
+    documentStore.activePage!.nodes[0].parentId = undefined
+    documentStore.activePage!.nodes[1].shape = 'group'
+    documentStore.activePage!.nodes[1].isContainer = true
+    selectionStore.setSelection(['node-1', 'node-2'])
+    mocks.events!.onContextMenu?.({ kind: 'node', cellId: 'node-1', x: 30, y: 40 })
+    await wrapper.vm.$nextTick()
+    await wrapper.find('[data-command-id="ungroup-or-remove"]').trigger('click')
+    expect(execute).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
+  })
+
+  it('makes the graph focusable and restores graph focus after pointer and context-menu interactions', async () => {
+    const { wrapper } = mountCanvas('https://example.com', true)
+    const graph = wrapper.find<HTMLElement>('[data-testid="x6-canvas"]')
+    expect(graph.attributes('tabindex')).toBe('0')
+    expect(graph.attributes('aria-label')).toBe('流程图画布')
+    await graph.trigger('pointerdown')
+    expect(document.activeElement).toBe(graph.element)
+
+    mocks.events!.onContextMenu?.({ kind: 'blank', x: 30, y: 40 })
+    await wrapper.vm.$nextTick()
+    await wrapper.find('[role="menu"]').trigger('keydown', { key: 'Escape' })
+    await wrapper.vm.$nextTick()
+    expect(document.activeElement).toBe(graph.element)
+    wrapper.unmount()
+  })
+
+  it('restores a picker opened from a real CanvasArea context menu to the graph element', async () => {
+    setActivePinia(createPinia())
+    const documentStore = useDocumentStore()
+    const diagram = linkedDocument('https://example.com')
+    diagram.pages[0].nodes[2].isContainer = true
+    documentStore.loadDocument(diagram)
+    const wrapper = mount(AppShell, {
+      attachTo: document.body,
+      global: { stubs: { PageBreakOverlay: true, PageFrame: true, RulerCorner: true, RulerOverlay: true, TextEditorOverlay: true } },
+    })
+
+    mocks.events!.onContextMenu?.({ kind: 'node', cellId: 'node-1', x: 30, y: 40 })
+    await wrapper.vm.$nextTick()
+    await wrapper.find('[data-command-id="context-add-container"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
+    const pickerInput = wrapper.find<HTMLInputElement>('[role="dialog"] input')
+    expect(document.activeElement).toBe(pickerInput.element)
+    pickerInput.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    await flushPromises()
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(wrapper.find('[data-testid="x6-canvas"]').element)
     wrapper.unmount()
   })
 })

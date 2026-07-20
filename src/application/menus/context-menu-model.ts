@@ -38,6 +38,8 @@ function formatPaintDisabledReason(state: ContextMenuState): string | undefined 
 export function contextMenuItems(kind: ContextKind, state: ContextMenuState): MenuItem[] {
   const paste = item('edit-paste', '粘贴', state.canPaste ? undefined : '剪贴板为空。')
   const group = item('arrange-group', '组合', state.selectedNodeCount >= 2 ? undefined : '至少选择两个节点。')
+  const ungroupOrRemoveReason = ungroupOrRemoveDisabledReason(state)
+  const ungroupOrRemove = item('ungroup-or-remove', '取消组合或移出容器', ungroupOrRemoveReason)
   const align: MenuItem = { id: 'arrange-align', label: '对齐', children: [
     item('arrange-align-left', '左对齐'), item('arrange-align-center-h', '水平居中'), item('arrange-align-right', '右对齐'),
     item('arrange-align-top', '顶端对齐'), item('arrange-align-middle-v', '垂直居中'), item('arrange-align-bottom', '底端对齐'),
@@ -52,8 +54,9 @@ export function contextMenuItems(kind: ContextKind, state: ContextMenuState): Me
       item('context-edit-text', '编辑文本'), item('context-link', '链接'),
       item('arrange-to-front', '置于顶层'), item('arrange-to-back', '置于底层'),
       item('arrange-forward', '上移一层'), item('arrange-backward', '下移一层'),
-       group, item('context-add-container', '加入容器', state.canAddToContainer ? undefined : '没有可加入的目标容器。'),
-       item('format-font', '文本样式', state.hasTextSelection ? undefined : '所选图元没有可编辑文本。'),
+      group, item('context-add-container', '加入容器', state.canAddToContainer ? undefined : '没有可加入的目标容器。'),
+      item('format-font', '文本样式', state.hasTextSelection ? undefined : '所选图元没有可编辑文本。'),
+      ...(ungroupOrRemoveReason === undefined ? [ungroupOrRemove] : []),
     ],
     edge: [
       item('edit-cut', '剪切'), item('edit-copy', '复制'), item('edit-delete', '删除'),
@@ -61,14 +64,15 @@ export function contextMenuItems(kind: ContextKind, state: ContextMenuState): Me
     ],
     multi: [
       item('edit-cut', '剪切'), item('edit-copy', '复制'), item('edit-delete', '删除'),
-       item('context-format-paint', '格式刷', formatPaintDisabledReason(state)), align, distribute,
-       item('arrange-auto-connect', '自动连线', state.eligibleNodeCount >= 2 ? undefined : '至少选择两个可自动连线的节点。'), group,
+      item('context-format-paint', '格式刷', formatPaintDisabledReason(state)), align, distribute,
+      item('arrange-auto-connect', '自动连线', state.eligibleNodeCount >= 2 ? undefined : '至少选择两个可自动连线的节点。'), group,
+      ...(ungroupOrRemoveReason === undefined ? [ungroupOrRemove] : []),
     ],
     container: [
       item('edit-copy', '复制'), item('edit-delete', '删除'),
-       item('ungroup-or-remove', '取消组合或移出容器', ungroupOrRemoveDisabledReason(state)),
-       item('context-add-members', '添加成员', state.selectedContainerCount === 1 && state.canAddMembers ? undefined : '没有可添加的成员。'),
-       item('arrange-to-front', '置于顶层'), item('arrange-to-back', '置于底层'),
+      ungroupOrRemove,
+      item('context-add-members', '添加成员', state.selectedContainerCount === 1 && state.canAddMembers ? undefined : '没有可添加的成员。'),
+      item('arrange-to-front', '置于顶层'), item('arrange-to-back', '置于底层'),
     ],
   }
   return byKind[kind]
