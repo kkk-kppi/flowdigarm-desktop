@@ -75,6 +75,16 @@
       @apply="applyPreferences"
       @close="closePreferences"
     />
+    <ExportDialog
+      v-if="editorReady && exportOpen && services"
+      :controller="services.export"
+      :file-name="documentStore.document.name"
+      :png-dpi="appStore.pngDpi"
+      :return-focus="exportReturnFocus"
+      @close="closeExport"
+      @help="openExportHelp"
+      @success="documentStore.setNotice(`已导出到 ${$event}`)"
+    />
   </div>
 </template>
 
@@ -95,6 +105,7 @@ import ContainerMembershipPicker from '@/ui/components/ContainerMembershipPicker
 import UnsavedChangesDialog from '@/ui/dialogs/UnsavedChangesDialog.vue'
 import RecoveryDialog from '@/ui/dialogs/RecoveryDialog.vue'
 import PreferencesDialog from '@/ui/dialogs/PreferencesDialog.vue'
+import ExportDialog from '@/ui/dialogs/ExportDialog.vue'
 import { shapeDragStartKey } from '@/ui/shapes/shape-drag-key'
 import { createMainMenus } from '@/application/menus/menu-model'
 import { isContainerNode } from '@/application/shapes/container-node'
@@ -142,13 +153,15 @@ const recoverySnapshot = ref<RecoverySnapshot | null>(null)
 const startupComplete = ref(!services)
 const preferencesOpen = ref(false)
 const preferencesReturnFocus = ref<HTMLElement | null>(null)
+const exportOpen = ref(false)
+const exportReturnFocus = ref<HTMLElement | null>(null)
 const unsavedReturnFocus = ref<HTMLElement | null>(null)
 const viewport = reactive<ViewportState>({ zoom: 1, panX: 0, panY: 0 })
 
 const unsavedRequest = computed(() => services?.unsaved.request.value ?? null)
 const editorReady = computed(() => startupComplete.value && recoverySnapshot.value === null)
 const modalOpen = computed(() => Boolean(
-  containerPickerRequest.value || unsavedRequest.value || recoverySnapshot.value || preferencesOpen.value,
+  containerPickerRequest.value || unsavedRequest.value || recoverySnapshot.value || preferencesOpen.value || exportOpen.value,
 ))
 const currentPreferences = computed<EditorPreferences>(() => ({
   theme: appStore.theme,
@@ -238,7 +251,7 @@ const menuCallbacks: MenuCallbacks = {
   save: () => { void pendingFileCommand('save') },
   saveAs: () => { void pendingFileCommand('saveAs') },
   recent: () => { void pendingFileCommand('recent') },
-  export: () => { void pendingFileCommand('export') },
+  export: openExport,
   pageSetup: () => { appStore.showProperties(); documentStore.setNotice('请在右侧“页面设置”标签中调整页面。') },
   zoomIn: () => canvasAreaRef.value?.zoomIn(),
   zoomOut: () => canvasAreaRef.value?.zoomOut(),
@@ -361,6 +374,26 @@ function openPreferences(request: MenuInvocation): void {
 function closePreferences(): void {
   preferencesOpen.value = false
   void nextTick(() => { preferencesReturnFocus.value = null })
+}
+
+function openExport(request: MenuInvocation): void {
+  emit('fileCommand', 'export')
+  if (!services) {
+    documentStore.setNotice('桌面服务不可用。')
+    return
+  }
+  exportReturnFocus.value = request.trigger?.isConnected ? request.trigger : null
+  exportOpen.value = true
+}
+
+function closeExport(): void {
+  exportOpen.value = false
+  void nextTick(() => { exportReturnFocus.value = null })
+}
+
+function openExportHelp(): void {
+  exportOpen.value = false
+  appStore.openHelp('export')
 }
 
 async function applyPreferences(settings: EditorPreferences): Promise<void> {

@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import {
+  createTauriDiagramExporter,
   normalizeDiagramSavePath,
   createTauriDiagramFileRepository,
   tauriDesktopPlatform,
@@ -8,6 +9,7 @@ import {
   tauriRecoveryRepository,
 } from '@/platform/tauri-desktop-platform'
 import { DiagramFileError } from '@/application/persistence/file-errors'
+import type { NativeExportRequest } from '@/application/export/export-ports'
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }))
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn(), save: vi.fn() }))
@@ -100,5 +102,33 @@ describe('tauri image adapter', () => {
       filters: [{ name: '图片文件', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
     })
     expect(invoke).toHaveBeenCalledWith('read_image', { path: 'C:/images/photo.webp' })
+  })
+})
+
+describe('tauri export adapter', () => {
+  beforeEach(() => {
+    vi.mocked(invoke).mockReset()
+  })
+
+  it('chooses a save destination with the format filter and invokes only the Rust export command', async () => {
+    const invokeSpy = vi.fn(async (_command: string, _args?: Record<string, unknown>) => ['C:/exports/chart.svg'])
+    const invokeCommand = async <T,>(command: string, args?: Record<string, unknown>): Promise<T> => invokeSpy(command, args) as Promise<T>
+    const exporter = createTauriDiagramExporter(invokeCommand)
+    const { save } = await import('@tauri-apps/plugin-dialog')
+    vi.mocked(save).mockResolvedValueOnce('C:/exports/chart.svg')
+    const path = await exporter.chooseDestination({ format: 'svg', suggestedName: 'chart.svg' })
+    expect(path).toBe('C:/exports/chart.svg')
+    expect(save).toHaveBeenCalledWith({ defaultPath: 'chart.svg', filters: [{ name: 'SVG 图像 (*.svg)', extensions: ['svg'] }] })
+    const input: NativeExportRequest = { format: 'svg', scope: 'currentPage', fileName: 'chart', path: path!, pages: [], documentJson: undefined }
+    await expect(exporter.export(input)).resolves.toEqual(['C:/exports/chart.svg'])
+    expect(invokeSpy).toHaveBeenCalledWith('export_diagram', { input })
+  })
+
+  it('adds the selected export extension when the native dialog returns no extension', async () => {
+    const exporter = createTauriDiagramExporter(async <T,>() => [] as T)
+    const { save } = await import('@tauri-apps/plugin-dialog')
+    vi.mocked(save).mockResolvedValueOnce('C:/exports/chart')
+    await expect(exporter.chooseDestination({ format: 'png', suggestedName: 'chart.png' }))
+      .resolves.toBe('C:/exports/chart.png')
   })
 })

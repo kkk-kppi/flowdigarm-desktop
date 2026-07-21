@@ -9,9 +9,19 @@ import type {
 import type { ImageReadResult, ImageRepository } from '@/application/images/image-import'
 import type { DesktopPlatform } from './desktop-platform'
 import { DiagramFileError, normalizeDiagramFileError } from '@/application/persistence/file-errors'
+import type { DiagramExporter, ExportFormat } from '@/application/export/export-ports'
 
 const diagramFilter = [{ name: '流程图文件 (*.flowdiagram)', extensions: ['flowdiagram'] }]
 const imageFilter = [{ name: '图片文件', extensions: ['png', 'jpg', 'jpeg', 'webp'] }]
+const exportFilters: Record<ExportFormat, Array<{ name: string; extensions: string[] }>> = {
+  svg: [{ name: 'SVG 图像 (*.svg)', extensions: ['svg'] }],
+  png: [{ name: 'PNG 图像 (*.png)', extensions: ['png'] }],
+  pdf: [{ name: 'PDF 文档 (*.pdf)', extensions: ['pdf'] }],
+  json: [{ name: '流程图文件 (*.flowdiagram)', extensions: ['flowdiagram'] }],
+}
+const exportExtensions: Record<ExportFormat, string> = {
+  svg: 'svg', png: 'png', pdf: 'pdf', json: 'flowdiagram',
+}
 
 export function normalizeDiagramSavePath(path: string): string {
   const fileName = path.slice(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1)
@@ -94,6 +104,20 @@ export const tauriImageRepository: ImageRepository = {
     return invoke<ImageReadResult>('read_image', { path })
   },
 }
+
+export function createTauriDiagramExporter(invokeCommand: InvokeCommand = invoke): DiagramExporter {
+  return {
+    async chooseDestination({ format, suggestedName }) {
+      const path = await save({ defaultPath: suggestedName, filters: exportFilters[format] })
+      if (!path) return null
+      const fileName = path.slice(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1)
+      return fileName.lastIndexOf('.') <= 0 ? `${path}.${exportExtensions[format]}` : path
+    },
+    export: (input) => invokeCommand<string[]>('export_diagram', { input }),
+  }
+}
+
+export const tauriDiagramExporter = createTauriDiagramExporter()
 
 export const tauriDesktopPlatform: DesktopPlatform = {
   async openDiagram() {

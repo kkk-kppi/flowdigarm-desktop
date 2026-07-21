@@ -93,6 +93,10 @@ function fakeServices(overrides: Partial<EditorServices> = {}): EditorServices {
       apply: vi.fn(async () => {}),
     },
     imageImport: vi.fn(async () => true),
+    export: {
+      chooseDestination: vi.fn(async () => 'C:/exports/流程.svg'),
+      export: vi.fn(async () => ['C:/exports/流程.svg']),
+    },
     window: {
       minimize: vi.fn(async () => {}),
       toggleMaximize: vi.fn(async () => {}),
@@ -209,6 +213,18 @@ describe('AppShell 组装', () => {
     expect(services.window.minimize).toHaveBeenCalledOnce()
     expect(services.window.toggleMaximize).toHaveBeenCalledOnce()
     expect(useDocumentStore().lastNotice ?? '').not.toContain('下一步桌面接线')
+  })
+
+  it('opens the real export dialog from File > Export and routes help through helpId export', async () => {
+    const services = fakeServices()
+    const wrapper = mountShellWithServices(services, true)
+    await flushPromises()
+    await wrapper.find('[data-menu-id="file"]').trigger('click')
+    await wrapper.find('[data-command-id="file-export"]').trigger('click')
+    expect(wrapper.find('[aria-labelledby="export-title"]').exists()).toBe(true)
+    await wrapper.find('[data-testid="export-help"]').trigger('click')
+    expect(wrapper.find('[aria-label="导出帮助"]').exists()).toBe(true)
+    wrapper.unmount()
   })
 
   it('shows startup recovery once and routes restore through the recovery controller', async () => {

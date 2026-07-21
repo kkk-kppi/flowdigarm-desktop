@@ -8,9 +8,11 @@ import { FileWorkflowController } from '@/application/persistence/file-workflow-
 import { RecoveryController } from '@/application/recovery/recovery-controller'
 import { SettingsController } from '@/application/settings/settings-controller'
 import { importImage } from '@/application/images/image-import'
+import { ExportController } from '@/application/export/export-controller'
 import {
   tauriDiagramFileRepository,
   tauriImageRepository,
+  tauriDiagramExporter,
   tauriRecentDocumentRepository,
   tauriRecoveryRepository,
   tauriSettingsRepository,
@@ -82,6 +84,9 @@ const settingsController = new SettingsController(
   tauriSettingsRepository,
 )
 const windowController = createTauriWindowController(() => fileWorkflowController.requestClose())
+const exportController = new ExportController({
+  snapshot: () => ({ document: documentStore.document, activePageId: documentStore.activePageId }),
+}, tauriDiagramExporter)
 const services: EditorServices = {
   file: fileWorkflowController,
   recovery: recoveryController,
@@ -92,6 +97,7 @@ const services: EditorServices = {
     select: (ids) => selectionStore.setSelection(ids),
     setNotice: (message) => documentStore.setNotice(message),
   }),
+  export: exportController,
   window: windowController,
   unsaved,
 }

@@ -3,6 +3,7 @@ import type { FileWorkflowUi } from '@/application/persistence/file-workflow-con
 import type { RecentDocument, RecoverySnapshot } from '@/application/persistence/persistence-ports'
 import type { EditorPreferences } from '@/application/settings/settings-controller'
 import type { WindowController } from '@/platform/window-controller'
+import type { ExportController } from '@/application/export/export-controller'
 
 type UnsavedChoice = 'save' | 'discard' | 'cancel'
 
@@ -34,6 +35,7 @@ export interface EditorServices {
     apply(settings: EditorPreferences): Promise<void>
   }
   imageImport(): Promise<boolean>
+  export: Pick<ExportController, 'chooseDestination' | 'export'>
   window: WindowController
   unsaved: UnsavedDialogService
 }

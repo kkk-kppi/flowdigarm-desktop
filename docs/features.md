@@ -115,10 +115,10 @@
 
 ## 11. 输出（SVG/PNG/PDF/JSON 导出）
 
-- 入口：实现后补全
-- 前置条件：实现后补全
-- 成功结果：实现后补全
-- 失败反馈：实现后补全
-- 撤销边界：实现后补全
-- 数据字段：实现后补全
-- 自动化测试位置：实现后补全（规划：`tests/unit/editor/export/*`、Rust 导出单测）
+- 入口：「文件→导出」打开 480px 导出对话框；选择当前页/全部页面、SVG/PNG/PDF/JSON、PNG 96/150/300 DPI、文件名和保存位置。对话框只调用 application controller，文件选择和 Tauri invoke 位于 platform adapter。
+- 前置条件：当前文档和活动页存在；文件名清除 Windows 非法字符后非空；保存路径为匹配格式的绝对路径；PNG DPI 只能为 96、150 或 300。
+- 成功结果：TypeScript 从文档快照生成以 pt 为单位的语义 SVG，直接背景页先于前景页、图元按 zIndex、网格/参考线/分页符/选择层不输出。SVG/PDF 仅保留 http/https/mailto 链接；PNG 像素严格为 `round(pt*dpi/72)`；PDF 为按文档页序排列、MediaBox 使用 pt 的单个多页文件；JSON 为单一 `.flowdiagram`。全部页面 SVG/PNG 输出 `{base}-{01}-{安全页名}.{ext}`。
+- 失败反馈：目标选择取消不改变状态；并发导出提示「正在导出，请稍候。」；native 失败提示「导出失败，当前文档未受影响：{原因}」。Rust 先验证并生成全部产物，再同步临时文件和事务替换；失败会回滚已有目标且不留下部分新文件。
+- 撤销边界：导出只读取 structured clone 快照，不修改 document、revision、dirty、history 或 PNG 首选项，不产生撤销记录。
+- 数据字段：`ExportPagePayload/ExportLinkAnnotation/NativeExportRequest`（`src/application/export/export-ports.ts`）；语义渲染器 `src/infrastructure/export/svg-export.ts`；原生生成与事务 `src-tauri/src/commands/export_commands.rs`。Rust 依赖锁定 `resvg 0.35.0`，运行时不访问网络。
+- 自动化测试位置：`tests/unit/editor/export/*`、`tests/component/ExportDialog.test.ts`、`tests/unit/platform/tauri-desktop-platform.test.ts`、`src-tauri/tests/export_commands.rs`。
