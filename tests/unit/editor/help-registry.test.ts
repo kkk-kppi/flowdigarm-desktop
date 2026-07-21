@@ -2,6 +2,23 @@ import { featureHelpRegistry, getFeatureHelp } from '@/ui/help/feature-help-regi
 import { readFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+const coreDocs = [
+  'docs/README.md',
+  'docs/features.md',
+  'docs/interactions.md',
+  'docs/user-guide.md',
+] as const
+const deliveryDocs = [
+  ...coreDocs,
+  'docs/需求追踪表.md',
+  'docs/acceptance.md',
+  'docs/release.md',
+] as const
+
+function readDoc(relativePath: string): string {
+  return readFileSync(resolve(process.cwd(), relativePath), 'utf8')
+}
+
 describe('功能帮助注册表', () => {
   it('至少包含 undo 与 redo 两条首批条目', () => {
     expect(featureHelpRegistry.has('undo')).toBe(true)
@@ -216,6 +233,39 @@ describe('功能帮助注册表', () => {
         .filter((line) => /^#+\s/.test(line))
         .map((line) => slug(line.replace(/^#+\s+/, '')))
       expect(headings, entry.docAnchor).toContain(anchor)
+    }
+  })
+
+  it('四份核心中文文档均为实质内容且没有交付占位', () => {
+    const placeholder = /实现后补全|后续任务|骨架版本|章节骨架|Task\s*\d+\s*(?:提供|接入)/i
+    for (const relativePath of coreDocs) {
+      expect(existsSync(resolve(process.cwd(), relativePath)), relativePath).toBe(true)
+      const content = readDoc(relativePath)
+      expect(content.length, relativePath).toBeGreaterThan(1_000)
+      expect(content, relativePath).toMatch(/[\u3400-\u9fff]/u)
+      expect(content, relativePath).not.toMatch(placeholder)
+    }
+  })
+
+  it('功能文档恰含 11 个需求组且每组都有七个必填字段', () => {
+    const content = readDoc('docs/features.md')
+    const groups = [...content.matchAll(/^## (\d+)\. .+$/gm)]
+    expect(groups.map((match) => Number(match[1]))).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
+    const fields = ['入口', '前置条件', '成功结果', '失败反馈', '撤销边界', '数据字段', '自动化测试位置']
+    for (const [index, group] of groups.entries()) {
+      const section = content.slice(group.index, groups[index + 1]?.index ?? content.length)
+      for (const field of fields) {
+        expect(section, `功能组 ${group[1]} 缺少「${field}」`).toMatch(new RegExp(`^- ${field}：\\S`, 'm'))
+      }
+    }
+  })
+
+  it('交付文档引用的精确源码与测试路径均存在', () => {
+    const exactPath = /`((?:src(?:-tauri)?\/(?!target\/)|tests\/|e2e\/|docs\/|\.github\/)[\p{L}\p{N}._/-]+)`/gu
+    for (const docPath of deliveryDocs) {
+      for (const match of readDoc(docPath).matchAll(exactPath)) {
+        expect(existsSync(resolve(process.cwd(), match[1])), `${docPath} -> ${match[1]}`).toBe(true)
+      }
     }
   })
 })

@@ -9,6 +9,7 @@ import { useAppStore } from '@/stores/app-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { useSelectionStore } from '@/stores/selection-store'
 import { createTestDocument } from '../helpers/test-document'
+import { getFeatureHelp } from '@/ui/help/feature-help-registry'
 
 function prepare() {
   setActivePinia(createPinia())
@@ -19,9 +20,10 @@ function prepare() {
 describe('complex feature help entries', () => {
   it('opens registry help with an accessible icon button', async () => {
     prepare()
-    const wrapper = mount(QuickHelpButton, { props: { helpId: 'page-setup', label: '页面设置' } })
+    const entry = getFeatureHelp('page-setup')!
+    const wrapper = mount(QuickHelpButton, { props: { helpId: 'page-setup', label: '错误的重复标签' } })
     expect(wrapper.attributes('aria-label')).toBe('页面设置帮助')
-    expect(wrapper.attributes('title')).toContain('。')
+    expect(wrapper.attributes('title')).toContain(entry.purpose)
     await wrapper.trigger('click')
     expect(useAppStore().helpId).toBe('page-setup')
   })

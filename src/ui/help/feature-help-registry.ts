@@ -1,6 +1,6 @@
 /**
  * 功能帮助注册表：为每个功能提供面向用户的说明条目。
- * 条目内容使用简体中文；后续任务按功能逐个补全注册。
+ * 条目内容使用简体中文，按钮提示与帮助面板共同读取此注册表。
  */
 export interface FeatureHelpEntry {
   /** 功能唯一标识，如 undo */
@@ -163,7 +163,7 @@ const entries: readonly FeatureHelpEntry[] = [
       'Ctrl+C 复制、Ctrl+X 剪切、Ctrl+V 粘贴（macOS 为 Cmd）；同一内容连续粘贴逐次偏移 12pt。',
     scope: '作用于当前页选中图元；仅保留源与目标都在复制集内的边（跨集边不随复制）。',
     undoBoundary: '一次粘贴一条记录（含多个图元）；剪切为一条删除记录。',
-    limits: '使用应用内剪贴板，不访问系统剪贴板；剪贴板为空时粘贴仅提示「剪贴板为空。」。',
+    limits: '优先使用应用内副本；系统剪贴板不可用或内容校验失败时显示降级提示，不阻断已有应用内内容粘贴。',
     docAnchor: 'user-guide#编辑',
   },
   {
@@ -328,11 +328,11 @@ const entries: readonly FeatureHelpEntry[] = [
   },
   {
     id: 'preferences', title: '首选项', purpose: '配置编辑器的应用级偏好。', operation: '从工具菜单选择首选项。',
-    scope: '作用于应用视图和行为设置，不直接修改图元。', undoBoundary: '首选项不进入文档撤销历史。', limits: '实际持久化与对话框由后续桌面接线提供。', docAnchor: 'user-guide#首选项',
+    scope: '作用于应用视图和行为设置，不直接修改图元。', undoBoundary: '首选项不进入文档撤销历史。', limits: '本机设置保存失败时当前运行仍采用新值，并显示提示。', docAnchor: 'user-guide#首选项',
   },
   {
-    id: 'export', title: '导出', purpose: '将流程图输出为外部格式。', operation: '从文件菜单选择导出并在后续对话框中选择格式。',
-    scope: '导出读取当前文档，不修改文档内容。', undoBoundary: '导出不进入撤销历史。', limits: '文件对话框与平台导出处理器由后续桌面接线提供。', docAnchor: 'user-guide#导出',
+    id: 'export', title: '导出', purpose: '将流程图输出为 SVG、PNG、PDF 或可重新打开的 JSON 图文件。', operation: '从「文件」菜单选择「导出」，设置页面范围、格式、文件名与保存位置后执行。',
+    scope: '导出读取当前文档快照，不修改文档内容、保存状态、撤销历史或 PNG 首选项。', undoBoundary: '导出不进入撤销历史。', limits: 'PNG 为栅格输出；PDF 页面内容为栅格，页面尺寸与安全链接注释仍按 pt 输出。', docAnchor: 'user-guide#导出',
   },
   {
     id: 'shortcuts', title: '快捷键列表', purpose: '集中查看编辑器键盘快捷键。', operation: '从帮助菜单选择快捷键列表。',

@@ -3,16 +3,19 @@
     type="button"
     class="quick-help"
     :data-help-id="helpId"
-    :aria-label="`${label}帮助`"
-    :title="`${label}帮助。查看目的、操作方式、影响范围、撤销边界与限制。`"
+    :aria-label="`${entry?.title ?? label}帮助`"
+    :title="entry ? `${entry.title}：${entry.purpose}` : `${label}帮助`"
     @click.stop="appStore.openHelp(helpId)"
   >?</button>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useAppStore } from '@/stores/app-store'
-defineProps<{ helpId: string; label: string }>()
+import { getFeatureHelp } from './feature-help-registry'
+const props = defineProps<{ helpId: string; label: string }>()
 const appStore = useAppStore()
+const entry = computed(() => getFeatureHelp(props.helpId))
 </script>
 
 <style scoped>

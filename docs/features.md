@@ -1,21 +1,20 @@
 # 功能文档
 
-> 本文档随实现更新：当前仅按需求追踪表 A 组 11 项建立章节骨架，各字段在对应功能任务落地后补全。
+本文按需求基线的 11 组功能记录当前实现。每组均给出真实入口、前置条件、结果、失败反馈、撤销边界、数据字段和自动化证据；未提供的能力会明确标为当前版本限制。
 
 ## 1. 文档与页面（新建/打开/保存/多页标签/页面设置）
 
 - 入口：文件菜单提供新建、打开、保存、另存为与最近文件；页面标签栏 `src/ui/pages/PageTabs.vue` 管理多页；启动发现恢复快照时显示恢复对话框。所有文件动作经 `FileWorkflowController` 协调 store/repository，Vue 不直接读写文件或调用 Tauri。
 - 前置条件：存在已打开文档（至少一页）；背景页引用目标必须是背景类型页面且不成循环。
 - 成功结果：新建/打开/关闭遇到脏文档时可保存、不保存或取消；文件选择取消保持当前文档。`.flowdiagram` 打开经 Rust 基础校验和 application 完整领域校验；保存使用同目录临时文件、fsync 与原子替换。显式保存只清理捕获 revision 对应的恢复 token；恢复文档以 dirty 状态载入并保留快照，直到显式保存成功。最近文件按置顶、最近顺序显示并受首选项数量限制。
-- 失败反馈：删除最后一页「至少保留一个页面。」；删除被引用为背景页的页面「该页面被引用为背景页，无法删除。」；重命名空名或纯空白「页面名称不能为空。」；背景页引用循环或指向非背景页「背景页设置无效。」；页面无图元时"自动调整大小"禁用（title 提示"页面无图元"）。
+- 失败反馈：删除最后一页提示「至少保留一个页面。」；删除被引用背景页提示「该页面被引用为背景页，无法删除。」；空白页名提示「页面名称不能为空。」；背景引用非法提示「背景页设置无效。」；非法文件显示具体中文校验错误且不替换当前文档；失效最近文件提示「最近文件不可用，已从列表移除。」；保存失败提示「无法保存，原文件未被覆盖。」；损坏恢复数据提示「恢复数据已损坏，已忽略。」。页面无图元时「自动调整大小」禁用并提示「页面无图元」。
 - 撤销边界：新建/删除/重命名页面各一条记录；页面设置一次"应用"一条记录（无变化不产生）；"自动调整大小"一条记录；切换页与分页符等视图开关不产生命令、不进入撤销历史。
 - 数据字段：图文件只保存 `DiagramDocument`；SQLite `flowchart-editor.db` 只保存 7 张本机元数据表：迁移版本、设置、最近文件、恢复快照、形状统计、窗口状态和用户模板。最近文件含 path/documentId/name/lastOpenedAt/pinned，恢复快照含 documentId/name/json/sourcePath/updatedAt，时间为 Unix 毫秒 UTC。应用契约见 `src/application/persistence/persistence-ports.ts`，SQLite 不保存用户图文件主体。
-- 失败反馈：非法文件显示具体中文校验错误且不替换当前文档；失效最近文件提示「最近文件不可用，已从列表移除。」；保存失败提示「无法保存，原文件未被覆盖。」；损坏恢复数据提示「恢复数据已损坏，已忽略。」。SQLite 元数据失败不改变已经成功的图文件保存。
 - 自动化测试位置：文件用例与自动恢复在 `tests/unit/editor/persistence/*`，保存点在 `tests/unit/stores/document-store.test.ts`，形状统计降级在 `tests/unit/editor/shapes/shape-usage-repository.test.ts`；Rust 原子文件、SQLite、迁移和 command 校验测试与实现同模块位于 `src-tauri/src/{persistence,commands}`。
 
 ## 2. 画布与视图（工作区/标尺/缩放/网格/状态栏）
 
-- 入口：应用主窗口中央画布区（`src/ui/canvas/CanvasArea.vue`，由 `src/App.vue` 经 AppShell 包裹渲染）；缩放/平移/适应入口为 Ctrl+滚轮、中键或 Space+左键拖拽（菜单与状态栏控件入口在后续任务接线）。
+- 入口：应用主窗口中央画布区 `src/ui/canvas/CanvasArea.vue`；Ctrl/Cmd+滚轮缩放，中键或 Space+左键拖拽平移；「视图」菜单提供「放大」「缩小」「适应屏幕」「适应页面」「适应内容」「适应选区」及标尺、网格、参考线、分页符开关，状态栏提供缩放比例、适应屏幕、网格和对齐开关。
 - 前置条件：存在已打开的文档页；页面单位 ∈ mm/cm/in/pt/px（默认 A4、mm）。
 - 成功结果：X6 画布按 cell-mapper 元数据渲染页面节点与边；顶部/左侧标尺随单位、缩放、平移实时换算，主刻度约 60–120 CSS px（1/2/5×10ⁿ 自适应，连续缩放极端值可达约 150）；Ctrl+滚轮以光标为锚缩放（10%–400% 钳制）；中键/Space+左键平移；适应窗口/页面/内容/选择使目标矩形在视口居中；网格开关控制 X6 点阵网格显示；100% 缩放 = 96 CSS px/in。
 - 失败反馈：视口操作为纯视图状态，无失败路径；空内容时"适应内容"不改变视口（由调用方回退到适应页面）。
@@ -95,13 +94,13 @@
 
 ## 9. 属性和数据（右侧面板/几何显示/业务数据）
 
-- 入口：实现后补全
-- 前置条件：实现后补全
-- 成功结果：实现后补全
-- 失败反馈：实现后补全
-- 撤销边界：实现后补全
-- 数据字段：实现后补全
-- 自动化测试位置：实现后补全（规划：`tests/component/RightPanel.test.ts`）
+- 入口：右侧面板的「属性」标签页 `src/ui/inspector/RightPanel.vue`；单节点时显示节点信息、几何、样式和文本，选中边时显示边属性，多选时显示可聚合的样式与文本字段。面板可折叠，窗口宽度小于 1100px 时以右侧浮层显示。
+- 前置条件：属性编辑要求当前页存在选择；未选择时显示「未选择图元」。几何区仅在恰好选择一个节点时显示；边属性区要求至少选择一条边。
+- 成功结果：类型和 ID 只读；名称、文本与链接失焦提交；X/Y/宽/高按当前页面单位显示，写入时换算回 pt；角度写入后规范化；节点与边样式支持多选聚合，「多个值」状态不会伪装成某个目标值。节点 `data` 字段能够随 `.flowdiagram` 校验、保存、打开和 JSON 导出往返。
+- 失败反馈：非数字几何输入不提交；宽高小于形状最小尺寸时按最小尺寸钳制；非法链接在面板显示「仅支持 http、https、mailto 链接。」且文档不变。当前版本**没有业务数据 JSON 编辑入口**，只能由合法图文件保留和往返该字段，不得将其描述为可视化编辑已完成。
+- 撤销边界：名称/内容、链接、移动、缩放、旋转、节点样式、边样式、文本样式和连接类型均按一次控件提交生成一条记录；展开/折叠区块、切换标签和收起面板不进入撤销历史。业务数据没有 UI 写入命令。
+- 数据字段：`DiagramNode` 的 id/shape/x/y/width/height/angle/zIndex/text/style/link/data/parentId/isContainer/imageHref，`DiagramEdge` 的 source/target/connector/vertices/labels/style/link/zIndex（`src/domain/diagram.ts`）；单位换算在 `src/domain/measurement.ts`；聚合在 `src/application/inspector/aggregate-style.ts`。
+- 自动化测试位置：`tests/component/RightPanel.test.ts`、`tests/component/PropertyTab.test.ts`、`tests/unit/editor/aggregate-style.test.ts`、`tests/unit/editor/aggregate-display.test.ts`、`tests/unit/domain/document-schema.test.ts`、`tests/unit/stores/document-store.test.ts`。
 
 ## 10. 发现与帮助（查找替换/右键菜单/tooltip/帮助注册表）
 

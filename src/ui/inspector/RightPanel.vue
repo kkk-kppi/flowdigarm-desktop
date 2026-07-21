@@ -58,7 +58,7 @@
         </div>
       </template>
       <div v-else class="panel-body">
-        <!-- 查找替换模式：Task 8 接入 -->
+        <!-- 查找替换模式由外壳注入，面板本身只负责布局。 -->
         <slot name="find" />
       </div>
     </aside>
@@ -69,7 +69,7 @@
 // 右侧面板（280px）：标题行（当前标题 + 关闭×）+ 属性/页面设置两标签。
 // 左侧边中点折叠按钮收起/展开整栏（app-store.rightPanelCollapsed，视图状态不入历史）；
 // 窄窗口（<1100px）浮层化（floating 类：absolute 右侧 + 阴影，可关闭）；
-// mode='find' 为 Task 8 查找替换预留状态位与插槽。
+// mode='find' 显示外壳注入的查找替换内容。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useAppStore } from '@/stores/app-store'
 import PageSetupTab from '@/ui/pages/PageSetupTab.vue'
