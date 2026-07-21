@@ -11,7 +11,7 @@ export class PageManager {
   private readonly histories = new Map<string, CommandHistory>()
   private readonly controllers = new Map<string, ViewportController>()
 
-  constructor(document: DiagramDocument) {
+  constructor(document: DiagramDocument, private defaultZoom = 1) {
     this.pageIds = new Set(document.pages.map((page) => page.id))
     this.activeId = document.pages[0]?.id ?? ''
   }
@@ -38,14 +38,19 @@ export class PageManager {
     return history
   }
 
-  /** 每页独立视口控制器（惰性创建，初始 zoom=1；pan 居中由 UI 首次 fit 决定）。 */
+  /** 每页独立视口控制器（惰性创建，初始 zoom 取持久化默认值；pan 居中由 UI 首次 fit 决定）。 */
   controllerFor(pageId: string): ViewportController {
     let controller = this.controllers.get(pageId)
     if (!controller) {
-      controller = new ViewportController()
+      controller = new ViewportController({ zoom: this.defaultZoom })
       this.controllers.set(pageId, controller)
     }
     return controller
+  }
+
+  /** 修改尚未访问页面创建视口时采用的初始缩放。 */
+  setDefaultZoom(zoom: number): void {
+    this.defaultZoom = zoom
   }
 
   /** 文档替换后对齐：清理已不存在页的栈/视口；活动页失效时回退第一页。 */

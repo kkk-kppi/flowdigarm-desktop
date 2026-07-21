@@ -1,7 +1,7 @@
 use std::fs;
 
 use flowchart_editor_lib::commands::image_commands::{
-    determine_image_kind, read_image_file, ImageKind,
+    determine_image_kind, read_image_bytes, read_image_file, ImageKind,
 };
 use image::{codecs::png::PngEncoder, ColorType, ImageEncoder};
 use tempfile::tempdir;
@@ -70,6 +70,17 @@ fn rejects_relative_and_oversized_paths_before_decode() {
     fs::write(&path, vec![0_u8; 5 * 1024 * 1024 + 1]).unwrap();
     assert_eq!(
         read_image_file(&path).unwrap_err(),
+        "图片过大，最大支持 5 MB。"
+    );
+}
+
+#[test]
+fn rejects_bytes_that_grow_past_the_limit_after_metadata_check() {
+    let mut bytes = valid_png();
+    bytes.resize(5 * 1024 * 1024 + 1, 0);
+
+    assert_eq!(
+        read_image_bytes(std::path::Path::new("grown.png"), bytes).unwrap_err(),
         "图片过大，最大支持 5 MB。"
     );
 }

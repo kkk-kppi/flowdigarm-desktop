@@ -6,55 +6,58 @@
       :inert="modalOpen ? true : undefined"
       :aria-hidden="modalOpen ? 'true' : undefined"
     >
-      <TitleBar
-        :file-name="fileName"
-        :dirty="documentStore.dirty"
-        @minimize="onWindowCommand('minimize')"
-        @maximize="onWindowCommand('maximize')"
-        @close="onWindowCommand('close')"
-      />
-      <MenuBar :menus="menus" @execute="onMenuExecute" />
-      <CompactToolbar />
-      <PageTabs />
-      <div class="shell-main" data-testid="shell-main">
-        <ElementLibrary @create-request="onCreateRequest" @more-shapes="onMoreShapes" />
-        <CanvasArea ref="canvasAreaRef" class="shell-canvas" :menu-controller="menuController" @viewport-change="onViewportChange" />
-        <RightPanel ref="rightPanelRef">
-          <template #find>
-            <FindReplaceTab
-              :controller="findController"
-              :current-page-id="documentStore.activePageId"
-              @back="appStore.showProperties()"
-              @help="appStore.openHelp($event)"
-            />
-          </template>
-        </RightPanel>
-        <div v-if="appStore.layerManagerOpen" class="layer-wrap">
-          <button type="button" class="layer-close" aria-label="关闭图层管理" title="关闭图层管理。返回完整画布空间。" @click="appStore.closeLayerManager()">×</button>
-          <LayerManager :controller="layerController" />
+      <template v-if="editorReady">
+        <TitleBar
+          :file-name="fileName"
+          :dirty="documentStore.dirty"
+          @minimize="onWindowCommand('minimize')"
+          @maximize="onWindowCommand('maximize')"
+          @close="onWindowCommand('close')"
+        />
+        <MenuBar :menus="menus" @execute="onMenuExecute" />
+        <CompactToolbar />
+        <PageTabs />
+        <div class="shell-main" data-testid="shell-main">
+          <ElementLibrary @create-request="onCreateRequest" @more-shapes="onMoreShapes" />
+          <CanvasArea ref="canvasAreaRef" class="shell-canvas" :menu-controller="menuController" @viewport-change="onViewportChange" />
+          <RightPanel ref="rightPanelRef">
+            <template #find>
+              <FindReplaceTab
+                :controller="findController"
+                :current-page-id="documentStore.activePageId"
+                @back="appStore.showProperties()"
+                @help="appStore.openHelp($event)"
+              />
+            </template>
+          </RightPanel>
+          <div v-if="appStore.layerManagerOpen" class="layer-wrap">
+            <button type="button" class="layer-close" aria-label="关闭图层管理" title="关闭图层管理。返回完整画布空间。" @click="appStore.closeLayerManager()">×</button>
+            <LayerManager :controller="layerController" />
+          </div>
         </div>
-      </div>
-      <StatusBar
-        :selected-count="selectionStore.count"
-        :anchor-x="anchorPosition?.x"
-        :anchor-y="anchorPosition?.y"
-        :page-index="pageIndex"
-        :page-count="documentStore.document.pages.length"
-        :zoom="viewport.zoom"
-        :dirty="documentStore.dirty"
-        @set-zoom="onSetZoom"
-      />
-      <FeatureHelp v-if="appStore.helpId" :help-id="appStore.helpId" :return-focus="helpReturnFocus" @close="closeHelp" />
+        <StatusBar
+          :selected-count="selectionStore.count"
+          :anchor-x="anchorPosition?.x"
+          :anchor-y="anchorPosition?.y"
+          :page-index="pageIndex"
+          :page-count="documentStore.document.pages.length"
+          :zoom="viewport.zoom"
+          :dirty="documentStore.dirty"
+          @set-zoom="onSetZoom"
+        />
+        <FeatureHelp v-if="appStore.helpId" :help-id="appStore.helpId" :return-focus="helpReturnFocus" @close="closeHelp" />
+      </template>
+      <div v-else class="startup-gate" data-testid="startup-gate" role="status">正在检查恢复数据…</div>
     </div>
     <ContainerMembershipPicker
-      v-if="containerPickerRequest"
+      v-if="editorReady && containerPickerRequest"
       :request="containerPickerRequest"
       :error="containerPickerError"
       @confirm="confirmContainerMembership"
       @cancel="cancelContainerMembership"
     />
     <UnsavedChangesDialog
-      v-if="unsavedRequest"
+      v-if="editorReady && unsavedRequest"
       :action="unsavedRequest.action"
       :return-focus="dialogReturnFocus"
       @choose="onUnsavedChoice"
@@ -66,7 +69,7 @@
       @discard="discardRecovery"
     />
     <PreferencesDialog
-      v-if="preferencesOpen"
+      v-if="editorReady && preferencesOpen"
       :model-value="currentPreferences"
       :return-focus="dialogReturnFocus"
       @apply="applyPreferences"
@@ -76,7 +79,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, nextTick, onMounted, provide, reactive, ref } from 'vue'
+import { computed, inject, nextTick, onMounted, provide, reactive, ref, watch } from 'vue'
 import CanvasArea from '@/ui/canvas/CanvasArea.vue'
 import CompactToolbar from '@/ui/toolbar/CompactToolbar.vue'
 import ElementLibrary from '@/ui/shapes/ElementLibrary.vue'
@@ -114,6 +117,7 @@ import { useSelectionStore } from '@/stores/selection-store'
 import { useFormatPaintStore } from '@/stores/format-paint-store'
 import { editorServicesKey } from '@/ui/services/editor-services'
 import type { EditorPreferences } from '@/application/settings/settings-controller'
+import type { RecoverySnapshot } from '@/application/persistence/persistence-ports'
 
 const emit = defineEmits<{
   fileCommand: [command: 'new' | 'open' | 'save' | 'saveAs' | 'recent' | 'export']
@@ -134,12 +138,14 @@ const containerPickerReturnFocus = ref<HTMLElement | null>(null)
 const containerPickerError = ref<string | undefined>()
 const fileBusy = ref(false)
 const recentDocuments = ref(services?.file.recentDocuments ?? [])
-const recoverySnapshot = ref(services?.recovery.pending ?? null)
+const recoverySnapshot = ref<RecoverySnapshot | null>(null)
+const startupComplete = ref(!services)
 const preferencesOpen = ref(false)
 const dialogReturnFocus = ref<HTMLElement | null>(null)
 const viewport = reactive<ViewportState>({ zoom: 1, panX: 0, panY: 0 })
 
 const unsavedRequest = computed(() => services?.unsaved.request.value ?? null)
+const editorReady = computed(() => startupComplete.value && recoverySnapshot.value === null)
 const modalOpen = computed(() => Boolean(
   containerPickerRequest.value || unsavedRequest.value || recoverySnapshot.value || preferencesOpen.value,
 ))
@@ -309,6 +315,7 @@ function onWindowCommand(command: 'minimize' | 'maximize' | 'close'): void {
 }
 
 function onMenuExecute(id: string, trigger: HTMLButtonElement | null): void {
+  if (!editorReady.value) return
   const recentMatch = /^file-recent-(\d+)$/.exec(id)
   if (recentMatch) {
     const recent = recentDocuments.value[Number(recentMatch[1])]
@@ -345,6 +352,7 @@ async function runImageImport(request: MenuInvocation): Promise<void> {
 }
 
 function openPreferences(request: MenuInvocation): void {
+  if (!editorReady.value) return
   if (!services) {
     documentStore.setNotice('桌面服务不可用。')
     return
@@ -355,6 +363,7 @@ function openPreferences(request: MenuInvocation): void {
 
 function closePreferences(): void {
   preferencesOpen.value = false
+  void nextTick(() => { dialogReturnFocus.value = null })
 }
 
 async function applyPreferences(settings: EditorPreferences): Promise<void> {
@@ -362,6 +371,7 @@ async function applyPreferences(settings: EditorPreferences): Promise<void> {
   fileBusy.value = true
   try {
     await services.settings.apply(settings)
+    documentStore.configureDefaults(settings)
     recentDocuments.value = await services.file.loadRecent(settings.recentLimit)
     closePreferences()
   } finally {
@@ -382,6 +392,14 @@ async function discardRecovery(): Promise<void> {
   await services.recovery.discard()
   recoverySnapshot.value = services.recovery.pending
 }
+
+watch(unsavedRequest, (request, previous) => {
+  if (request && !previous && !dialogReturnFocus.value?.isConnected) {
+    dialogReturnFocus.value = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  } else if (!request && previous) {
+    void nextTick(() => { dialogReturnFocus.value = null })
+  }
+})
 
 function openHelp(helpId: string, request: MenuInvocation): void {
   helpReturnFocus.value = request.trigger?.isConnected ? request.trigger : null
@@ -431,9 +449,16 @@ function onViewportChange(state: ViewportState): void {
 
 onMounted(async () => {
   if (!services) return
-  await services.settings.load()
-  recentDocuments.value = await services.file.loadRecent(appStore.recentLimit)
-  recoverySnapshot.value = await services.recovery.checkStartup()
+  try {
+    const settings = await services.settings.load()
+    documentStore.configureDefaults(settings)
+    recentDocuments.value = await services.file.loadRecent(appStore.recentLimit)
+    recoverySnapshot.value = await services.recovery.checkStartup()
+  } catch {
+    documentStore.setNotice('启动检查失败，已使用安全默认设置。')
+  } finally {
+    startupComplete.value = true
+  }
 })
 </script>
 
@@ -454,6 +479,8 @@ onMounted(async () => {
   flex-direction: column;
   min-height: 0;
 }
+
+.startup-gate { display: grid; flex: 1; place-items: center; color: var(--color-text-secondary); }
 
 .shell-main {
   display: flex;

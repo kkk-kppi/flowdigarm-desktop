@@ -71,12 +71,16 @@ describe('RecoveryDialog', () => {
     expect(wrapper.emitted('restore')).toHaveLength(1)
   })
 
-  it('requires a second explicit action before discarding', async () => {
-    const wrapper = mount(RecoveryDialog, { props: { snapshot } })
+  it('requires a second explicit action before discarding and focuses that confirmation', async () => {
+    const wrapper = mount(RecoveryDialog, { attachTo: document.body, props: { snapshot } })
     await wrapper.find('[data-testid="recovery-discard"]').trigger('click')
+    await nextTick()
     expect(wrapper.emitted('discard')).toBeUndefined()
     expect(wrapper.text()).toContain('确认丢弃')
-    await wrapper.find('[data-testid="recovery-confirm-discard"]').trigger('click')
+    const confirm = wrapper.find<HTMLButtonElement>('[data-testid="recovery-confirm-discard"]')
+    expect(document.activeElement).toBe(confirm.element)
+    await confirm.trigger('click')
     expect(wrapper.emitted('discard')).toHaveLength(1)
+    wrapper.unmount()
   })
 })

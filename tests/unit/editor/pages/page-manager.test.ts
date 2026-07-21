@@ -57,6 +57,12 @@ describe('PageManager', () => {
     expect(manager.controllerFor('page-a')).toBe(controller)
   })
 
+  it('uses the configured default zoom for every lazily-created page viewport', () => {
+    const manager = new PageManager(twoPageDocument(), 1.75)
+    expect(manager.controllerFor('page-a').state.zoom).toBe(1.75)
+    expect(manager.controllerFor('page-b').state.zoom).toBe(1.75)
+  })
+
   it('syncFromDocument 清理已不存在页的命令栈与视口', () => {
     const document = twoPageDocument()
     const manager = new PageManager(document)

@@ -2,7 +2,7 @@
 // 纯谓词与只读结构检查，全部导出；不写文件、不依赖形状注册表。
 
 import type { DiagramDocument, DiagramPage } from './diagram'
-import { MAX_PT } from './limits'
+import { MAX_IMAGE_BYTES, MAX_PT } from './limits'
 
 export function isFiniteNumber(v: unknown): v is number {
   return typeof v === 'number' && Number.isFinite(v)
@@ -36,6 +36,16 @@ export function isAllowedHyperlinkProtocol(url: string): boolean {
   } catch {
     return false
   }
+}
+
+/** 图片仅允许受控 data URL 或与普通超链接相同的安全协议。 */
+export function isValidImageHref(href: unknown): href is string {
+  if (typeof href !== 'string') return false
+  if (!href.startsWith('data:')) return isAllowedHyperlinkProtocol(href)
+  const match = /^data:image\/(?:png|jpeg|webp);base64,([a-z0-9+/=\s]*)$/i.exec(href)
+  if (!match) return false
+  const payload = match[1].replace(/\s/g, '')
+  return Math.floor((payload.length * 3) / 4) <= MAX_IMAGE_BYTES
 }
 
 /** 收集全文档（页/节点/边）中重复出现的 id。 */

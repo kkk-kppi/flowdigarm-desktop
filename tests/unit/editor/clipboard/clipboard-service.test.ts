@@ -66,6 +66,13 @@ describe('copyCells', () => {
     expect(page.nodes[0].x).toBe(10)
     expect(page.edges[0].vertices[0].x).toBe(60)
   })
+
+  it('drops a parent reference when its container is outside the copied node set', () => {
+    const page = 测试页()
+    page.nodes[0].parentId = 'node-3'
+    expect(copyCells(page, ['node-1']).nodes[0].parentId).toBeUndefined()
+    expect(page.nodes[0].parentId).toBe('node-3')
+  })
 })
 
 describe('createPasteCommand', () => {

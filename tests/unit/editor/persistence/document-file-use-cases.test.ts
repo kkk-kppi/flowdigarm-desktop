@@ -2,6 +2,7 @@ import { createEmptyDocument, type DiagramDocument } from '@/domain/diagram'
 import { serializeDiagramDocument } from '@/domain/document-schema'
 import type { DiagramFileRepository } from '@/application/persistence/persistence-ports'
 import { openDiagram, openRecentDiagram, saveDiagram } from '@/application/persistence/document-file-use-cases'
+import { DiagramFileError } from '@/application/persistence/file-errors'
 
 function validDocument(): DiagramDocument {
   const document = createEmptyDocument('审批流程')
@@ -60,6 +61,15 @@ describe('document file use cases', () => {
   it('openRecentDiagram 复用同一解析流程', async () => {
     const result = await openRecentDiagram(repository(), 'C:/docs/recent.flowdiagram')
     expect(result).toMatchObject({ ok: true, path: 'C:/docs/recent.flowdiagram' })
+  })
+
+  it('preserves structured repository failure messages', async () => {
+    await expect(openRecentDiagram(repository({
+      read: async () => { throw new DiagramFileError('permission') },
+    }), 'C:/docs/protected.flowdiagram')).resolves.toEqual({
+      ok: false,
+      error: '没有权限读取该文件。',
+    })
   })
 
   it('saveDiagram 序列化文档并传递已有路径与建议名称', async () => {

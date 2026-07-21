@@ -73,7 +73,10 @@ const recoveryController = new RecoveryController(
 )
 const settingsController = new SettingsController(
   {
-    applyPreferences: (settings) => appStore.applyPreferences(settings),
+    applyPreferences: (settings) => {
+      appStore.applyPreferences(settings)
+      documentStore.configureDefaults(settings)
+    },
     setNotice: (message) => documentStore.setNotice(message),
   },
   tauriSettingsRepository,

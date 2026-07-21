@@ -1,6 +1,7 @@
 import { parseDiagramDocument, serializeDiagramDocument } from '@/domain/document-schema'
 import type { DiagramDocument } from '@/domain/diagram'
 import type { DiagramFileRepository } from './persistence-ports'
+import { normalizeDiagramFileError } from './file-errors'
 
 export type OpenDiagramResult =
   | { ok: true; path: string; document: DiagramDocument; warnings: string[] }
@@ -20,8 +21,8 @@ export async function openDiagram(repository: DiagramFileRepository): Promise<Op
   try {
     const selected = await repository.open()
     return selected ? parseOpenedDiagram(selected) : null
-  } catch {
-    return { ok: false, error: '无法打开文件。' }
+  } catch (error) {
+    return { ok: false, error: normalizeDiagramFileError(error).message }
   }
 }
 
@@ -31,8 +32,8 @@ export async function openRecentDiagram(
 ): Promise<OpenDiagramResult> {
   try {
     return parseOpenedDiagram(await repository.read(path))
-  } catch {
-    return { ok: false, error: '无法打开文件。' }
+  } catch (error) {
+    return { ok: false, error: normalizeDiagramFileError(error).message }
   }
 }
 
@@ -61,8 +62,8 @@ export async function saveDiagramSnapshot(
     return savedPath
       ? { ok: true, path: savedPath }
       : { ok: false, error: '已取消保存。' }
-  } catch {
-    return { ok: false, error: '无法保存，原文件未被覆盖。' }
+  } catch (error) {
+    return { ok: false, error: normalizeDiagramFileError(error, 'save').message }
   }
 }
 

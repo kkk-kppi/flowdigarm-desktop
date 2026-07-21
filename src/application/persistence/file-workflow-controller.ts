@@ -6,6 +6,7 @@ import type {
   RecentDocument,
   RecentDocumentRepository,
 } from './persistence-ports'
+import { normalizeDiagramFileError } from './file-errors'
 
 export interface FileWorkflowStore {
   document: DiagramDocument
@@ -51,8 +52,8 @@ export class FileWorkflowController {
       let opened: { path: string; json: string } | null
       try {
         opened = await this.files.open()
-      } catch {
-        this.ui.showError('无法打开文件。')
+      } catch (error) {
+        this.ui.showError(normalizeDiagramFileError(error).message)
         return false
       }
       if (!opened) return false
@@ -66,14 +67,19 @@ export class FileWorkflowController {
       let opened: { path: string; json: string }
       try {
         opened = await this.files.read(path)
-      } catch {
-        try {
-          await this.recents.remove(path)
-        } catch {
-          // A stale recent entry must not block the current document.
+      } catch (error) {
+        const fileError = normalizeDiagramFileError(error)
+        if (fileError.code === 'not-found') {
+          try {
+            await this.recents.remove(path)
+          } catch {
+            // A stale recent entry must not block the current document.
+          }
+          this.recentDocuments = this.recentDocuments.filter((recent) => recent.path !== path)
+          this.ui.showError('文件不存在或已被移动，已从最近文件中移除。')
+        } else {
+          this.ui.showError(fileError.message)
         }
-        this.recentDocuments = this.recentDocuments.filter((recent) => recent.path !== path)
-        this.ui.showError('最近文件不可用，已从列表移除。')
         return false
       }
       const parsed = parseDiagramDocument(opened.json)

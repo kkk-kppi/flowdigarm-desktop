@@ -26,7 +26,11 @@ export function copyCells(page: DiagramPage, ids: string[]): ClipboardPayload {
   const edges = page.edges.filter(
     (edge) => copiedNodeIds.has(edge.source.nodeId) && copiedNodeIds.has(edge.target.nodeId),
   )
-  return structuredClone({ nodes, edges })
+  const payload = structuredClone({ nodes, edges })
+  for (const node of payload.nodes) {
+    if (node.parentId !== undefined && !copiedNodeIds.has(node.parentId)) delete node.parentId
+  }
+  return payload
 }
 
 /**

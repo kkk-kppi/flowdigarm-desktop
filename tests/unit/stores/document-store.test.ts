@@ -101,6 +101,17 @@ describe('document-store', () => {
     expect(store.dirty).toBe(false)
   })
 
+  it('applies persisted defaults to the untouched document and all future new documents and viewports', () => {
+    const store = useDocumentStore()
+    store.configureDefaults({ defaultPageUnit: 'in', defaultConnector: 'curved', defaultZoom: 1.75 })
+
+    expect(store.activePage).toMatchObject({ unit: 'in', defaultConnector: 'curved' })
+    expect(store.pageManager.controllerFor(store.activePageId).state.zoom).toBe(1.75)
+    store.newDocument()
+    expect(store.activePage).toMatchObject({ unit: 'in', defaultConnector: 'curved' })
+    expect(store.pageManager.controllerFor(store.activePageId).state.zoom).toBe(1.75)
+  })
+
   it('new/load/replace 即使文档 ID 相同也单调递增 documentEpoch', () => {
     const store = useDocumentStore()
     const initialEpoch = store.documentEpoch

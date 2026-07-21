@@ -11,6 +11,7 @@ import {
   type FileWorkflowStore,
   type FileWorkflowUi,
 } from '@/application/persistence/file-workflow-controller'
+import { DiagramFileError } from '@/application/persistence/file-errors'
 
 function document(name: string): DiagramDocument {
   const value = createEmptyDocument(name)
@@ -103,13 +104,13 @@ describe('FileWorkflowController', () => {
     expect(target.document).toBe(before)
   })
 
-  it('opens valid files but reports the specific parse error without changing invalid files', async () => {
+  it('opens valid files but preserves a real adapter validation rejection without changing documents', async () => {
     const target = store(false)
     const feedback = ui()
     const repository = files({
       open: vi.fn()
         .mockResolvedValueOnce({ path: 'C:/valid.flowdiagram', json: serializeDiagramDocument(document('已打开')) })
-        .mockResolvedValueOnce({ path: 'C:/bad.flowdiagram', json: '{"schemaVersion":0}' }),
+        .mockRejectedValueOnce(new DiagramFileError('invalid')),
     })
     const controller = new FileWorkflowController(target, persistence(), repository, recents(), feedback)
 
@@ -121,38 +122,42 @@ describe('FileWorkflowController', () => {
     expect(feedback.errors).toEqual(['文件格式无效，未打开文件。'])
   })
 
-  it('removes an unavailable recent item and keeps the current document', async () => {
+  it('removes only a not-found recent item and keeps the current document', async () => {
     const target = store(false)
     const recentRepository = recents()
     const feedback = ui()
     const controller = new FileWorkflowController(
       target,
       persistence(),
-      files({ read: async () => { throw new Error('missing') } }),
+      files({ read: async () => { throw new DiagramFileError('not-found') } }),
       recentRepository,
       feedback,
     )
 
     await expect(controller.openRecent('C:/missing.flowdiagram')).resolves.toBe(false)
     expect(recentRepository.removed).toEqual(['C:/missing.flowdiagram'])
-    expect(feedback.errors).toEqual(['最近文件不可用，已从列表移除。'])
+    expect(feedback.errors).toEqual(['文件不存在或已被移动，已从最近文件中移除。'])
   })
 
-  it('reports a specific validation error without removing an existing invalid recent file', async () => {
-    const target = store(false)
+  it.each([
+    ['invalid', '文件格式无效，未打开文件。'],
+    ['too-large', '文件过大，最大支持 20 MB。'],
+    ['permission', '没有权限读取该文件。'],
+    ['io', '无法读取文件。'],
+  ] as const)('keeps recent entries for %s adapter failures and displays the stable message', async (code, message) => {
     const recentRepository = recents()
     const feedback = ui()
     const controller = new FileWorkflowController(
-      target,
+      store(false),
       persistence(),
-      files({ read: async (path) => ({ path, json: '{"schemaVersion":0}' }) }),
+      files({ read: async () => { throw new DiagramFileError(code) } }),
       recentRepository,
       feedback,
     )
 
-    await expect(controller.openRecent('C:/invalid.flowdiagram')).resolves.toBe(false)
+    await expect(controller.openRecent(`C:/${code}.flowdiagram`)).resolves.toBe(false)
     expect(recentRepository.removed).toEqual([])
-    expect(feedback.errors).toEqual(['文件格式无效，未打开文件。'])
+    expect(feedback.errors).toEqual([message])
   })
 
   it('uses save and saveAs independently and treats picker cancellation as non-error', async () => {

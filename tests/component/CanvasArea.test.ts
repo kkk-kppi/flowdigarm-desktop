@@ -120,6 +120,24 @@ describe('CanvasArea 超链接点击', () => {
     wrapper.unmount()
   })
 
+  it('Ctrl/Cmd+V invokes the async system-aware paste workflow before reporting an empty clipboard', async () => {
+    const { wrapper, documentStore } = mountCanvas('https://example.com')
+    const read = vi.fn(async () => ({
+      nodes: [structuredClone(documentStore.activePage!.nodes[0])],
+      edges: [],
+    }))
+    documentStore.clipboard = null
+    documentStore.setSystemClipboard({ write: async () => {}, read })
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true, cancelable: true }))
+    expect(documentStore.lastNotice).not.toBe('剪贴板为空。')
+    await flushPromises()
+
+    expect(read).toHaveBeenCalledOnce()
+    expect(documentStore.activePage!.nodes).toHaveLength(4)
+    wrapper.unmount()
+  })
+
   it('exposes typed text-edit and locate interactions', async () => {
     const { wrapper, selectionStore } = mountCanvas('https://example.com')
     const canvas = wrapper.vm as unknown as CanvasController

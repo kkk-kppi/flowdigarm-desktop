@@ -8,6 +8,7 @@ import type {
 } from '@/application/persistence/persistence-ports'
 import type { ImageReadResult, ImageRepository } from '@/application/images/image-import'
 import type { DesktopPlatform } from './desktop-platform'
+import { DiagramFileError, normalizeDiagramFileError } from '@/application/persistence/file-errors'
 
 const diagramFilter = [{ name: '流程图文件 (*.flowdiagram)', extensions: ['flowdiagram'] }]
 const imageFilter = [{ name: '图片文件', extensions: ['png', 'jpg', 'jpeg', 'webp'] }]
@@ -20,24 +21,51 @@ export function normalizeDiagramSavePath(path: string): string {
   throw new Error('只能保存为 .flowdiagram 文件。')
 }
 
-export const tauriDiagramFileRepository: DiagramFileRepository = {
-  async open() {
-    const path = await open({ multiple: false, directory: false, filters: diagramFilter })
-    if (!path) return null
-    return { path, json: await invoke<string>('read_diagram', { path }) }
-  },
-  async read(path) {
-    return { path, json: await invoke<string>('read_diagram', { path }) }
-  },
-  async save(input) {
-    let path = input.path
-    if (!path) {
-      path = await save({ defaultPath: input.suggestedName, filters: diagramFilter }) ?? undefined
-    }
-    if (!path) return null
-    path = normalizeDiagramSavePath(path)
-    return invoke<string>('save_diagram', { path, documentJson: input.json })
-  },
+type InvokeCommand = <T>(command: string, args?: Record<string, unknown>) => Promise<T>
+
+export function createTauriDiagramFileRepository(invokeCommand: InvokeCommand = invoke): DiagramFileRepository {
+  return {
+    async open() {
+      let path: string | null
+      try {
+        path = await open({ multiple: false, directory: false, filters: diagramFilter })
+      } catch (error) {
+        throw normalizeDiagramFileError(error)
+      }
+      if (!path) return null
+      return { path, json: await invokeDiagramRead(path, invokeCommand) }
+    },
+    async read(path) {
+      return { path, json: await invokeDiagramRead(path, invokeCommand) }
+    },
+    async save(input) {
+      let path = input.path
+      if (!path) {
+        path = await save({ defaultPath: input.suggestedName, filters: diagramFilter }) ?? undefined
+      }
+      if (!path) return null
+      try {
+        path = normalizeDiagramSavePath(path)
+      } catch (error) {
+        throw new DiagramFileError('invalid', 'save', error instanceof Error ? error.message : undefined)
+      }
+      try {
+        return await invokeCommand<string>('save_diagram', { path, documentJson: input.json })
+      } catch (error) {
+        throw normalizeDiagramFileError(error, 'save')
+      }
+    },
+  }
+}
+
+export const tauriDiagramFileRepository = createTauriDiagramFileRepository()
+
+async function invokeDiagramRead(path: string, invokeCommand: InvokeCommand): Promise<string> {
+  try {
+    return await invokeCommand<string>('read_diagram', { path })
+  } catch (error) {
+    throw normalizeDiagramFileError(error)
+  }
 }
 
 export const tauriRecoveryRepository: RecoveryRepository = {

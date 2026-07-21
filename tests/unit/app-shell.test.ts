@@ -11,6 +11,8 @@ import { useFormatPaintStore } from '@/stores/format-paint-store'
 import { createTestDocument } from '../helpers/test-document'
 import { editorServicesKey, type EditorServices } from '@/ui/services/editor-services'
 import { DEFAULT_EDITOR_PREFERENCES } from '@/application/settings/settings-controller'
+import type { EditorPreferences } from '@/application/settings/settings-controller'
+import type { RecoverySnapshot } from '@/application/persistence/persistence-ports'
 
 const canvasCalls = {
   editNodeText: vi.fn(),
@@ -106,10 +108,11 @@ function fakeServices(overrides: Partial<EditorServices> = {}): EditorServices {
   return services
 }
 
-function mountShellWithServices(services: EditorServices) {
+function mountShellWithServices(services: EditorServices, attachToBody = false) {
   setActivePinia(createPinia())
   useDocumentStore().newDocument()
   return mount(AppShell, {
+    ...(attachToBody ? { attachTo: document.body } : {}),
     global: {
       provide: { [editorServicesKey as symbol]: services },
       stubs: { CanvasArea: CanvasAreaStub },
@@ -227,6 +230,71 @@ describe('AppShell 组装', () => {
     await wrapper.find('[data-testid="recovery-restore"]').trigger('click')
     expect(services.recovery.restore).toHaveBeenCalledOnce()
     expect(wrapper.find('[aria-labelledby="recovery-title"]').exists()).toBe(false)
+  })
+
+  it('keeps the editor inaccessible until delayed settings and recovery complete, then requires a recovery decision', async () => {
+    let resolveSettings!: (settings: EditorPreferences) => void
+    let resolveRecovery!: (snapshot: RecoverySnapshot | null) => void
+    const snapshot = {
+      documentId: 'doc-r', versionToken: '1:2', name: '恢复流程', json: '{}', updatedAt: 10,
+    }
+    const services = fakeServices({
+      settings: {
+        load: vi.fn(() => new Promise<EditorPreferences>((resolve) => { resolveSettings = resolve })),
+        apply: vi.fn(async () => {}),
+      },
+      recovery: {
+        pending: null,
+        checkStartup: vi.fn(() => new Promise<RecoverySnapshot | null>((resolve) => { resolveRecovery = resolve })),
+        restore: vi.fn(() => true),
+        discard: vi.fn(async () => {}),
+      },
+    })
+    const wrapper = mountShellWithServices(services)
+
+    expect(wrapper.find('[data-testid="canvas-area-stub"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="menubar"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-labelledby="preferences-title"]').exists()).toBe(false)
+    resolveSettings({ ...DEFAULT_EDITOR_PREFERENCES, defaultZoom: 1.75, defaultPageUnit: 'in', defaultConnector: 'curved' })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="canvas-area-stub"]').exists()).toBe(false)
+
+    resolveRecovery(snapshot)
+    await flushPromises()
+    expect(wrapper.findAll('[role="dialog"]')).toHaveLength(1)
+    expect(wrapper.find('[aria-labelledby="recovery-title"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="canvas-area-stub"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="menubar"]').exists()).toBe(false)
+
+    await wrapper.find('[data-testid="recovery-restore"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="canvas-area-stub"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="menubar"]').exists()).toBe(true)
+    expect(useDocumentStore().activePage).toMatchObject({ unit: 'in', defaultConnector: 'curved' })
+    expect(useDocumentStore().pageManager.controllerFor(useDocumentStore().activePageId).state.zoom).toBe(1.75)
+  })
+
+  it('captures a fresh focus target for an unsaved dialog after another shared dialog closes', async () => {
+    const services = fakeServices()
+    const wrapper = mountShellWithServices(services, true)
+    await flushPromises()
+    await wrapper.find('[data-menu-id="tools"]').trigger('click')
+    await wrapper.find('[data-command-id="tool-preferences"]').trigger('click')
+    await wrapper.find('[aria-labelledby="preferences-title"]').trigger('keydown', { key: 'Escape' })
+    await flushPromises()
+
+    const nativeCloseOrigin = document.createElement('button')
+    document.body.append(nativeCloseOrigin)
+    nativeCloseOrigin.focus()
+    services.unsaved.request.value = { action: 'close' }
+    await flushPromises()
+    await wrapper.find('[data-testid="unsaved-cancel"]').trigger('click')
+    services.unsaved.request.value = null
+    await flushPromises()
+
+    expect(document.activeElement).toBe(nativeCloseOrigin)
+    nativeCloseOrigin.remove()
+    wrapper.unmount()
   })
 
   it('accepts viewport snapshots from CanvasArea without reassigning reactive state', async () => {

@@ -3,12 +3,13 @@
 
 import type { DiagramDocument, DiagramEdge, DiagramNode, DiagramPage } from './diagram'
 import { CURRENT_SCHEMA_VERSION, createEmptyPage } from './diagram'
-import { MAX_EDGES_PER_PAGE, MAX_IMAGE_BYTES, MAX_NODES_PER_PAGE, MAX_TEXT_LENGTH } from './limits'
+import { MAX_EDGES_PER_PAGE, MAX_NODES_PER_PAGE, MAX_TEXT_LENGTH } from './limits'
 import {
   collectDuplicateIds,
   findBackgroundPageCycle,
   isAllowedHyperlinkProtocol,
   isFiniteNumber,
+  isValidImageHref,
   isValidColor,
   isValidPtLength,
   isValidPtPosition,
@@ -247,20 +248,4 @@ function validateEdge(
     }
   }
   return null
-}
-
-/** data URL 解码后大小 ≤ MAX_IMAGE_BYTES，或为安全 URL（http/https/mailto）。 */
-function isValidImageHref(href: unknown): boolean {
-  if (typeof href !== 'string') return false
-  if (href.startsWith('data:')) {
-    const commaIndex = href.indexOf(',')
-    if (commaIndex === -1) return false
-    const metadata = href.slice(0, commaIndex)
-    const payload = href.slice(commaIndex + 1)
-    const byteLength = metadata.includes(';base64')
-      ? Math.floor((payload.replace(/\s/g, '').length * 3) / 4)
-      : payload.length
-    return byteLength <= MAX_IMAGE_BYTES
-  }
-  return isAllowedHyperlinkProtocol(href)
 }

@@ -7,7 +7,7 @@ use serde_json::Value;
 use tauri::State;
 
 use crate::persistence::{
-    atomic_file::atomic_write,
+    atomic_file::{atomic_write, AtomicFileError},
     sqlite_repository::{
         unix_millis, PersistenceState, RecentDocument, RecoverySnapshot, RecoverySnapshotWrite,
         RepositoryError, ShapeUsage, SqliteRepository, DATABASE_UNAVAILABLE,
@@ -17,6 +17,18 @@ use crate::persistence::{
 const MAX_DOCUMENT_BYTES: usize = 20 * 1024 * 1024;
 const INVALID_FILE: &str = "文件格式无效，未打开文件。";
 const INVALID_PATH: &str = "文件路径无效。";
+const FILE_NOT_FOUND: &str = "文件不存在或已被移动。";
+const FILE_TOO_LARGE: &str = "文件过大，最大支持 20 MB。";
+const READ_PERMISSION_DENIED: &str = "没有权限读取该文件。";
+const SAVE_PERMISSION_DENIED: &str = "没有权限保存到该位置。";
+
+fn map_read_error(error: std::io::Error) -> String {
+    match error.kind() {
+        std::io::ErrorKind::NotFound => FILE_NOT_FOUND.to_owned(),
+        std::io::ErrorKind::PermissionDenied => READ_PERMISSION_DENIED.to_owned(),
+        _ => "无法读取文件。".to_owned(),
+    }
+}
 
 fn validate_document_json(document_json: &str) -> Result<Value, String> {
     if document_json.len() > MAX_DOCUMENT_BYTES {
@@ -53,11 +65,14 @@ fn normalize_save_path(path: &Path) -> Result<PathBuf, String> {
 
 fn read_diagram_file(path: &Path) -> Result<String, String> {
     validate_read_path(path)?;
-    let metadata = fs::metadata(path).map_err(|_| "无法读取文件。".to_owned())?;
+    let metadata = fs::metadata(path).map_err(map_read_error)?;
     if metadata.len() > MAX_DOCUMENT_BYTES as u64 {
-        return Err(INVALID_FILE.into());
+        return Err(FILE_TOO_LARGE.into());
     }
-    let bytes = fs::read(path).map_err(|_| "无法读取文件。".to_owned())?;
+    let bytes = fs::read(path).map_err(map_read_error)?;
+    if bytes.len() > MAX_DOCUMENT_BYTES {
+        return Err(FILE_TOO_LARGE.into());
+    }
     let text = String::from_utf8(bytes).map_err(|_| INVALID_FILE.to_owned())?;
     validate_document_json(&text)?;
     Ok(text)
@@ -66,7 +81,12 @@ fn read_diagram_file(path: &Path) -> Result<String, String> {
 fn save_diagram_file(path: &Path, document_json: &str) -> Result<PathBuf, String> {
     validate_document_json(document_json)?;
     let path = normalize_save_path(path)?;
-    atomic_write(&path, document_json.as_bytes()).map_err(|error| error.to_string())?;
+    atomic_write(&path, document_json.as_bytes()).map_err(|error| match error {
+        AtomicFileError::Io(source) if source.kind() == std::io::ErrorKind::PermissionDenied => {
+            SAVE_PERMISSION_DENIED.to_owned()
+        }
+        _ => "无法保存，原文件未被覆盖。".to_owned(),
+    })?;
     Ok(path)
 }
 
@@ -315,6 +335,10 @@ mod tests {
     fn reads_utf8_json_and_rejects_oversized_or_invalid_files() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("valid.flowdiagram");
+        assert_eq!(
+            read_diagram_file(&dir.path().join("missing.flowdiagram")).unwrap_err(),
+            "文件不存在或已被移动。"
+        );
         fs::write(&path, VALID).unwrap();
         assert_eq!(read_diagram_file(&path).unwrap(), VALID);
         fs::write(&path, [0xff, 0xfe]).unwrap();
@@ -325,7 +349,7 @@ mod tests {
         fs::write(&path, vec![b' '; 20 * 1024 * 1024 + 1]).unwrap();
         assert_eq!(
             read_diagram_file(&path).unwrap_err(),
-            "文件格式无效，未打开文件。"
+            "文件过大，最大支持 20 MB。"
         );
     }
 

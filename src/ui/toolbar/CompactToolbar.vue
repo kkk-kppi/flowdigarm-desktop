@@ -50,8 +50,8 @@
       <button
         type="button"
         data-testid="tb-paste"
-        :disabled="!documentStore.clipboard"
-        title="粘贴（Ctrl+V）：粘贴应用内剪贴板内容（逐次偏移 12pt）"
+        :disabled="!documentStore.canPaste"
+        title="粘贴（Ctrl+V）：优先粘贴应用内内容，否则读取系统剪贴板"
         aria-label="粘贴"
         @click="documentStore.pasteClipboard()"
       >

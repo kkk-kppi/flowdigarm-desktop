@@ -78,6 +78,13 @@ pub fn read_image_file(path: &Path) -> Result<ImageRead, String> {
         return Err("图片过大，最大支持 5 MB。".to_owned());
     }
     let bytes = fs::read(path).map_err(|_| "无法读取图片。".to_owned())?;
+    read_image_bytes(path, bytes)
+}
+
+pub fn read_image_bytes(path: &Path, bytes: Vec<u8>) -> Result<ImageRead, String> {
+    if bytes.len() as u64 > MAX_IMAGE_BYTES {
+        return Err("图片过大，最大支持 5 MB。".to_owned());
+    }
     let kind = determine_image_kind(path, &bytes)?;
     let decoded = image::load_from_memory_with_format(&bytes, kind.image_format())
         .map_err(|_| UNSUPPORTED_IMAGE.to_owned())?;

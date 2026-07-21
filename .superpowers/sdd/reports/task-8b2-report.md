@@ -58,3 +58,20 @@ Implemented file UX, recent files, guarded close, startup recovery, ten persiste
 
 - Vite reports the existing large-chunk warning (`~868 kB` main JS, `~257 kB` gzip); build succeeds and code splitting is outside Task 8b2.
 - Native dialogs/window commands are covered at port/adapter/config boundaries; no packaged cross-platform GUI smoke test was requested or run.
+
+## Findings Remediation (2026-07-21)
+
+- Startup now withholds all editor controls and global canvas shortcuts until settings and recovery lookup finish; a pending recovery decision is the sole rendered dialog and restore/discard releases the gate.
+- System clipboard input now validates the complete node/edge/text/style/label schema, UUID uniqueness and references, geometry, counts, text/image limits, and URL protocols before updating the in-app fallback.
+- Tauri file failures map to structured `not-found`/`invalid`/`too-large`/`permission`/`io` application errors with stable Chinese messages; recent entries are removed only for `not-found`.
+- Canvas keyboard paste and toolbar/menu paste share the async store workflow, which uses local data first and only then reads and validates the system clipboard.
+- Persisted unit, connector, and zoom defaults now apply to the untouched initial document, future documents, and lazily created per-page viewports.
+- Recovery discard confirmation receives focus after its DOM swap; shared dialog return focus is cleared and recaptured for unsaved close flows.
+- Image bytes are checked again after reading and before type detection, decoding, or data URL encoding.
+
+## Findings Verification
+
+- Focused workflow/recovery/clipboard/settings/store/CanvasArea/dialog/platform matrix: `13 passed` files, `153 passed` tests.
+- Full TypeScript: `pnpm test` -> `92 passed` files, `797 passed` tests.
+- Full Rust: `cargo test --manifest-path src-tauri/Cargo.toml` -> `33` library + `4` image integration tests passed.
+- Build/typecheck: `pnpm build` succeeded; the existing ~873 kB chunk-size warning remains non-blocking.

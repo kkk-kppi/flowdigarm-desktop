@@ -416,11 +416,7 @@ function onWindowKeyDown(event: KeyboardEvent): void {
     event.preventDefault()
   } else if (key === 'v') {
     event.preventDefault()
-    if (documentStore.clipboard) {
-      documentStore.pasteClipboard()
-    } else {
-      documentStore.setNotice('剪贴板为空。')
-    }
+    void documentStore.pasteClipboard()
   }
 }
 

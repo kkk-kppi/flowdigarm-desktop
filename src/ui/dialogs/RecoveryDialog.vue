@@ -10,8 +10,8 @@
       <p v-if="confirming" class="warning">确认丢弃这份恢复数据？此操作无法撤销。</p>
       <div class="actions">
         <button ref="firstButton" type="button" data-testid="recovery-restore" class="primary" @click="emit('restore')">恢复</button>
-        <button v-if="!confirming" type="button" data-testid="recovery-discard" @click="confirming = true">丢弃</button>
-        <button v-else type="button" data-testid="recovery-confirm-discard" class="danger" @click="emit('discard')">确认丢弃</button>
+        <button v-if="!confirming" type="button" data-testid="recovery-discard" @click="requestDiscard">丢弃</button>
+        <button v-else ref="confirmDiscardButton" type="button" data-testid="recovery-confirm-discard" class="danger" @click="emit('discard')">确认丢弃</button>
       </div>
     </section>
   </div>
@@ -25,6 +25,7 @@ const props = defineProps<{ snapshot: RecoverySnapshot }>()
 const emit = defineEmits<{ restore: []; discard: [] }>()
 const dialog = ref<HTMLElement | null>(null)
 const firstButton = ref<HTMLButtonElement | null>(null)
+const confirmDiscardButton = ref<HTMLButtonElement | null>(null)
 const confirming = ref(false)
 let returnFocus: HTMLElement | null = null
 const updatedAt = computed(() => new Date(props.snapshot.updatedAt).toLocaleString('zh-CN'))
@@ -36,6 +37,12 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (returnFocus?.isConnected) returnFocus.focus()
 })
+
+async function requestDiscard(): Promise<void> {
+  confirming.value = true
+  await nextTick()
+  confirmDiscardButton.value?.focus()
+}
 
 function onKeydown(event: KeyboardEvent): void {
   if (event.key !== 'Tab') return

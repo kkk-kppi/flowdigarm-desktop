@@ -2,10 +2,12 @@ import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import {
   normalizeDiagramSavePath,
+  createTauriDiagramFileRepository,
   tauriDesktopPlatform,
   tauriImageRepository,
   tauriRecoveryRepository,
 } from '@/platform/tauri-desktop-platform'
+import { DiagramFileError } from '@/application/persistence/file-errors'
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }))
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn(), save: vi.fn() }))
@@ -43,6 +45,35 @@ describe('tauri recovery adapter', () => {
       json: '{}',
     })).rejects.toThrow('自动恢复快照数据无效。')
     expect(invoke).not.toHaveBeenCalled()
+  })
+})
+
+describe('tauri diagram file adapter errors', () => {
+  beforeEach(() => vi.mocked(invoke).mockReset())
+
+  it.each([
+    ['文件不存在或已被移动。', 'not-found'],
+    ['文件格式无效，未打开文件。', 'invalid'],
+    ['文件过大，最大支持 20 MB。', 'too-large'],
+    ['没有权限读取该文件。', 'permission'],
+    ['unexpected command failure', 'io'],
+  ] as const)('maps Rust rejection %s to structured %s', async (rejection, code) => {
+    const repository = createTauriDiagramFileRepository(async () => { throw rejection })
+    let error: unknown
+    try {
+      await repository.read('C:/docs/a.flowdiagram')
+    } catch (caught) {
+      error = caught
+    }
+
+    expect(error instanceof DiagramFileError).toBe(true)
+    expect({
+      name: (error as DiagramFileError).name,
+      code: (error as DiagramFileError).code,
+    }).toMatchObject<Partial<DiagramFileError>>({
+      name: 'DiagramFileError',
+      code,
+    })
   })
 })
 

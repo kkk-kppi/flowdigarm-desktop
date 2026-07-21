@@ -9,8 +9,10 @@ import { markRaw } from 'vue'
 import {
   createEmptyDocument,
   type DiagramDocument,
+  type ConnectorKind,
   type DiagramNode,
   type DiagramPage,
+  type PageUnit,
 } from '@/domain/diagram'
 import type { EditorCommand } from '@/application/commands/editor-command'
 import { COMMAND_HISTORY_LIMIT } from '@/application/commands/command-history'
@@ -46,6 +48,15 @@ interface DocumentState {
   /** 常用形状统计版本号：recordShapeUsage 完成后递增（驱动图元库常用区刷新）。 */
   shapeUsageVersion: number
   systemClipboardConfigured: boolean
+  defaultPageUnit: PageUnit
+  defaultConnector: ConnectorKind
+  defaultZoom: number
+}
+
+interface DocumentDefaults {
+  defaultPageUnit: PageUnit
+  defaultConnector: ConnectorKind
+  defaultZoom: number
 }
 
 // PageManager 含命令栈/视口等可变对象，不走响应式；按 store 实例关联，loadDocument 时重建。
@@ -184,6 +195,9 @@ export const useDocumentStore = defineStore('document', {
       lastNotice: null,
       shapeUsageVersion: 0,
       systemClipboardConfigured: false,
+      defaultPageUnit: 'mm',
+      defaultConnector: 'orthogonal',
+      defaultZoom: 1,
     }
   },
   getters: {
@@ -226,17 +240,41 @@ export const useDocumentStore = defineStore('document', {
   actions: {
     /** 新建空文档（单页 A4）。 */
     newDocument() {
-      this.loadDocument(createEmptyDocument())
+      const document = createEmptyDocument()
+      document.pages[0].unit = this.defaultPageUnit
+      document.pages[0].defaultConnector = this.defaultConnector
+      this.loadDocument(document)
     },
     /** 载入文档：重建 PageManager、清 dirty；path 缺省视为未关联文件。 */
     loadDocument(document: DiagramDocument, path?: string) {
-      pageManagers.set(this, new PageManager(document))
+      pageManagers.set(this, new PageManager(document, this.defaultZoom))
       this.document = markRaw(document)
       this.documentEpoch += 1
       this.activePageId = document.pages[0]?.id ?? ''
       this.filePath = path ?? null
       this.dirty = false
       resetRevision(this)
+    },
+    /** Settings-owned defaults for new documents and lazily-created per-page viewports. */
+    configureDefaults(defaults: DocumentDefaults) {
+      this.defaultPageUnit = defaults.defaultPageUnit
+      this.defaultConnector = defaults.defaultConnector
+      this.defaultZoom = defaults.defaultZoom
+      const untouched = !this.dirty && this.filePath === null
+        && this.document.pages.every((page) => page.nodes.length === 0 && page.edges.length === 0)
+      if (untouched) {
+        this.document = markRaw({
+          ...this.document,
+          pages: this.document.pages.map((page) => ({
+            ...page,
+            unit: defaults.defaultPageUnit,
+            defaultConnector: defaults.defaultConnector,
+          })),
+        })
+        pageManagers.set(this, new PageManager(this.document, defaults.defaultZoom))
+      } else {
+        pageManagerOf(this, this.document).setDefaultZoom(defaults.defaultZoom)
+      }
     },
     replaceDocument(document: DiagramDocument, path?: string) {
       this.loadDocument(document, path)
