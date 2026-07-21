@@ -371,7 +371,8 @@ export class GraphAdapter {
   setSnapToGrid(enabled: boolean, gridSize: number): void {
     this.snapToGridEnabled = enabled
     this.snapGridSize = Number.isFinite(gridSize) && gridSize > 0 ? gridSize : 1
-    this.graph.setGridSize(enabled ? this.snapGridSize : 1)
+    // 视觉网格大小与吸附开关独立：吸附关闭时不应把网格缩成 1。
+    this.graph.setGridSize(this.snapGridSize)
   }
 
   /** 供调试/E2E 访问底层 Graph。 */
