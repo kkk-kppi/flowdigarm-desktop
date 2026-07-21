@@ -5,6 +5,7 @@ export default defineConfig({
   outputDir: 'test-results/artifacts',
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
+  failOnFlakyTests: true,
   retries: process.env.CI ? 1 : 0,
   workers: 1,
   reporter: [

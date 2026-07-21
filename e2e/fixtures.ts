@@ -51,6 +51,44 @@ export function x6Cell(page: Page, id: string) {
   return page.locator(`.x6-cell[data-cell-id="${id}"]`)
 }
 
+export async function waitForX6Cell(page: Page, id: string, revision: number) {
+  await expect.poll(() => page.evaluate(({ id, revision }) => {
+    const state = window.__FLOW_E2E__?.snapshot()
+    const documentHasNode = state?.document.pages.some((diagramPage) =>
+      diagramPage.nodes.some((node) => node.id === id),
+    ) ?? false
+    const documentHasEdge = state?.document.pages.some((diagramPage) =>
+      diagramPage.edges.some((edge) => edge.id === id),
+    ) ?? false
+    const documentHasCell = documentHasNode || documentHasEdge
+    const cells = [...document.querySelectorAll<SVGElement>('.x6-cell[data-cell-id]')]
+      .filter((cell) => cell.dataset.cellId === id)
+    const cell = cells[0]
+    const hasBox = cell
+      ? [cell, ...cell.querySelectorAll('*')].some((element) => {
+          const box = element.getBoundingClientRect()
+          return documentHasNode
+            ? box.width > 0 && box.height > 0
+            : box.width > 0 || box.height > 0
+        })
+      : false
+    return {
+      revision: state?.revision,
+      documentHasCell,
+      cellCount: cells.length,
+      attached: cell?.isConnected ?? false,
+      hasBox,
+    }
+  }, { id, revision })).toEqual({
+    revision,
+    documentHasCell: true,
+    cellCount: 1,
+    attached: true,
+    hasBox: true,
+  })
+  return x6Cell(page, id)
+}
+
 export function createCanvasFixture(): DiagramDocument {
   const document = createEmptyDocument('画布交互夹具')
   const page = document.pages[0]

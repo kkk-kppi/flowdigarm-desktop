@@ -9,6 +9,7 @@ describe('Playwright release gate configuration', () => {
     expect(server?.url).toBe('http://127.0.0.1:1420')
     expect(config.projects).toEqual([expect.objectContaining({ name: 'chromium' })])
     expect(config.workers).toBe(1)
+    expect(config.failOnFlakyTests).toBe(true)
     expect(config.reporter).toEqual(expect.arrayContaining([
       ['html', expect.any(Object)],
       ['json', expect.objectContaining({ outputFile: 'test-results/results.json' })],

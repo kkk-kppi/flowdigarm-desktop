@@ -1,4 +1,4 @@
-import { expect, openCleanEditor, snapshot, test, x6Cell } from './fixtures'
+import { expect, openCleanEditor, snapshot, test, waitForX6Cell } from './fixtures'
 
 test.beforeEach(async ({ page }) => openCleanEditor(page))
 
@@ -14,7 +14,7 @@ test('creates, edits, formats, persists, recovers, and exports through real UI p
   await expect.poll(async () => (await snapshot(page)).canUndo).toBe(true)
   let state = await snapshot(page)
   const firstId = state.document.pages[0].nodes[0].id
-  const firstBox = await x6Cell(page, firstId).boundingBox()
+  const firstBox = await (await waitForX6Cell(page, firstId, state.revision)).boundingBox()
   expect(firstBox).not.toBeNull()
   await page.mouse.move(firstBox!.x + firstBox!.width / 2, firstBox!.y + firstBox!.height / 2)
   await page.mouse.down()
@@ -25,19 +25,20 @@ test('creates, edits, formats, persists, recovers, and exports through real UI p
 
   state = await snapshot(page)
   const secondId = state.document.pages[0].nodes.find(({ id }) => id !== firstId)!.id
-  await x6Cell(page, firstId).click({ force: true })
-  await x6Cell(page, secondId).click({ force: true, modifiers: ['Shift'] })
+  await (await waitForX6Cell(page, firstId, state.revision)).click({ force: true })
+  await (await waitForX6Cell(page, secondId, state.revision)).click({ force: true, modifiers: ['Shift'] })
   await expect.poll(async () => (await snapshot(page)).selectedIds).toEqual([firstId, secondId])
   await page.getByRole('menuitem', { name: '工具' }).click()
   await page.getByRole('menuitem', { name: '自动连线' }).click()
   await expect.poll(async () => (await snapshot(page)).document.pages[0].edges.length).toBe(1)
-  const connected = (await snapshot(page)).document.pages[0].edges[0]
+  state = await snapshot(page)
+  const connected = state.document.pages[0].edges[0]
   expect(connected.source.nodeId).toBe(firstId)
   expect(connected.target.nodeId).toBe(secondId)
   expect(connected.source.port).toBeTruthy()
   expect(connected.target.port).toBeTruthy()
 
-  await x6Cell(page, firstId).click({ force: true })
+  await (await waitForX6Cell(page, firstId, state.revision)).click({ force: true })
   await page.keyboard.press('F2')
   await page.getByTestId('text-editor-textarea').fill('中文流程节点')
   await page.getByTestId('text-editor-textarea').press('Control+Enter')
@@ -49,7 +50,8 @@ test('creates, edits, formats, persists, recovers, and exports through real UI p
   expect((await snapshot(page)).document.pages[0].nodes.find(({ id }) => id === firstId)?.text?.value).toBe('中文流程节点')
 
   await page.getByRole('button', { name: '加粗' }).click()
-  await x6Cell(page, secondId).click({ force: true, modifiers: ['Shift'] })
+  state = await snapshot(page)
+  await (await waitForX6Cell(page, secondId, state.revision)).click({ force: true, modifiers: ['Shift'] })
   await expect(page.getByRole('button', { name: '加粗' })).toHaveClass(/indeterminate/)
   await page.getByRole('button', { name: '加粗' }).click()
   state = await snapshot(page)
@@ -57,20 +59,24 @@ test('creates, edits, formats, persists, recovers, and exports through real UI p
   await page.getByTestId('tb-undo').click()
   expect((await snapshot(page)).document.pages[0].nodes.map((node) => node.text?.style.bold)).toEqual([true, false])
   await page.getByTestId('tb-redo').click()
-  expect((await snapshot(page)).document.pages[0].nodes.every((node) => node.text?.style.bold)).toBe(true)
+  state = await snapshot(page)
+  expect(state.document.pages[0].nodes.every((node) => node.text?.style.bold)).toBe(true)
 
-  await x6Cell(page, firstId).click({ force: true })
+  await (await waitForX6Cell(page, firstId, state.revision)).click({ force: true })
   await page.getByRole('button', { name: '斜体' }).click()
+  state = await snapshot(page)
   await page.getByTestId('tb-format-painter').click()
   await expect(page.getByTestId('tb-format-painter')).toHaveAttribute('aria-pressed', 'true')
-  await x6Cell(page, secondId).click({ force: true })
-  expect((await snapshot(page)).document.pages[0].nodes.find(({ id }) => id === secondId)?.text?.style.italic).toBe(true)
+  await (await waitForX6Cell(page, secondId, state.revision)).click({ force: true })
+  state = await snapshot(page)
+  expect(state.document.pages[0].nodes.find(({ id }) => id === secondId)?.text?.style.italic).toBe(true)
   await expect(page.getByTestId('tb-format-painter')).toHaveAttribute('aria-pressed', 'false')
 
-  await x6Cell(page, firstId).click({ force: true })
+  await (await waitForX6Cell(page, firstId, state.revision)).click({ force: true })
   await page.getByRole('button', { name: '下划线' }).click()
+  state = await snapshot(page)
   await page.getByTestId('tb-format-painter').dblclick()
-  await x6Cell(page, secondId).click({ force: true })
+  await (await waitForX6Cell(page, secondId, state.revision)).click({ force: true })
   await expect(page.getByTestId('tb-format-painter')).toHaveAttribute('aria-pressed', 'true')
   expect((await snapshot(page)).document.pages[0].nodes.find(({ id }) => id === secondId)?.text?.style.underline).toBe(true)
   await page.keyboard.press('Escape')
@@ -84,10 +90,11 @@ test('creates, edits, formats, persists, recovers, and exports through real UI p
   await page.getByTestId('confirm-replace-all').click()
   expect((await snapshot(page)).document.pages[0].nodes.find(({ id }) => id === firstId)?.text?.value).toBe('已替换流程节点')
   await page.getByTestId('tb-undo').click()
-  expect((await snapshot(page)).document.pages[0].nodes.find(({ id }) => id === firstId)?.text?.value).toBe('中文流程节点')
+  state = await snapshot(page)
+  expect(state.document.pages[0].nodes.find(({ id }) => id === firstId)?.text?.value).toBe('中文流程节点')
   await page.getByTestId('find-back').click()
 
-  await x6Cell(page, firstId).click({ force: true })
+  await (await waitForX6Cell(page, firstId, state.revision)).click({ force: true })
   const geometryBefore = (await snapshot(page)).document.pages[0].nodes.map(({ id, x, y, width, height }) => ({ id, x, y, width, height }))
   const displayedMm = Number(await page.getByTestId('geo-x').inputValue())
   await page.getByTestId('rp-tab-page').click()

@@ -3,11 +3,11 @@
 Date: 2026-07-21
 Branch: `feat/flowchart-editor-v1`
 Platform executed: Windows x64
-Commit target: `test: 强化真实交互清理无障碍与发布门禁`
+Commit target: `test: 消除 X6 重建后的 Playwright 定位抖动`
 
 ## Result
 
-Task 9b and its review remediation are implemented for the locally available Windows environment. Chromium E2E, real resource disposal, performance evidence, frontend production build, locked Rust tests, and a locked Tauri release no-bundle executable all pass. macOS Intel and Apple Silicon execution is **未覆盖** locally; the CI matrix is configuration only and is not represented as passing evidence.
+Task 9b and its review remediation are implemented for the locally available Windows environment. Chromium E2E now observes document revision and exact X6 cell reattachment before post-command interactions, and the release gate rejects retry-recovered flaky tests. Chromium E2E, real resource disposal, performance evidence, frontend production build, locked Rust tests, and a locked Tauri release no-bundle executable all pass. macOS Intel and Apple Silicon execution is **未覆盖** locally; the CI matrix is configuration only and is not represented as passing evidence.
 
 The untracked `.playwright-mcp/` directory and `opencode.json` were not read, edited, staged, or removed. The session-generated `docs/superpowers/plans/2026-07-21-task-9b-release-gates.md` was deleted and excluded.
 
@@ -72,8 +72,11 @@ Performance RED/GREEN progression:
 |---|---|
 | `pnpm test` | PASS: 102 files, 864 tests. |
 | `cargo test --locked --manifest-path src-tauri/Cargo.toml` | PASS: 44 tests (34 library + 6 export integration + 4 image integration), 0 failures. |
-| `pnpm playwright test` | PASS: 16 Chromium tests, 0 failures; console/page/unhandled-rejection handlers close the page immediately and retain teardown assertions. |
-| `pnpm build` | PASS: typecheck and Vite production build, 1,149 modules; no `resource-tracker`, `browser-e2e-platform`, `disposeApplication`, or `__FLOW_E2E__` in emitted JavaScript. |
+| `pnpm exec vitest run tests/unit/e2e/playwright-config.test.ts tests/unit/e2e/e2e-hook.test.ts` | PASS: 2 files, 4 tests. The config assertion was first observed RED with 1 failed / 2 passed before `failOnFlakyTests` was enabled. |
+| `pnpm playwright test e2e/editor-core.spec.ts e2e/canvas-interactions.spec.ts --retries=0` | PASS: 5 Chromium tests, 0 failures after the settle helper was generalized for horizontal/vertical SVG edges. |
+| `pnpm playwright test --repeat-each=3 --retries=0` | PASS: 48 Chromium executions (16 tests x 3), 0 failures, 0 retries, and no retry-masked results. |
+| `pnpm playwright test` | PASS: 16 Chromium tests, 0 failures and 0 flaky results; console/page/unhandled-rejection handlers close the page immediately and retain teardown assertions. |
+| `pnpm build` | PASS: typecheck and Vite production build, 1,149 modules; largest application chunk `867.68 kB` minified (`258.65 kB` gzip); no `resource-tracker`, `browser-e2e-platform`, `disposeApplication`, or `__FLOW_E2E__` in emitted JavaScript. |
 | `pnpm tauri build --no-bundle -- -- --locked` | PASS: release executable built; the first separator is consumed by pnpm and the second reaches Tauri so Cargo receives `--locked`. |
 
 Chromium was already installed; no browser installation was needed.
@@ -86,10 +89,10 @@ Fixture: 500 nodes, 800 edges, Chinese labels; one warm-up and four recorded run
 
 | Metric | Samples (ms) | Gate | Result |
 |---|---|---|---|
-| Selection | 43.6, 51.9, 48.8, 52.4 | `<150` | PASS |
-| Zoom | 102.0, 99.3, 91.3, 83.7 | `<300` | PASS |
-| Drag pointerup to settled store | 54.6, 80.0, 99.2, 74.7 | `<300` | PASS |
-| Serialize/save UI path | 275.7, 261.2, 239.1, 249.8 | `<2000` | PASS |
+| Selection | 89.9, 78.3, 89.3, 71.4 | `<150` | PASS |
+| Zoom | 109.2, 122.0, 105.8, 110.0 | `<300` | PASS |
+| Drag pointerup to settled store | 85.2, 72.2, 90.2, 59.3 | `<300` | PASS |
+| Serialize/save UI path | 235.2, 338.7, 266.2, 296.2 | `<2000` | PASS |
 
 CI applies a 2x multiplier and still rejects freezes/timeouts.
 
@@ -120,6 +123,8 @@ Each runner installs locked dependencies and Chromium, runs Vitest/Cargo `--lock
 - Persistence coverage reads saved/exported bytes before and after forced failures, and schema/geometry/URL rejection run as separate exact-message cases without replacing the current document.
 - Fresh browser artifacts were regenerated at `playwright-report/index.html`, `test-results/results.json`, `test-results/performance.json`, and `test-results/artifacts/`.
 - Playwright uses one worker locally and in CI so performance thresholds are measured without contention from unrelated browser suites.
+- `waitForX6Cell` polls the exact E2E revision, document node/edge existence, unique connected X6 DOM cell, and rendered geometry before post-command interaction; no fixed timeout sleep or weaker visibility assertion is used.
+- `failOnFlakyTests: true` makes CI/release fail if the retained diagnostic retry recovers a failed first attempt.
 
 Release prerequisites, artifact handling, signing variables, and rollback are documented in `docs/release.md`. L1-L6 evidence and uncovered status are documented in `docs/acceptance.md`.
 
@@ -137,5 +142,5 @@ Release prerequisites, artifact handling, signing variables, and rollback are do
 ## Residual Concerns
 
 - macOS Intel and Apple Silicon builds, E2E, signing, and notarization were not executable on this Windows host and remain **未覆盖** until CI or physical-machine evidence exists.
-- The production build reports one `877.13 kB` minified application chunk warning; it does not fail the release gate but is a future code-splitting opportunity.
+- The production build reports one `867.68 kB` minified application chunk warning; it does not fail the release gate but is a future code-splitting opportunity.
 - CI certificate import, signing, and notarization branches are configured but cannot be validated without repository secrets and tag-runner execution.
