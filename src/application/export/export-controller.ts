@@ -75,6 +75,15 @@ export class ExportController {
         ? snapshot.document.pages.filter(({ id }) => id === snapshot.activePageId)
         : snapshot.document.pages
       if (pages.length === 0) throw new Error('导出页面不存在。')
+      const activePage = pages[0]
+      const jsonDocument = options.scope === 'currentPage'
+        ? {
+            ...snapshot.document,
+            pages: snapshot.document.pages.filter(({ id }) => (
+              id === activePage.id || id === activePage.backgroundPageId
+            )),
+          }
+        : snapshot.document
       const request: NativeExportRequest = {
         format: options.format,
         scope: options.scope,
@@ -90,7 +99,7 @@ export class ExportController {
             ...rendered,
           }
         }),
-        documentJson: options.format === 'json' ? serializeDiagramDocument(snapshot.document) : undefined,
+        documentJson: options.format === 'json' ? serializeDiagramDocument(jsonDocument) : undefined,
       }
       try {
         return await this.exporter.export(request)

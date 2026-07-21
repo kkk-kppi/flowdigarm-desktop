@@ -22,8 +22,8 @@ const panel = ref<HTMLElement | null>(null)
 const closeButton = ref<HTMLButtonElement | null>(null)
 const entry = computed(() => getFeatureHelp(props.helpId))
 function close(): void {
-  emit('close')
   const target = props.returnFocus?.isConnected ? props.returnFocus : fallbackFocus?.isConnected ? fallbackFocus : null
+  emit('close')
   target?.focus()
 }
 function onKeydown(event: KeyboardEvent): void { if (event.key === 'Escape') { event.preventDefault(); close() } }

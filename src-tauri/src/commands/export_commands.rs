@@ -388,17 +388,42 @@ fn generate(
 
 fn rollback(staged: &mut [StagedFile]) {
     for file in staged.iter_mut().rev() {
-        if file.installed && file.target.exists() {
-            let _ = fs::remove_file(&file.target);
+        if file.installed {
+            remove_regular_file(&file.target);
         }
         if let Some(backup) = &file.backup {
-            let _ = fs::rename(backup, &file.target);
+            if fs::symlink_metadata(&file.target).is_err() {
+                let _ = fs::rename(backup, &file.target);
+            }
         }
-        let _ = fs::remove_file(&file.temporary);
+        remove_regular_file(&file.temporary);
     }
 }
 
-fn commit_all(files: Vec<GeneratedFile>) -> Result<(), String> {
+// Export targets may be absent or regular files. Directories and every symlink are rejected,
+// including symlinks whose destination is a regular file, so transaction cleanup never moves them.
+fn ensure_regular_file_or_missing(path: &Path) -> Result<(), String> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_file() => Ok(()),
+        Ok(_) => Err("导出目标必须是普通文件或不存在。".into()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(_) => Err("无法检查导出目标，原文件未受影响。".into()),
+    }
+}
+
+fn remove_regular_file(path: &Path) {
+    if fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_file()) {
+        let _ = fs::remove_file(path);
+    }
+}
+
+fn commit_all_with_hook<F>(files: Vec<GeneratedFile>, mut before_commit: F) -> Result<(), String>
+where
+    F: FnMut(usize, &Path),
+{
+    for generated in &files {
+        ensure_regular_file_or_missing(&generated.path)?;
+    }
     let mut staged = Vec::with_capacity(files.len());
     for generated in files {
         let parent = generated.path.parent().ok_or("导出路径无效。")?;
@@ -430,7 +455,12 @@ fn commit_all(files: Vec<GeneratedFile>) -> Result<(), String> {
         });
     }
     for index in 0..staged.len() {
-        if staged[index].target.exists() {
+        before_commit(index, &staged[index].target);
+        if let Err(error) = ensure_regular_file_or_missing(&staged[index].target) {
+            rollback(&mut staged);
+            return Err(error);
+        }
+        if fs::symlink_metadata(&staged[index].target).is_ok() {
             let parent = staged[index].target.parent().ok_or("导出路径无效。")?;
             let name = staged[index]
                 .target
@@ -452,10 +482,14 @@ fn commit_all(files: Vec<GeneratedFile>) -> Result<(), String> {
     }
     for file in &staged {
         if let Some(backup) = &file.backup {
-            let _ = fs::remove_file(backup);
+            remove_regular_file(backup);
         }
     }
     Ok(())
+}
+
+fn commit_all(files: Vec<GeneratedFile>) -> Result<(), String> {
+    commit_all_with_hook(files, |_, _| {})
 }
 
 pub fn export_request(input: NativeExportRequest) -> Result<Vec<String>, String> {
@@ -473,4 +507,47 @@ pub fn export_request(input: NativeExportRequest) -> Result<Vec<String>, String>
 #[tauri::command]
 pub fn export_diagram(input: NativeExportRequest) -> Result<Vec<String>, String> {
     export_request(input)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{commit_all_with_hook, GeneratedFile};
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn mid_commit_failure_restores_replaced_files_and_removes_every_staged_output() {
+        let dir = tempdir().unwrap();
+        let first = dir.path().join("first.svg");
+        let second = dir.path().join("second.svg");
+        fs::write(&first, b"old-first").unwrap();
+        let files = vec![
+            GeneratedFile {
+                path: first.clone(),
+                bytes: b"new-first".to_vec(),
+            },
+            GeneratedFile {
+                path: second.clone(),
+                bytes: b"new-second".to_vec(),
+            },
+        ];
+
+        let result = commit_all_with_hook(files, |index, target| {
+            if index == 1 {
+                fs::create_dir(target).unwrap();
+            }
+        });
+
+        assert_eq!(result.unwrap_err(), "导出目标必须是普通文件或不存在。");
+        assert_eq!(fs::read(&first).unwrap(), b"old-first");
+        assert!(second.is_dir());
+        let names = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        assert_eq!(names.len(), 2);
+        assert!(!names
+            .iter()
+            .any(|name| name.ends_with(".tmp") || name.ends_with(".bak")));
+    }
 }

@@ -115,6 +115,20 @@ fn all_page_generation_failure_preserves_every_existing_target() {
 }
 
 #[test]
+fn rejects_a_real_directory_output_target_without_renaming_or_deleting_it() {
+    let dir = tempdir().unwrap();
+    let target = dir.path().join("diagram.svg");
+    fs::create_dir(&target).unwrap();
+
+    assert_eq!(
+        export_request(request(&target, "svg", vec![page("P", 72.0, 36.0)])).unwrap_err(),
+        "导出目标必须是普通文件或不存在。"
+    );
+    assert!(target.is_dir());
+    assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
+}
+
+#[test]
 fn rejects_invalid_paths_formats_dpi_sizes_payloads_and_links() {
     let dir = tempdir().unwrap();
     let absolute = dir.path().join("bad.png");

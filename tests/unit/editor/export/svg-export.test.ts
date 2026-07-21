@@ -57,6 +57,56 @@ describe('renderPageSvg', () => {
     expect(result.links).toEqual([{ url: 'https://example.com/?a=1&b=2', xPt: 10, yPt: 20, widthPt: 80, heightPt: 40 }])
   })
 
+  it('renders image nodes as only safe images and leaves invalid image bodies unpainted', () => {
+    const imageText = createDefaultTextContent('不可渲染')
+    imageText.style.background = '#ff0000'
+    const page = createEmptyPage({
+      id: 'page', name: 'P',
+      nodes: [
+        createTestNode({ id: 'safe-image', shape: 'image', imageHref: 'data:image/png;base64,iVBORw0KGgo=', text: imageText }),
+        createTestNode({ id: 'bad-image', shape: 'image', x: 100, imageHref: 'file:///secret.png', text: imageText }),
+        createTestNode({ id: 'missing-image', shape: 'image', x: 200, text: imageText }),
+      ],
+    })
+    const { svg } = renderPageSvg({ ...createEmptyDocument(), pages: [page] }, page.id)
+    const safe = svg.match(/<g data-cell-id="safe-image"[^>]*>([\s\S]*?)<\/g>/)?.[1] ?? ''
+    const bad = svg.match(/<g data-cell-id="bad-image"[^>]*>([\s\S]*?)<\/g>/)?.[1] ?? ''
+    const missing = svg.match(/<g data-cell-id="missing-image"[^>]*>([\s\S]*?)<\/g>/)?.[1] ?? ''
+
+    expect(safe).toContain('<image ')
+    expect(safe).not.toMatch(/<(?:rect|path|ellipse)\b/)
+    expect(safe).not.toContain('<text')
+    expect(bad).not.toMatch(/<(?:image|rect|path|ellipse)\b/)
+    expect(bad).not.toContain('<text')
+    expect(missing).not.toMatch(/<(?:image|rect|path|ellipse)\b/)
+    expect(missing).not.toContain('<text')
+  })
+
+  it.each([
+    ['horizontal', 'middle'], ['horizontal', 'bottom'],
+    ['vertical', 'middle'], ['vertical', 'bottom'],
+  ] as const)('keeps %s %s baselines inside the diamond text area', (direction, verticalAlign) => {
+    const text = createDefaultTextContent(direction === 'vertical' ? '甲乙丙' : '甲\n乙\n丙')
+    text.style.fontSize = 10
+    text.paragraph = { before: 2, after: 3, lineHeight: 1.2 }
+    text.block.direction = direction
+    text.block.verticalAlign = verticalAlign
+    const node = createTestNode({ id: `diamond-${direction}-${verticalAlign}`, shape: 'diamond', x: 10, y: 20, width: 120, height: 100, text })
+    const page = createEmptyPage({ id: 'page', nodes: [node] })
+
+    const { svg } = renderPageSvg({ ...createEmptyDocument(), pages: [page] }, page.id)
+    const group = svg.match(new RegExp(`<g data-cell-id="diamond-${direction}-${verticalAlign}"[^>]*>([\\s\\S]*?)<\\/g>`))?.[1] ?? ''
+    const baselines = [...group.matchAll(/<tspan[^>]* y="([\d.]+)"/g)].map((match) => Number(match[1]))
+    const inset = shapeRegistry.get('diamond').textAreaInset
+    const top = node.y + inset.top + text.block.marginTop + text.paragraph.before
+    const bottom = node.y + node.height - inset.bottom - text.block.marginBottom - text.paragraph.after
+
+    expect(baselines).toHaveLength(3)
+    expect(baselines.every((baseline) => baseline >= top && baseline <= bottom)).toBe(true)
+    if (verticalAlign === 'bottom') expect(baselines.at(-1)).toBe(bottom)
+    else expect((baselines[0] - text.style.fontSize + baselines.at(-1)!) / 2).toBeCloseTo((top + bottom) / 2)
+  })
+
   it('renders straight, orthogonal, and curved edge paths with vertices, dash, markers, opacity, labels, and z-order', () => {
     const nodes = [
       createTestNode({ id: 'a', x: 10, y: 10, zIndex: 2 }),
@@ -77,7 +127,7 @@ describe('renderPageSvg', () => {
 
     expect(svg.indexOf('data-cell-id="straight"')).toBeLessThan(svg.indexOf('data-cell-id="a"'))
     expect(svg).toMatch(/data-cell-id="straight"[^>]*>[\s\S]*? L /)
-    expect(svg).toMatch(/data-cell-id="orthogonal"[^>]*>[\s\S]*?80 70/)
+    expect(svg).toMatch(/data-cell-id="orthogonal"[^>]*>[\s\S]*?H 80 V 70/)
     expect(svg).toMatch(/data-cell-id="curved"[^>]*>[\s\S]*? C /)
     expect(svg).toContain('stroke-dasharray="8 4 2 4"')
     expect(svg).toContain('opacity="0.4"')

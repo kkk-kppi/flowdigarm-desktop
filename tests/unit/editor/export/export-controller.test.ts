@@ -1,5 +1,6 @@
 import { ExportController } from '@/application/export/export-controller'
 import type { DiagramExporter, NativeExportRequest } from '@/application/export/export-ports'
+import { parseDiagramDocument } from '@/domain/document-schema'
 import { createEmptyPage } from '@/domain/diagram'
 import { createTestDocument } from '../../../helpers/test-document'
 
@@ -40,6 +41,23 @@ describe('ExportController', () => {
     expect(state.document).toBe(documentIdentity)
     expect(state.revision).toBe(7)
     expect(state.dirty).toBe(true)
+  })
+
+  it('serializes only the active page and its directly referenced background for current-page JSON', async () => {
+    const { controller, requests, state } = setup()
+    const background = createEmptyPage({ id: 'background', name: '背景', type: 'background' })
+    state.document.pages.unshift(background)
+    state.document.pages.find(({ id }) => id === state.activePageId)!.backgroundPageId = background.id
+
+    await controller.export({
+      format: 'json', scope: 'currentPage', fileName: 'page', destination: 'C:/page.flowdiagram',
+    })
+
+    const json = requests[0].documentJson ?? ''
+    const serialized = JSON.parse(json)
+    expect(serialized.pages.map(({ id }: { id: string }) => id)).toEqual(['background', 'page-1'])
+    expect(serialized.pages[1].backgroundPageId).toBe('background')
+    expect(parseDiagramDocument(json).ok).toBe(true)
   })
 
   it.each([72, 97, 600])('rejects unsupported PNG DPI %s before native export', async (dpi) => {

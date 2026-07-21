@@ -215,15 +215,22 @@ describe('AppShell 组装', () => {
     expect(useDocumentStore().lastNotice ?? '').not.toContain('下一步桌面接线')
   })
 
-  it('opens the real export dialog from File > Export and routes help through helpId export', async () => {
+  it('opens export help and restores focus to the persistent File trigger when help closes', async () => {
     const services = fakeServices()
     const wrapper = mountShellWithServices(services, true)
     await flushPromises()
-    await wrapper.find('[data-menu-id="file"]').trigger('click')
+    const fileTrigger = wrapper.find<HTMLButtonElement>('[data-menu-id="file"]')
+    await fileTrigger.trigger('click')
     await wrapper.find('[data-command-id="file-export"]').trigger('click')
     expect(wrapper.find('[aria-labelledby="export-title"]').exists()).toBe(true)
-    await wrapper.find('[data-testid="export-help"]').trigger('click')
+    const exportHelp = wrapper.find<HTMLButtonElement>('[data-testid="export-help"]')
+    exportHelp.element.focus()
+    await exportHelp.trigger('click')
+    await flushPromises()
     expect(wrapper.find('[aria-label="导出帮助"]').exists()).toBe(true)
+    await wrapper.find('[aria-label="关闭帮助"]').trigger('click')
+    await flushPromises()
+    expect(document.activeElement).toBe(fileTrigger.element)
     wrapper.unmount()
   })
 

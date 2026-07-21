@@ -392,6 +392,7 @@ function closeExport(): void {
 }
 
 function openExportHelp(): void {
+  helpReturnFocus.value = exportReturnFocus.value?.isConnected ? exportReturnFocus.value : null
   exportOpen.value = false
   appStore.openHelp('export')
 }
@@ -437,8 +438,10 @@ function openHelp(helpId: string, request: MenuInvocation): void {
 }
 
 function closeHelp(): void {
+  const closedExportHelp = appStore.helpId === 'export'
   appStore.closeHelp()
   helpReturnFocus.value = null
+  if (closedExportHelp) exportReturnFocus.value = null
 }
 
 function openContainerPicker(request: ContainerPickerRequest): void {
