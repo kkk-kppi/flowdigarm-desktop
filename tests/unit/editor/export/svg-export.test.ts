@@ -5,10 +5,18 @@ import { renderPageSvg } from '@/infrastructure/export/svg-export'
 import { createTestEdge, createTestNode } from '../../../helpers/test-document'
 
 describe('renderPageSvg', () => {
-  it('renders exact pt page geometry, direct background first, and every registered shape', () => {
+  it('renders exact pt page geometry, the complete background chain once, and every registered shape', () => {
+    const oldest = createEmptyPage({
+      id: 'oldest', name: '最旧背景', type: 'background',
+      nodes: [createTestNode({ id: 'oldest-node', x: 1, y: 2, text: createDefaultTextContent('最旧层') })],
+    })
+    const middle = createEmptyPage({
+      id: 'middle', name: '中间背景', type: 'background', backgroundPageId: oldest.id,
+      nodes: [createTestNode({ id: 'middle-node', x: 2, y: 3, text: createDefaultTextContent('中间层') })],
+    })
     const background = createEmptyPage({
-      id: 'background', name: '背景', type: 'background',
-      nodes: [createTestNode({ id: 'bg', x: 1, y: 2, text: createDefaultTextContent('背景层') })],
+      id: 'background', name: '背景', type: 'background', backgroundPageId: middle.id,
+      nodes: [createTestNode({ id: 'bg', x: 3, y: 4, text: createDefaultTextContent('直接背景层') })],
     })
     const nodes = shapeRegistry.all().map((definition, index) => createTestNode({
       id: `shape-${definition.type}`,
@@ -23,12 +31,17 @@ describe('renderPageSvg', () => {
       id: 'foreground', name: '前景', backgroundPageId: background.id,
       pageSize: { width: 595.276, height: 841.89 }, nodes,
     })
-    const document = { ...createEmptyDocument(), pages: [page, background] }
+    const document = { ...createEmptyDocument(), pages: [page, background, oldest, middle] }
 
     const result = renderPageSvg(document, page.id)
 
     expect(result.svg).toContain('<svg xmlns="http://www.w3.org/2000/svg" width="595.276pt" height="841.89pt" viewBox="0 0 595.276 841.89">')
-    expect(result.svg.indexOf('背景层')).toBeLessThan(result.svg.indexOf('矩形'))
+    expect(result.svg.indexOf('最旧层')).toBeLessThan(result.svg.indexOf('中间层'))
+    expect(result.svg.indexOf('中间层')).toBeLessThan(result.svg.indexOf('直接背景层'))
+    expect(result.svg.indexOf('直接背景层')).toBeLessThan(result.svg.indexOf('矩形'))
+    expect(result.svg.match(/data-cell-id="oldest-node"/g)).toHaveLength(1)
+    expect(result.svg.match(/data-cell-id="middle-node"/g)).toHaveLength(1)
+    expect(result.svg.match(/data-cell-id="bg"/g)).toHaveLength(1)
     for (const definition of shapeRegistry.all()) {
       expect(result.svg).toContain(`data-cell-id="shape-${definition.type}"`)
     }
@@ -141,5 +154,41 @@ describe('renderPageSvg', () => {
     const before = structuredClone(document)
     expect(() => renderPageSvg(document, 'missing')).toThrow('导出页面不存在。')
     expect(document).toEqual(before)
+  })
+
+  it('renders cyclic background references without duplicate pages', () => {
+    const first = createEmptyPage({
+      id: 'first', type: 'background', backgroundPageId: 'second',
+      nodes: [createTestNode({ id: 'first-node' })],
+    })
+    const second = createEmptyPage({
+      id: 'second', type: 'background', backgroundPageId: 'first',
+      nodes: [createTestNode({ id: 'second-node' })],
+    })
+    const page = createEmptyPage({ id: 'page', backgroundPageId: first.id })
+
+    const { svg } = renderPageSvg({ ...createEmptyDocument(), pages: [page, first, second] }, page.id)
+
+    expect(svg.match(/data-cell-id="first-node"/g)).toHaveLength(1)
+    expect(svg.match(/data-cell-id="second-node"/g)).toHaveLength(1)
+  })
+
+  it('uses the same center rotation for the node body and its edge terminal', () => {
+    const page = createEmptyPage({
+      id: 'page',
+      nodes: [
+        createTestNode({ id: 'rotated', x: 10, y: 20, width: 80, height: 40, angle: 90 }),
+        createTestNode({ id: 'target', x: 210, y: 20, width: 80, height: 40 }),
+      ],
+      edges: [createTestEdge({
+        id: 'edge', connector: 'orthogonal',
+        source: { nodeId: 'rotated', port: 'right' }, target: { nodeId: 'target', port: 'left' },
+      })],
+    })
+
+    const { svg } = renderPageSvg({ ...createEmptyDocument(), pages: [page] }, page.id)
+
+    expect(svg).toContain('<g data-cell-id="rotated" transform="rotate(90 50 40)">')
+    expect(svg).toMatch(/data-cell-id="edge"[^>]*><path d="M 50 80 /)
   })
 })

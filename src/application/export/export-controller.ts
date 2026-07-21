@@ -1,3 +1,4 @@
+import { resolvePageBackgroundChain } from '@/application/pages/page-background-chain'
 import { serializeDiagramDocument } from '@/domain/document-schema'
 import type { DiagramDocument } from '@/domain/diagram'
 import { renderPageSvg } from '@/infrastructure/export/svg-export'
@@ -79,9 +80,7 @@ export class ExportController {
       const jsonDocument = options.scope === 'currentPage'
         ? {
             ...snapshot.document,
-            pages: snapshot.document.pages.filter(({ id }) => (
-              id === activePage.id || id === activePage.backgroundPageId
-            )),
+            pages: resolvePageBackgroundChain(snapshot.document, activePage.id),
           }
         : snapshot.document
       const request: NativeExportRequest = {

@@ -1,4 +1,4 @@
-import { resolveBackgroundPage } from '@/application/pages/background-page-resolver'
+import { resolvePageBackgroundChain } from '@/application/pages/page-background-chain'
 import '@/application/shapes/common-shapes'
 import { shapeRegistry } from '@/application/shapes/shape-registry'
 import type {
@@ -162,8 +162,9 @@ export function renderPageSvg(document: DiagramDocument, pageId: string): Render
   const page = document.pages.find((candidate) => candidate.id === pageId)
   if (!page) throw new Error('导出页面不存在。')
   const links: ExportLinkAnnotation[] = []
-  const background = resolveBackgroundPage(document, page.id)
-  const content = `${background ? renderCells(background, links) : ''}${renderCells(page, links)}`
+  const content = resolvePageBackgroundChain(document, page.id)
+    .map((layer) => renderCells(layer, links))
+    .join('')
   const width = number(page.pageSize.width)
   const height = number(page.pageSize.height)
   const defs = '<defs><marker id="arrow-end" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="context-stroke"/></marker><marker id="arrow-start" markerWidth="8" markerHeight="8" refX="1" refY="4" orient="auto-start-reverse"><path d="M8 0 L0 4 L8 8 Z" fill="context-stroke"/></marker></defs>'

@@ -43,11 +43,13 @@ describe('ExportController', () => {
     expect(state.dirty).toBe(true)
   })
 
-  it('serializes only the active page and its directly referenced background for current-page JSON', async () => {
+  it('serializes the active page with its complete background chain from oldest to foreground', async () => {
     const { controller, requests, state } = setup()
-    const background = createEmptyPage({ id: 'background', name: '背景', type: 'background' })
-    state.document.pages.unshift(background)
-    state.document.pages.find(({ id }) => id === state.activePageId)!.backgroundPageId = background.id
+    const oldest = createEmptyPage({ id: 'background-oldest', name: '最旧背景', type: 'background' })
+    const middle = createEmptyPage({ id: 'background-middle', name: '中间背景', type: 'background', backgroundPageId: oldest.id })
+    const direct = createEmptyPage({ id: 'background-direct', name: '直接背景', type: 'background', backgroundPageId: middle.id })
+    state.document.pages.unshift(direct, oldest, middle)
+    state.document.pages.find(({ id }) => id === state.activePageId)!.backgroundPageId = direct.id
 
     await controller.export({
       format: 'json', scope: 'currentPage', fileName: 'page', destination: 'C:/page.flowdiagram',
@@ -55,8 +57,12 @@ describe('ExportController', () => {
 
     const json = requests[0].documentJson ?? ''
     const serialized = JSON.parse(json)
-    expect(serialized.pages.map(({ id }: { id: string }) => id)).toEqual(['background', 'page-1'])
-    expect(serialized.pages[1].backgroundPageId).toBe('background')
+    expect(serialized.pages.map(({ id }: { id: string }) => id)).toEqual([
+      'background-oldest', 'background-middle', 'background-direct', 'page-1',
+    ])
+    expect(serialized.pages[1].backgroundPageId).toBe('background-oldest')
+    expect(serialized.pages[2].backgroundPageId).toBe('background-middle')
+    expect(serialized.pages[3].backgroundPageId).toBe('background-direct')
     expect(parseDiagramDocument(json).ok).toBe(true)
   })
 
