@@ -1,5 +1,5 @@
 <template>
-  <aside class="element-library" data-testid="element-library">
+  <aside class="element-library" :class="{ collapsed }" data-testid="element-library">
     <div class="library-header">
       <span class="library-title">图元</span>
       <QuickHelpButton help-id="shape-library" label="形状库" />
@@ -8,6 +8,7 @@
         class="collapse-toggle"
         data-testid="collapse-toggle"
         :aria-label="collapsed ? '展开图元库' : '折叠图元库'"
+        :title="collapsed ? '展开图元库' : '折叠图元库'"
         :aria-expanded="!collapsed"
         @click="collapsed = !collapsed"
       >
@@ -145,7 +146,7 @@
 // 常用区：computeTopShapes(20)（次数降序、同次按内置序、新用户按内置序补足），
 // 使用记录经 document-store 注入的 repository；shapeUsageVersion 变化时异步刷新；搜索时隐藏。
 // 拖拽经 X6 Dnd（CanvasArea 注入 shapeDragStartKey）获得画布内拖拽预览；双击/回车直接创建。
-import { computed, inject, onMounted, reactive, ref, watch } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import QuickHelpButton from '@/ui/help/QuickHelpButton.vue'
 import { shapeRegistry, type ShapeDefinition } from '@/application/shapes/shape-registry'
 import '@/application/shapes/common-shapes' // 模块副作用：注册内置形状
@@ -226,12 +227,28 @@ function thumbRadius(def: ShapeDefinition): number {
   return (def.body.roundedRadius / def.defaultSize.width) * 100
 }
 
+let clearPendingDrag: (() => void) | undefined
+
 function onCellMouseDown(shapeType: string, event: MouseEvent): void {
-  // 左键才启动拖拽；注入缺失（如测试环境）时静默跳过
-  if (event.button === 0 && startShapeDrag) {
-    startShapeDrag(shapeType, event)
+  if (event.button !== 0 || !startShapeDrag) return
+  clearPendingDrag?.()
+  const origin = { x: event.clientX, y: event.clientY }
+  const clear = () => {
+    window.removeEventListener('mousemove', onMove)
+    window.removeEventListener('mouseup', clear)
+    if (clearPendingDrag === clear) clearPendingDrag = undefined
   }
+  const onMove = (moveEvent: MouseEvent) => {
+    if (Math.hypot(moveEvent.clientX - origin.x, moveEvent.clientY - origin.y) <= 3) return
+    clear()
+    startShapeDrag(shapeType, moveEvent)
+  }
+  clearPendingDrag = clear
+  window.addEventListener('mousemove', onMove)
+  window.addEventListener('mouseup', clear)
 }
+
+onBeforeUnmount(() => clearPendingDrag?.())
 </script>
 
 <style scoped>
@@ -244,6 +261,10 @@ function onCellMouseDown(shapeType: string, event: MouseEvent): void {
   border-right: 1px solid var(--color-border, #d9d9d9);
   background: var(--color-bg-panel, #fafafa);
   overflow: hidden;
+}
+
+.element-library.collapsed {
+  width: 48px;
 }
 
 .library-header {

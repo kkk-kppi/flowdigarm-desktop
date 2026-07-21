@@ -66,6 +66,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   createDefaultEdgeStyle,
   createDefaultTextContent,
+  type DiagramDocument,
   type DiagramEdge,
   type PageUnit,
   type TextContent,
@@ -129,6 +130,7 @@ const canvasSize = reactive({ width: 0, height: 0 })
 const containerRef = ref<HTMLElement | null>(null)
 const contextMenu = ref<{ x: number; y: number; items: ReturnType<typeof contextMenuItems> } | null>(null)
 let adapter: GraphAdapter | null = null
+let skipDocumentRenderFor: DiagramDocument | null = null
 let unsubscribeViewport: (() => void) | null = null
 let resizeObserver: ResizeObserver | null = null
 /** 已完成首次 fit 的页（每页首次显示时 fitToPage 一次，之后保持用户视口）。 */
@@ -463,7 +465,13 @@ onMounted(() => {
           })
         }
       }
-      documentStore.executeCommand(new MoveCellsCommand(moves))
+      try {
+        documentStore.executeCommand(new MoveCellsCommand(moves))
+        skipDocumentRenderFor = documentStore.document
+      } catch (error) {
+        skipDocumentRenderFor = null
+        throw error
+      }
     },
     onNodeClick: (nodeId, modifiers) => {
       // 格式刷模式：点击图元 = 应用格式（不进入选择逻辑，选择已由 suppressSelection 抑制）
@@ -631,7 +639,12 @@ watch(
 // 文档内容/设置变化：重渲染当前页（含页面尺寸、背景页引用变化）
 watch(
   () => documentStore.document,
-  () => {
+  (document) => {
+    if (skipDocumentRenderFor === document) {
+      skipDocumentRenderFor = null
+      return
+    }
+    skipDocumentRenderFor = null
     renderActivePage()
   },
 )

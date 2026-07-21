@@ -1,0 +1,141 @@
+name: Release gate
+
+on:
+  push:
+    branches: [main, "feat/**"]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  release-gate:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+            family: windows
+            target: x86_64-pc-windows-msvc
+            executable: src-tauri/target/x86_64-pc-windows-msvc/release/flowchart-editor.exe
+          - name: macOS Intel
+            os: macos-13
+            family: macos
+            target: x86_64-apple-darwin
+            executable: src-tauri/target/x86_64-apple-darwin/release/flowchart-editor
+          - name: macOS Apple Silicon
+            os: macos-14
+            family: macos
+            target: aarch64-apple-darwin
+            executable: src-tauri/target/aarch64-apple-darwin/release/flowchart-editor
+    env:
+      CI: "1"
+      WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+      WINDOWS_CERTIFICATE_THUMBPRINT: ${{ secrets.WINDOWS_CERTIFICATE_THUMBPRINT }}
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> src-tauri/target
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install chromium
+      - run: pnpm test
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
+      - run: pnpm playwright test
+      - run: pnpm build
+      - run: pnpm tauri build --no-bundle --target ${{ matrix.target }}
+
+      - name: Import Windows signing certificate
+        if: startsWith(github.ref, 'refs/tags/') && matrix.family == 'windows' && env.WINDOWS_CERTIFICATE != '' && env.WINDOWS_CERTIFICATE_PASSWORD != '' && env.WINDOWS_CERTIFICATE_THUMBPRINT != ''
+        shell: pwsh
+        run: |
+          $certificatePath = Join-Path $env:RUNNER_TEMP 'flowchart-editor.pfx'
+          [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          Import-PfxCertificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\My -Password $password | Out-Null
+      - name: Build signed Windows tag bundles
+        if: startsWith(github.ref, 'refs/tags/') && matrix.family == 'windows' && env.WINDOWS_CERTIFICATE != '' && env.WINDOWS_CERTIFICATE_PASSWORD != '' && env.WINDOWS_CERTIFICATE_THUMBPRINT != ''
+        shell: pwsh
+        run: |
+          $config = @{ bundle = @{ windows = @{ certificateThumbprint = $env:WINDOWS_CERTIFICATE_THUMBPRINT } } } | ConvertTo-Json -Compress -Depth 4
+          pnpm tauri build --target ${{ matrix.target }} --bundles nsis,msi --config $config
+      - name: Build unsigned Windows tag bundles
+        if: startsWith(github.ref, 'refs/tags/') && matrix.family == 'windows' && (env.WINDOWS_CERTIFICATE == '' || env.WINDOWS_CERTIFICATE_PASSWORD == '' || env.WINDOWS_CERTIFICATE_THUMBPRINT == '')
+        shell: pwsh
+        run: |
+          "Signing secrets are not configured; building unsigned Windows bundles." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          pnpm tauri build --target ${{ matrix.target }} --bundles nsis,msi
+
+      - name: Import Apple signing certificate
+        if: startsWith(github.ref, 'refs/tags/') && matrix.family == 'macos' && env.APPLE_CERTIFICATE != '' && env.APPLE_CERTIFICATE_PASSWORD != '' && env.APPLE_SIGNING_IDENTITY != '' && env.APPLE_ID != '' && env.APPLE_PASSWORD != '' && env.APPLE_TEAM_ID != ''
+        shell: bash
+        run: |
+          CERTIFICATE_PATH="$RUNNER_TEMP/flowchart-editor.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/flowchart-editor.keychain-db"
+          printf '%s' "$APPLE_CERTIFICATE" | base64 -D > "$CERTIFICATE_PATH"
+          security create-keychain -p runner "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p runner "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple: -s -k runner "$KEYCHAIN_PATH"
+      - name: Build signed/notarized macOS tag bundles
+        if: startsWith(github.ref, 'refs/tags/') && matrix.family == 'macos' && env.APPLE_CERTIFICATE != '' && env.APPLE_CERTIFICATE_PASSWORD != '' && env.APPLE_SIGNING_IDENTITY != '' && env.APPLE_ID != '' && env.APPLE_PASSWORD != '' && env.APPLE_TEAM_ID != ''
+        shell: bash
+        run: pnpm tauri build --target ${{ matrix.target }} --bundles app,dmg
+      - name: Build unsigned macOS tag bundles
+        if: startsWith(github.ref, 'refs/tags/') && matrix.family == 'macos' && (env.APPLE_CERTIFICATE == '' || env.APPLE_CERTIFICATE_PASSWORD == '' || env.APPLE_SIGNING_IDENTITY == '' || env.APPLE_ID == '' || env.APPLE_PASSWORD == '' || env.APPLE_TEAM_ID == '')
+        shell: bash
+        env:
+          APPLE_SIGNING_IDENTITY: ""
+          APPLE_ID: ""
+          APPLE_PASSWORD: ""
+          APPLE_TEAM_ID: ""
+        run: |
+          echo 'Signing/notarization secrets are not configured; building unsigned macOS bundles.' >> "$GITHUB_STEP_SUMMARY"
+          pnpm tauri build --target ${{ matrix.target }} --bundles app,dmg
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-${{ matrix.target }}
+          if-no-files-found: warn
+          path: |
+            playwright-report/
+            test-results/
+      - name: Upload native executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: executable-${{ matrix.target }}
+          if-no-files-found: error
+          path: ${{ matrix.executable }}
+      - name: Upload tag bundles
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundles-${{ matrix.target }}
+          if-no-files-found: error
+          path: src-tauri/target/${{ matrix.target }}/release/bundle/

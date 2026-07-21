@@ -5,6 +5,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import ElementLibrary from '@/ui/shapes/ElementLibrary.vue'
 import { useDocumentStore } from '@/stores/document-store'
+import { shapeDragStartKey } from '@/ui/shapes/shape-drag-key'
 import '@/application/shapes/common-shapes'
 
 function 挂载() {
@@ -66,6 +67,25 @@ describe('ElementLibrary', () => {
     const wrapper = 挂载()
     await wrapper.find('[data-testid="shape-cell"][aria-label="菱形"]').trigger('dblclick')
     expect(wrapper.emitted('create-request')).toEqual([['diamond']])
+  })
+
+  it('mousedown 超过 3px 才启动 Dnd，避免吞掉双击创建', async () => {
+    setActivePinia(createPinia())
+    const startDrag = vi.fn()
+    const wrapper = mount(ElementLibrary, {
+      global: { provide: { [shapeDragStartKey as symbol]: startDrag } },
+    })
+    const cell = wrapper.find('[data-testid="shape-cell"][aria-label="矩形"]')
+
+    await cell.trigger('mousedown', { button: 0, clientX: 10, clientY: 10 })
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 12, clientY: 12 }))
+    expect(startDrag).not.toHaveBeenCalled()
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 14, clientY: 10 }))
+    expect(startDrag).toHaveBeenCalledOnce()
+
+    await cell.trigger('dblclick')
+    expect(wrapper.emitted('create-request')).toEqual([['rect']])
+    wrapper.unmount()
   })
 
   it('回车格子 emit create-request(shapeType)', async () => {

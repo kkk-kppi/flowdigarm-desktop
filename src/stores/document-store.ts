@@ -75,6 +75,10 @@ interface RevisionTracker {
 
 const revisionTrackers = new WeakMap<object, RevisionTracker>()
 
+function sideTableKey(store: object): object {
+  return (store as { $state?: object }).$state ?? store
+}
+
 interface RevisionTransition {
   beforeRevision: number
   afterRevision: number
@@ -86,10 +90,11 @@ interface RevisionTransitions {
 }
 
 function revisionTrackerOf(store: object): RevisionTracker {
-  let tracker = revisionTrackers.get(store)
+  const key = sideTableKey(store)
+  let tracker = revisionTrackers.get(key)
   if (!tracker) {
     tracker = { next: 0, current: 0, saved: 0, pages: new Map() }
-    revisionTrackers.set(store, tracker)
+    revisionTrackers.set(key, tracker)
   }
   return tracker
 }
@@ -155,7 +160,7 @@ function recordRedoRevision(store: object, pageId: string): boolean {
 }
 
 function resetRevision(store: object): void {
-  revisionTrackers.set(store, {
+  revisionTrackers.set(sideTableKey(store), {
     next: 0,
     current: 0,
     saved: 0,
@@ -164,19 +169,21 @@ function resetRevision(store: object): void {
 }
 
 function shapeUsageRepositoryOf(store: object): ShapeUsageRepository {
-  let repository = shapeUsageRepositories.get(store)
+  const key = sideTableKey(store)
+  let repository = shapeUsageRepositories.get(key)
   if (!repository) {
     repository = new InMemoryShapeUsageRepository()
-    shapeUsageRepositories.set(store, repository)
+    shapeUsageRepositories.set(key, repository)
   }
   return repository
 }
 
 function pageManagerOf(store: object, document: DiagramDocument): PageManager {
-  let manager = pageManagers.get(store)
+  const key = sideTableKey(store)
+  let manager = pageManagers.get(key)
   if (!manager) {
     manager = new PageManager(document)
-    pageManagers.set(store, manager)
+    pageManagers.set(key, manager)
   }
   return manager
 }
@@ -247,7 +254,7 @@ export const useDocumentStore = defineStore('document', {
     },
     /** 载入文档：重建 PageManager、清 dirty；path 缺省视为未关联文件。 */
     loadDocument(document: DiagramDocument, path?: string) {
-      pageManagers.set(this, new PageManager(document, this.defaultZoom))
+      pageManagers.set(sideTableKey(this), new PageManager(document, this.defaultZoom))
       this.document = markRaw(document)
       this.documentEpoch += 1
       this.activePageId = document.pages[0]?.id ?? ''
@@ -271,7 +278,7 @@ export const useDocumentStore = defineStore('document', {
             defaultConnector: defaults.defaultConnector,
           })),
         })
-        pageManagers.set(this, new PageManager(this.document, defaults.defaultZoom))
+        pageManagers.set(sideTableKey(this), new PageManager(this.document, defaults.defaultZoom))
       } else {
         pageManagerOf(this, this.document).setDefaultZoom(defaults.defaultZoom)
       }
@@ -347,7 +354,7 @@ export const useDocumentStore = defineStore('document', {
       this.clipboard = markRaw(payload)
       this.pasteCount = 0 // 新 payload 起新偏移序列
       try {
-        await systemClipboards.get(this)?.write(payload)
+        await systemClipboards.get(sideTableKey(this))?.write(payload)
       } catch {
         this.setNotice('系统剪贴板不可用，已使用应用内剪贴板。')
       }
@@ -371,7 +378,7 @@ export const useDocumentStore = defineStore('document', {
       this.executeCommand(createDeleteCellsCommand(page, nodeIds, edgeIds))
       selection.clear()
       try {
-        await systemClipboards.get(this)?.write(payload)
+        await systemClipboards.get(sideTableKey(this))?.write(payload)
       } catch {
         this.setNotice('系统剪贴板不可用，已使用应用内剪贴板。')
       }
@@ -397,7 +404,7 @@ export const useDocumentStore = defineStore('document', {
       let payload = this.clipboard
       if (!payload) {
         try {
-          payload = await systemClipboards.get(this)?.read() ?? null
+          payload = await systemClipboards.get(sideTableKey(this))?.read() ?? null
         } catch {
           this.setNotice('系统剪贴板不可用，已使用应用内剪贴板。')
         }
@@ -409,7 +416,7 @@ export const useDocumentStore = defineStore('document', {
       this.executeCommand(createPasteCommand(payload, this.activePageId, this.pasteCount))
     },
     setSystemClipboard(clipboard: ClipboardRepository) {
-      systemClipboards.set(this, clipboard)
+      systemClipboards.set(sideTableKey(this), clipboard)
       this.systemClipboardConfigured = true
     },
     /**
@@ -441,7 +448,7 @@ export const useDocumentStore = defineStore('document', {
     },
     /** 注入常用形状仓库（Task 8 换 SQLite 实现；测试注入 mock）。 */
     setShapeUsageRepository(repository: ShapeUsageRepository) {
-      shapeUsageRepositories.set(this, repository)
+      shapeUsageRepositories.set(sideTableKey(this), repository)
     },
     /** 记录一次形状使用（成功后递增版本号驱动常用区刷新；失败静默——统计不影响编辑）。 */
     async recordShapeUsage(shapeType: string) {

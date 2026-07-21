@@ -147,7 +147,8 @@ export class GraphAdapter {
   private readonly unsubscribes: Unsubscribe[] = []
   /** 抑制 syncViewport 引发的回流事件，避免视口状态回声。 */
   private applyingViewport = false
-  private moveGestureBefore: { id: string; x: number; y: number } | null = null
+  private moveGestureBefore: { id: string; x: number; y: number; rawX: number; rawY: number } | null = null
+  private moveGesturePointer: { x: number; y: number } | null = null
   private resizeGestureBefore: {
     id: string
     x: number
@@ -219,6 +220,7 @@ export class GraphAdapter {
       new Selection({
         enabled: true,
         multiple: true,
+        multipleSelectionModifiers: ['ctrl', 'meta', 'shift'],
         rubberband: true,
         movable: true,
         showNodeSelectionBox: true,
@@ -557,21 +559,36 @@ export class GraphAdapter {
 
   /** 节点移动手势合并：mousedown 记录起点，mouseup 对比终点，一次回调。 */
   private bindNodeMoveGesture(): void {
-    this.graph.on('node:mousedown', ({ node }) => {
-      const position = this.absolutePosition(node)
-      this.moveGestureBefore = { id: node.id, x: position.x, y: position.y }
-    })
-    this.graph.on('node:mouseup', ({ node }) => {
+    const finish = (node: Node, event?: { clientX: number; clientY: number }) => {
       const before = this.moveGestureBefore
+      const pointer = this.moveGesturePointer
       this.moveGestureBefore = null
-      if (!before || before.id !== node.id) {
+      this.moveGesturePointer = null
+      if (!before || before.id !== node.id) return
+      if (event && pointer && Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) <= 3) {
+        node.position(before.rawX, before.rawY)
         return
       }
       const after = this.absolutePosition(node)
       if (after.x !== before.x || after.y !== before.y) {
         this.events.onNodeMoved?.(node.id, { x: before.x, y: before.y }, after)
       }
+    }
+    this.graph.on('node:mousedown', ({ node, e }) => {
+      const position = this.absolutePosition(node)
+      const raw = node.position()
+      this.moveGestureBefore = { id: node.id, x: position.x, y: position.y, rawX: raw.x, rawY: raw.y }
+      this.moveGesturePointer = { x: e.clientX, y: e.clientY }
     })
+    this.graph.on('node:mouseup', ({ node, e }) => {
+      finish(node, e)
+    })
+    const onWindowMouseUp = (event: MouseEvent) => {
+      const cell = this.moveGestureBefore ? this.graph.getCellById(this.moveGestureBefore.id) : null
+      if (cell?.isNode()) finish(cell as Node, event)
+    }
+    window.addEventListener('mouseup', onWindowMouseUp)
+    this.unsubscribes.push(() => window.removeEventListener('mouseup', onWindowMouseUp))
     // graph.dispose 会解绑全部 graph.on 监听，无需逐个退订
   }
 

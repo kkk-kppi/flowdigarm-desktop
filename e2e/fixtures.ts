@@ -1,0 +1,68 @@
+import { expect, test as base, type ConsoleMessage, type Page } from '@playwright/test'
+import {
+  createDefaultEdgeStyle,
+  createDefaultNodeStyle,
+  createDefaultTextContent,
+  createEmptyDocument,
+  type DiagramDocument,
+} from '../src/domain/diagram'
+
+type ErrorGate = { messages: string[] }
+
+export const test = base.extend<{ errorGate: ErrorGate }>({
+  errorGate: [async ({ page }, use) => {
+    const messages: string[] = []
+    const onConsole = (message: ConsoleMessage) => {
+      if (message.type() === 'error') messages.push(`console.error: ${message.text()}`)
+    }
+    page.on('console', onConsole)
+    page.on('pageerror', (error) => messages.push(`pageerror: ${error.message}`))
+    await page.addInitScript(() => {
+      window.addEventListener('unhandledrejection', (event) => {
+        console.error('__UNHANDLED_REJECTION__', event.reason)
+      })
+    })
+    await use({ messages })
+    expect(messages, 'unexpected browser errors').toEqual([])
+  }, { auto: true }],
+})
+
+export { expect }
+
+export async function openCleanEditor(page: Page): Promise<void> {
+  await page.goto('/')
+  await expect.poll(() => page.evaluate(() => Boolean(window.__FLOW_E2E__))).toBe(true)
+  await page.evaluate(() => window.__FLOW_E2E__!.reset())
+  await expect(page.getByTestId('editor-shell')).toBeVisible()
+}
+
+export async function snapshot(page: Page) {
+  return page.evaluate(() => window.__FLOW_E2E__!.snapshot())
+}
+
+export function x6Cell(page: Page, id: string) {
+  return page.locator(`.x6-cell[data-cell-id="${id}"]`)
+}
+
+export function createCanvasFixture(): DiagramDocument {
+  const document = createEmptyDocument('画布交互夹具')
+  const page = document.pages[0]
+  const ids = {
+    group: '00000000-0000-4000-8000-000000000001',
+    first: '00000000-0000-4000-8000-000000000002',
+    second: '00000000-0000-4000-8000-000000000003',
+    third: '00000000-0000-4000-8000-000000000004',
+  }
+  page.pageSize = { preset: 'custom', width: 720, height: 520 }
+  page.nodes = [
+    { id: ids.group, shape: 'group', x: 40, y: 40, width: 560, height: 360, angle: 0, zIndex: 0, style: { ...createDefaultNodeStyle(), fillOpacity: 0, strokeDash: 'dash' }, isContainer: true },
+    { id: ids.first, shape: 'rect', x: 90, y: 100, width: 100, height: 60, angle: 0, zIndex: 1, text: createDefaultTextContent('中文节点一'), style: createDefaultNodeStyle(), parentId: ids.group },
+    { id: ids.second, shape: 'ellipse', x: 310, y: 100, width: 100, height: 60, angle: 0, zIndex: 2, text: createDefaultTextContent('中文节点二'), style: createDefaultNodeStyle(), parentId: ids.group },
+    { id: ids.third, shape: 'diamond', x: 210, y: 270, width: 100, height: 70, angle: 0, zIndex: 3, text: createDefaultTextContent('中文节点三'), style: createDefaultNodeStyle() },
+  ]
+  page.edges = [
+    { id: '00000000-0000-4000-8000-000000000011', source: { nodeId: ids.first, port: 'right' }, target: { nodeId: ids.second, port: 'left' }, connector: 'orthogonal', vertices: [{ x: 250, y: 130 }], labels: [], style: createDefaultEdgeStyle(), zIndex: 10 },
+    { id: '00000000-0000-4000-8000-000000000012', source: { nodeId: ids.second, port: 'bottom' }, target: { nodeId: ids.third, port: 'top' }, connector: 'curved', vertices: [], labels: [], style: createDefaultEdgeStyle(), zIndex: 11 },
+  ]
+  return document
+}
