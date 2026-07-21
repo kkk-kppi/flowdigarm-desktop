@@ -1,4 +1,4 @@
-import { expect, test as base, type ConsoleMessage, type Page } from '@playwright/test'
+import { expect, test as base, type ConsoleMessage, type ElementHandle, type Page } from '@playwright/test'
 import {
   createDefaultEdgeStyle,
   createDefaultNodeStyle,
@@ -51,42 +51,65 @@ export function x6Cell(page: Page, id: string) {
   return page.locator(`.x6-cell[data-cell-id="${id}"]`)
 }
 
-export async function waitForX6Cell(page: Page, id: string, revision: number) {
+export type CapturedX6Cell = {
+  revision: number
+  handle: ElementHandle<SVGElement>
+}
+
+export async function captureX6CellBeforeRebuild(page: Page, id: string): Promise<CapturedX6Cell> {
+  const handle = await page.$<SVGElement>(`.x6-cell[data-cell-id="${id}"]`)
+  if (!handle) throw new Error(`Cannot capture X6 cell ${id} before rebuild`)
+  return { revision: (await snapshot(page)).revision, handle }
+}
+
+export async function waitForRebuiltX6Cell(page: Page, id: string, captured: CapturedX6Cell) {
+  try {
+    await expect.poll(() => page.evaluate(({ id, revision, oldCell }) => {
+      const cell = document.querySelector<SVGElement>(`.x6-cell[data-cell-id="${id}"]`)
+      const visibleWithBox = cell
+        ? [cell, ...cell.querySelectorAll<SVGElement>('*')].some((element) => {
+            const style = getComputedStyle(element)
+            const box = element.getBoundingClientRect()
+            return style.display !== 'none'
+              && style.visibility !== 'hidden'
+              && (box.width > 0 || box.height > 0)
+          })
+        : false
+      return {
+        revisionAdvanced: (window.__FLOW_E2E__?.snapshot().revision ?? revision) !== revision,
+        oldDetached: oldCell.isConnected === false,
+        newAttached: cell?.isConnected === true,
+        identityChanged: cell !== null && cell !== oldCell,
+        visibleWithBox,
+      }
+    }, { id, revision: captured.revision, oldCell: captured.handle })).toEqual({
+      revisionAdvanced: true,
+      oldDetached: true,
+      newAttached: true,
+      identityChanged: true,
+      visibleWithBox: true,
+    })
+  } finally {
+    await captured.handle.dispose()
+  }
+
+  const handle = await page.$<SVGElement>(`.x6-cell[data-cell-id="${id}"]`)
+  if (!handle) throw new Error(`Cannot capture rebuilt X6 cell ${id}`)
+  return handle
+}
+
+export async function waitForCreatedX6Cell(page: Page, id: string, revision: number) {
   await expect.poll(() => page.evaluate(({ id, revision }) => {
-    const state = window.__FLOW_E2E__?.snapshot()
-    const documentHasNode = state?.document.pages.some((diagramPage) =>
-      diagramPage.nodes.some((node) => node.id === id),
-    ) ?? false
-    const documentHasEdge = state?.document.pages.some((diagramPage) =>
-      diagramPage.edges.some((edge) => edge.id === id),
-    ) ?? false
-    const documentHasCell = documentHasNode || documentHasEdge
-    const cells = [...document.querySelectorAll<SVGElement>('.x6-cell[data-cell-id]')]
-      .filter((cell) => cell.dataset.cellId === id)
-    const cell = cells[0]
-    const hasBox = cell
-      ? [cell, ...cell.querySelectorAll('*')].some((element) => {
-          const box = element.getBoundingClientRect()
-          return documentHasNode
-            ? box.width > 0 && box.height > 0
-            : box.width > 0 || box.height > 0
-        })
-      : false
+    const cell = document.querySelector<SVGElement>(`.x6-cell[data-cell-id="${id}"]`)
     return {
-      revision: state?.revision,
-      documentHasCell,
-      cellCount: cells.length,
-      attached: cell?.isConnected ?? false,
-      hasBox,
+      revisionAdvanced: (window.__FLOW_E2E__?.snapshot().revision ?? revision) > revision,
+      attached: cell?.isConnected === true,
     }
-  }, { id, revision })).toEqual({
-    revision,
-    documentHasCell: true,
-    cellCount: 1,
-    attached: true,
-    hasBox: true,
-  })
-  return x6Cell(page, id)
+  }, { id, revision })).toEqual({ revisionAdvanced: true, attached: true })
+
+  const handle = await page.$<SVGElement>(`.x6-cell[data-cell-id="${id}"]`)
+  if (!handle) throw new Error(`Cannot capture created X6 cell ${id}`)
+  return handle
 }
 
 export function createCanvasFixture(): DiagramDocument {
