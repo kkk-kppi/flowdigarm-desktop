@@ -94,13 +94,13 @@
 
 ## 9. 属性和数据（右侧面板/几何显示/业务数据）
 
-- 入口：右侧面板的「属性」标签页 `src/ui/inspector/RightPanel.vue`；单节点时显示节点信息、几何、样式和文本，选中边时显示边属性，多选时显示可聚合的样式与文本字段。面板可折叠，窗口宽度小于 1100px 时以右侧浮层显示。
-- 前置条件：属性编辑要求当前页存在选择；未选择时显示「未选择图元」。几何区仅在恰好选择一个节点时显示；边属性区要求至少选择一条边。
-- 成功结果：类型和 ID 只读；名称、文本与链接失焦提交；X/Y/宽/高按当前页面单位显示，写入时换算回 pt；角度写入后规范化；节点与边样式支持多选聚合，「多个值」状态不会伪装成某个目标值。节点 `data` 字段能够随 `.flowdiagram` 校验、保存、打开和 JSON 导出往返。
-- 失败反馈：非数字几何输入不提交；宽高小于形状最小尺寸时按最小尺寸钳制；非法链接在面板显示「仅支持 http、https、mailto 链接。」且文档不变。当前版本**没有业务数据 JSON 编辑入口**，只能由合法图文件保留和往返该字段，不得将其描述为可视化编辑已完成。
-- 撤销边界：名称/内容、链接、移动、缩放、旋转、节点样式、边样式、文本样式和连接类型均按一次控件提交生成一条记录；展开/折叠区块、切换标签和收起面板不进入撤销历史。业务数据没有 UI 写入命令。
+- 入口：右侧面板的「属性」标签页 `src/ui/inspector/RightPanel.vue`；单节点时显示节点信息、几何、业务数据、样式和文本，选中边时显示边属性，多选时显示可聚合的样式与文本字段。面板可折叠，窗口宽度小于 1100px 时以右侧浮层显示。
+- 前置条件：属性编辑要求当前页存在选择；未选择时显示「未选择图元」。几何与业务数据编辑仅支持恰好选择一个节点；多选或边选中时业务数据控件禁用并说明原因；边属性区要求至少选择一条边。
+- 成功结果：类型和 ID 只读；名称、文本与链接失焦提交；X/Y/宽/高按当前页面单位显示，写入时换算回 pt；角度写入后规范化；节点与边样式支持多选聚合，「多个值」状态不会伪装成某个目标值。业务数据以格式化 JSON 对象编辑，可应用、重置、撤销，并随 `.flowdiagram` 校验、保存、打开和 JSON 导出往返。
+- 失败反馈：非数字几何输入不提交；宽高小于形状最小尺寸时按最小尺寸钳制；非法链接在面板显示「仅支持 http、https、mailto 链接。」且文档不变；业务数据 JSON 无效或不是对象时显示中文行内错误且不修改文档。
+- 撤销边界：名称/内容、链接、移动、缩放、旋转、节点样式、边样式、文本样式、连接类型和一次业务数据应用均生成一条记录；业务数据语义未变化时不入栈；展开/折叠区块、重置草稿、切换标签和收起面板不进入撤销历史。
 - 数据字段：`DiagramNode` 的 id/shape/x/y/width/height/angle/zIndex/text/style/link/data/parentId/isContainer/imageHref，`DiagramEdge` 的 source/target/connector/vertices/labels/style/link/zIndex（`src/domain/diagram.ts`）；单位换算在 `src/domain/measurement.ts`；聚合在 `src/application/inspector/aggregate-style.ts`。
-- 自动化测试位置：`tests/component/RightPanel.test.ts`、`tests/component/PropertyTab.test.ts`、`tests/unit/editor/aggregate-style.test.ts`、`tests/unit/editor/aggregate-display.test.ts`、`tests/unit/domain/document-schema.test.ts`、`tests/unit/stores/document-store.test.ts`。
+- 自动化测试位置：`tests/component/RightPanel.test.ts`、`tests/component/PropertyTab.test.ts`、`tests/unit/editor/business-data-json.test.ts`、`tests/unit/editor/commands/set-business-data.test.ts`、`tests/unit/editor/aggregate-style.test.ts`、`tests/unit/editor/aggregate-display.test.ts`、`tests/unit/domain/document-schema.test.ts`、`tests/unit/stores/document-store.test.ts`。
 
 ## 10. 发现与帮助（查找替换/右键菜单/tooltip/帮助注册表）
 

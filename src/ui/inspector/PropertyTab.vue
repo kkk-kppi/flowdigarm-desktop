@@ -66,6 +66,59 @@
         </div>
       </section>
 
+      <section class="prop-section" data-testid="section-business-data">
+        <button
+          type="button"
+          class="section-header"
+          :aria-expanded="expanded.businessData"
+          @click="expanded.businessData = !expanded.businessData"
+        >
+          {{ expanded.businessData ? '▾' : '▸' }} 业务数据
+        </button>
+        <div v-if="expanded.businessData" class="section-body">
+          <textarea
+            v-model="businessDataDraft"
+            rows="8"
+            class="business-data-json"
+            data-testid="business-data-json"
+            title="业务数据 JSON 对象"
+            :disabled="!singleNode"
+          />
+          <p
+            v-if="!singleNode"
+            class="disabled-explanation"
+            data-testid="business-data-disabled"
+          >
+            仅支持单个节点编辑业务数据。
+          </p>
+          <p
+            v-if="businessDataError"
+            class="business-data-error"
+            data-testid="business-data-error"
+          >
+            {{ businessDataError }}
+          </p>
+          <div class="business-data-actions">
+            <button
+              type="button"
+              data-testid="business-data-apply"
+              :disabled="!singleNode"
+              @click="applyBusinessData"
+            >
+              应用
+            </button>
+            <button
+              type="button"
+              data-testid="business-data-reset"
+              :disabled="!singleNode"
+              @click="resetBusinessDataDraft"
+            >
+              重置
+            </button>
+          </div>
+        </div>
+      </section>
+
       <!-- 样式（节点） -->
       <section v-if="selectedNodes.length > 0" class="prop-section" data-testid="section-style">
         <button type="button" class="section-header" :aria-expanded="expanded.style" @click="expanded.style = !expanded.style">
@@ -508,6 +561,7 @@ import { MoveCellsCommand } from '@/application/commands/move-cells'
 import { ResizeCellsCommand } from '@/application/commands/resize-cells'
 import { RotateCellsCommand } from '@/application/commands/rotate-cells'
 import { SetLinkCommand } from '@/application/commands/set-link'
+import { SetBusinessDataCommand } from '@/application/commands/set-business-data'
 import { validateHyperlink } from '@/application/links/hyperlink-validator'
 import {
   TextStyleCommand,
@@ -529,6 +583,10 @@ import {
 } from '@/application/inspector/aggregate-display'
 import { fontFamilies, fontSizes } from '@/application/inspector/font-presets'
 import {
+  hasBusinessDataChanged,
+  parseBusinessDataJson,
+} from '@/application/inspector/business-data-json'
+import {
   buildTextStyleTargets,
   pickPatch,
   textContentsForSelection,
@@ -542,7 +600,14 @@ const documentStore = useDocumentStore()
 const selectionStore = useSelectionStore()
 const propertyRoot = ref<HTMLElement | null>(null)
 
-const expanded = reactive({ info: true, geometry: true, style: true, text: true, edge: true })
+const expanded = reactive({
+  info: true,
+  geometry: true,
+  businessData: true,
+  style: true,
+  text: true,
+  edge: true,
+})
 
 async function focusSection(section: 'link' | 'text' | 'line'): Promise<void> {
   if (section === 'text') expanded.text = true
@@ -580,6 +645,46 @@ const singleEdge = computed(() =>
     ? selectedEdges.value[0]
     : undefined,
 )
+
+const businessDataDraft = ref('')
+const businessDataError = ref<string | null>(null)
+
+function formattedBusinessData(data: Record<string, unknown> | undefined): string {
+  return JSON.stringify(data ?? {}, null, 2)
+}
+
+function resetBusinessDataDraft(): void {
+  businessDataDraft.value = formattedBusinessData(singleNode.value?.data)
+  businessDataError.value = null
+}
+
+function applyBusinessData(): void {
+  const node = singleNode.value
+  const pageId = page.value?.id
+  if (!node || !pageId) return
+  const result = parseBusinessDataJson(businessDataDraft.value)
+  if (!result.ok) {
+    businessDataError.value = result.error
+    return
+  }
+  businessDataError.value = null
+  const formatted = formattedBusinessData(result.data)
+  if (!hasBusinessDataChanged(node.data, result.data)) {
+    businessDataDraft.value = formatted
+    return
+  }
+  documentStore.executeCommand(
+    new SetBusinessDataCommand({
+      pageId,
+      nodeId: node.id,
+      before: node.data,
+      after: result.data,
+    }),
+  )
+  businessDataDraft.value = formatted
+}
+
+watch(singleNode, resetBusinessDataDraft, { immediate: true })
 
 // ---------- 聚合 ----------
 
@@ -987,6 +1092,53 @@ function commitLink(kind: 'node' | 'edge', event: Event): void {
   border-radius: 3px;
   background: var(--color-panel);
   color: var(--color-text);
+}
+
+.business-data-json {
+  box-sizing: border-box;
+  width: 100%;
+  resize: vertical;
+  padding: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  background: var(--color-panel);
+  color: var(--color-text);
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.business-data-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.business-data-actions button {
+  padding: 3px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  background: var(--color-panel);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.business-data-actions button:disabled,
+.business-data-json:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.business-data-error,
+.disabled-explanation {
+  margin: 6px 0 0;
+  font-size: 11px;
+}
+
+.business-data-error {
+  color: #d4380d;
+}
+
+.disabled-explanation {
+  color: var(--color-text-secondary);
 }
 
 .prop-row textarea {

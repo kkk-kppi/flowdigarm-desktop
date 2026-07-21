@@ -79,8 +79,8 @@
 | Windows NSIS/MSI 安装与签名 | 未覆盖 | 工作流已配置；未使用真实证书 secrets 构建、安装和验证。 |
 | macOS app/DMG 两架构 | 未覆盖 | 仅有 runner/target 配置，没有本地构建、安装和关键路径报告。 |
 | macOS 签名与公证 | 未覆盖 | 未使用真实 Apple secrets 执行签名或公证。 |
-| 业务数据 JSON 编辑入口 | 未覆盖 | `DiagramNode.data` 可校验和文件往返，但当前 UI 没有编辑器。 |
+| 业务数据 JSON 编辑入口 | 通过 | 单节点可格式化编辑 JSON 对象；解析错误、非对象拒绝、应用/重置、单条历史、撤销和禁用状态均通过。证据：`tests/unit/editor/business-data-json.test.ts`、`tests/unit/editor/commands/set-business-data.test.ts`、`tests/component/PropertyTab.test.ts`。 |
 
 ## 结论
 
-Windows 自动化、性能、导出和 no-bundle 构建有通过证据；macOS 两架构本地 E2E、真实签名/公证、显式断网桌面路径、Windows 启动 smoke、跳线视觉语义和业务数据编辑入口仍未覆盖。故整体状态保持 **未完成（存在未覆盖）**，不得宣称产品或发布验收完成。
+Windows 自动化、性能、导出、no-bundle 构建和业务数据 JSON 编辑有通过证据；macOS 两架构本地 E2E、真实签名/公证、显式断网桌面路径、Windows 启动 smoke 和跳线视觉语义仍未覆盖。故整体状态保持 **未完成（存在未覆盖）**，不得宣称产品或发布验收完成。

@@ -40,6 +40,76 @@ describe('PropertyTab 无选择', () => {
 })
 
 describe('PropertyTab 单节点', () => {
+  it('格式化显示业务数据，应用后可撤销且只产生一条记录', async () => {
+    const document = createTestDocument()
+    document.pages[0].nodes[0].data = { 负责人: '张三', 审批: { 通过: false } }
+    const { wrapper, store, selection } = mountTab(document)
+    await select(wrapper, selection, ['node-1'])
+    const textarea = wrapper.find('[data-testid="business-data-json"]')
+
+    expect((textarea.element as HTMLTextAreaElement).value).toBe(
+      JSON.stringify({ 负责人: '张三', 审批: { 通过: false } }, null, 2),
+    )
+    await textarea.setValue('{"负责人":"李四","审批":{"通过":true}}')
+    await wrapper.find('[data-testid="business-data-apply"]').trigger('click')
+
+    expect(store.document.pages[0].nodes[0].data).toEqual({
+      负责人: '李四',
+      审批: { 通过: true },
+    })
+    expect(store.undoLabel).toBe('业务数据')
+    store.undo()
+    expect(store.document.pages[0].nodes[0].data).toEqual({
+      负责人: '张三',
+      审批: { 通过: false },
+    })
+    expect(store.canUndo).toBe(false)
+  })
+
+  it('无效业务数据显示行内错误且不执行命令', async () => {
+    const { wrapper, store, selection } = mountTab()
+    await select(wrapper, selection, ['node-1'])
+    await wrapper.find('[data-testid="business-data-json"]').setValue('[]')
+    await wrapper.find('[data-testid="business-data-apply"]').trigger('click')
+
+    expect(wrapper.find('[data-testid="business-data-error"]').text()).toBe(
+      '业务数据必须是 JSON 对象。',
+    )
+    expect(store.document.pages[0].nodes[0].data).toBeUndefined()
+    expect(store.canUndo).toBe(false)
+  })
+
+  it('业务数据没有变化时不执行命令', async () => {
+    const document = createTestDocument()
+    document.pages[0].nodes[0].data = { 编号: 7 }
+    const { wrapper, store, selection } = mountTab(document)
+    await select(wrapper, selection, ['node-1'])
+
+    await wrapper.find('[data-testid="business-data-json"]').setValue('{"编号":7}')
+    await wrapper.find('[data-testid="business-data-apply"]').trigger('click')
+
+    expect(store.canUndo).toBe(false)
+  })
+
+  it('重置业务数据草稿并清除错误', async () => {
+    const document = createTestDocument()
+    document.pages[0].nodes[0].data = { 状态: '草稿' }
+    const { wrapper, store, selection } = mountTab(document)
+    await select(wrapper, selection, ['node-1'])
+    const textarea = wrapper.find('[data-testid="business-data-json"]')
+    await textarea.setValue('{')
+    await wrapper.find('[data-testid="business-data-apply"]').trigger('click')
+    expect(wrapper.find('[data-testid="business-data-error"]').exists()).toBe(true)
+
+    await wrapper.find('[data-testid="business-data-reset"]').trigger('click')
+
+    expect((textarea.element as HTMLTextAreaElement).value).toBe(
+      JSON.stringify({ 状态: '草稿' }, null, 2),
+    )
+    expect(wrapper.find('[data-testid="business-data-error"]').exists()).toBe(false)
+    expect(store.canUndo).toBe(false)
+  })
+
   it('节点信息：类型只读、名称=文本值、ID 小字只读', async () => {
     const { wrapper, selection } = mountTab()
     await select(wrapper, selection, ['node-1'])
@@ -243,9 +313,31 @@ describe('PropertyTab 多选聚合', () => {
     expect(wrapper.find('[data-testid="node-name"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="geo-x"]').exists()).toBe(false)
   })
+
+  it('多选时禁用业务数据编辑并说明原因', async () => {
+    const { wrapper, selection } = mountTab()
+    await select(wrapper, selection, ['node-1', 'node-2'])
+
+    expect(wrapper.find('[data-testid="business-data-json"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-testid="business-data-apply"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-testid="business-data-disabled"]').text()).toBe(
+      '仅支持单个节点编辑业务数据。',
+    )
+  })
 })
 
 describe('PropertyTab 边选中', () => {
+  it('边选中时禁用业务数据编辑并说明原因', async () => {
+    const { wrapper, selection } = mountTab()
+    await select(wrapper, selection, ['edge-1'])
+
+    expect(wrapper.find('[data-testid="business-data-json"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-testid="business-data-reset"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-testid="business-data-disabled"]').text()).toBe(
+      '仅支持单个节点编辑业务数据。',
+    )
+  })
+
   it('显示边属性区；线条颜色写入一条「应用样式」记录', async () => {
     const { wrapper, store, selection } = mountTab()
     await select(wrapper, selection, ['edge-1'])
