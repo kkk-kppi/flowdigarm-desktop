@@ -7,6 +7,7 @@ export interface EditorPreferences {
   showGrid: boolean
   showGuides: boolean
   showPageBreaks: boolean
+  snapToGrid: boolean
   defaultZoom: number
   defaultPageUnit: PageUnit
   defaultConnector: ConnectorKind
@@ -20,6 +21,7 @@ export const DEFAULT_EDITOR_PREFERENCES: EditorPreferences = {
   showGrid: false,
   showGuides: true,
   showPageBreaks: false,
+  snapToGrid: true,
   defaultZoom: 1,
   defaultPageUnit: 'mm',
   defaultConnector: 'orthogonal',
@@ -49,6 +51,7 @@ const settingKeys: Array<[keyof EditorPreferences, string]> = [
   ['showGrid', 'editor.showGrid'],
   ['showGuides', 'editor.showGuides'],
   ['showPageBreaks', 'editor.showPageBreaks'],
+  ['snapToGrid', 'editor.snapToGrid'],
   ['defaultZoom', 'editor.defaultZoom'],
   ['defaultPageUnit', 'editor.defaultPageUnit'],
   ['defaultConnector', 'editor.defaultConnector'],
@@ -141,6 +144,7 @@ function validateSettings(values: Record<string, unknown>): EditorPreferences {
     showGrid: booleanOr(values['editor.showGrid'], DEFAULT_EDITOR_PREFERENCES.showGrid),
     showGuides: booleanOr(values['editor.showGuides'], DEFAULT_EDITOR_PREFERENCES.showGuides),
     showPageBreaks: booleanOr(values['editor.showPageBreaks'], DEFAULT_EDITOR_PREFERENCES.showPageBreaks),
+    snapToGrid: booleanOr(values['editor.snapToGrid'], DEFAULT_EDITOR_PREFERENCES.snapToGrid),
     defaultZoom: numberOr(values['editor.defaultZoom'], 0.1, 8, DEFAULT_EDITOR_PREFERENCES.defaultZoom),
     defaultPageUnit: oneOf(values['editor.defaultPageUnit'], ['mm', 'cm', 'in', 'pt', 'px'])
       ?? DEFAULT_EDITOR_PREFERENCES.defaultPageUnit,

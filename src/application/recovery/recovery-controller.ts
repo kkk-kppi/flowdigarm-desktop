@@ -1,5 +1,5 @@
 import type { DiagramDocument } from '@/domain/diagram'
-import { parseDiagramDocument } from '@/domain/document-schema'
+import { parseDiagramDocument, type DocumentValidationContext } from '@/domain/document-schema'
 import type { RecoveryRepository, RecoverySnapshot } from '@/application/persistence/persistence-ports'
 
 export interface RecoveryStore {
@@ -15,6 +15,7 @@ export class RecoveryController {
     private readonly store: RecoveryStore,
     private readonly repository: RecoveryRepository,
     private readonly showError: (message: string) => void,
+    private readonly validationContext?: DocumentValidationContext,
   ) {}
 
   async checkStartup(): Promise<RecoverySnapshot | null> {
@@ -29,7 +30,7 @@ export class RecoveryController {
     }
     if (!snapshot) return null
 
-    const parsed = parseDiagramDocument(snapshot.json)
+    const parsed = parseDiagramDocument(snapshot.json, this.validationContext)
     if (!parsed.ok) {
       this.showError('恢复数据已损坏，已忽略。')
       try {

@@ -46,12 +46,17 @@ export class FindController {
       ? { kind: 'node', nodeId: match.cellId }
       : { kind: 'edgeLabel', edgeId: match.cellId, labelIndex: match.labelIndex! }
     const after = `${match.value.slice(0, match.start)}${replacement}${match.value.slice(match.end)}`
-    this.dependencies.executeCommand(new EditTextCommand({
-      pageId: match.pageId,
-      target,
-      before: match.value,
-      after,
-    }))
+    const edgeLabelBefore = target.kind === 'edgeLabel'
+      ? this.dependencies.getDocument().pages.find(({ id }) => id === match.pageId)
+        ?.edges.find(({ id }) => id === target.edgeId)?.labels[target.labelIndex]
+      : undefined
+    this.dependencies.executeCommand(new EditTextCommand(target.kind === 'edgeLabel'
+      ? {
+          pageId: match.pageId, target,
+          edgeLabelBefore: edgeLabelBefore ? structuredClone(edgeLabelBefore) : null,
+          before: match.value, after,
+        }
+      : { pageId: match.pageId, target, before: match.value, after }))
     this.search(this.request)
     return true
   }

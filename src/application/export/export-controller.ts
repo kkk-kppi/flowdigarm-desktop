@@ -1,5 +1,5 @@
 import { resolvePageBackgroundChain } from '@/application/pages/page-background-chain'
-import { serializeDiagramDocument } from '@/domain/document-schema'
+import { serializeDiagramDocument, serializeValidatedDiagramDocument, type DocumentValidationContext } from '@/domain/document-schema'
 import type { DiagramDocument } from '@/domain/diagram'
 import { renderPageSvg } from '@/infrastructure/export/svg-export'
 import type {
@@ -43,7 +43,11 @@ function reason(error: unknown): string {
 export class ExportController {
   private busy = false
 
-  constructor(private readonly source: ExportSource, private readonly exporter: DiagramExporter) {}
+  constructor(
+    private readonly source: ExportSource,
+    private readonly exporter: DiagramExporter,
+    private readonly validationContext?: DocumentValidationContext,
+  ) {}
 
   get isBusy(): boolean {
     return this.busy
@@ -98,7 +102,9 @@ export class ExportController {
             ...rendered,
           }
         }),
-        documentJson: options.format === 'json' ? serializeDiagramDocument(jsonDocument) : undefined,
+        documentJson: options.format === 'json'
+          ? this.validatedJson(jsonDocument)
+          : undefined,
       }
       try {
         return await this.exporter.export(request)
@@ -108,5 +114,12 @@ export class ExportController {
     } finally {
       this.busy = false
     }
+  }
+
+  private validatedJson(document: DiagramDocument): string {
+    if (!this.validationContext) return serializeDiagramDocument(document)
+    const result = serializeValidatedDiagramDocument(document, this.validationContext)
+    if (!result.ok) throw new Error(`文档校验失败，未导出：${result.error}`)
+    return result.json
   }
 }

@@ -24,6 +24,7 @@ import { pageToCells, relativePositionFor, type CellMetadata } from './cell-mapp
 import { isCellInteractable, toBackgroundCell } from './background-cells'
 import { SelectionBridge } from './selection-bridge'
 import { PT_TO_CSS_PX, type ViewportState } from '@/application/viewport/viewport-transform'
+import { absoluteNodePosition, snapGridPosition } from './x6-absolute-position'
 
 /** 边端点（节点 id + 端口 id）。 */
 export interface EdgeEndpointRef {
@@ -141,6 +142,7 @@ export class GraphAdapter {
   private readonly graph: Graph
   private readonly scroller: Scroller
   private readonly dnd: Dnd
+  private readonly snapline: Snapline
   private readonly container: HTMLElement
   private readonly events: GraphAdapterEvents
   private readonly unsubscribes: Unsubscribe[] = []
@@ -159,6 +161,8 @@ export class GraphAdapter {
   private verticesGestureBefore: { id: string; vertices: { x: number; y: number }[] } | null = null
   /** Shift 修饰键实时状态（Transform 部件创建时读取，keepAspectOnShiftResize 形状按修饰键等比缩放）。 */
   private shiftHeld = false
+  private snapToGridEnabled = true
+  private snapGridSize = 10
 
   constructor(container: HTMLElement, events: GraphAdapterEvents = {}) {
     this.container = container
@@ -227,7 +231,8 @@ export class GraphAdapter {
           isCellInteractable(cell) && this.events.suppressSelection?.(cell.id) !== true,
       }),
     )
-    this.graph.use(new Snapline({ enabled: true }))
+    this.snapline = new Snapline({ enabled: true })
+    this.graph.use(this.snapline)
     // 变换手势：最小尺寸按形状 minSize（部件创建时解析）；Shift 等比缩放仅对
     // keepAspectOnShiftResize 形状生效；手势结束经 node:resized/node:rotated 各回调一次
     this.graph.use(
@@ -269,18 +274,19 @@ export class GraphAdapter {
    * data 标记 background → 不可交互、不可选），再渲染前景页 cells；
    * 单参调用 = 无背景页（既有行为）。
    */
-  renderPage(page: DiagramPage, backgroundPage?: DiagramPage): void {
+  renderPage(layers: DiagramPage[]): void {
     this.graph.clearCells()
     const nodeMetas: CellMetadata[] = []
-    if (backgroundPage) {
-      for (const meta of pageToCells(backgroundPage)) {
-        this.addCell(toBackgroundCell(meta))
+    layers.forEach((page, layerIndex) => {
+      const isForeground = layerIndex === layers.length - 1
+      for (const raw of pageToCells(page)) {
+        const meta = isForeground ? raw : toBackgroundCell(raw, layers.length - layerIndex)
+        this.addCell(meta)
         if (meta.kind === 'node') nodeMetas.push(meta)
       }
-    }
-    for (const meta of pageToCells(page)) {
-      this.addCell(meta)
-      if (meta.kind === 'node') nodeMetas.push(meta)
+    })
+    if (layers.length === 0) {
+      return
     }
     this.wireParentChildren(nodeMetas)
   }
@@ -355,6 +361,17 @@ export class GraphAdapter {
     } else {
       this.graph.hideGrid()
     }
+  }
+
+  setGuidesVisible(visible: boolean): void {
+    if (visible) this.snapline.enable()
+    else this.snapline.disable()
+  }
+
+  setSnapToGrid(enabled: boolean, gridSize: number): void {
+    this.snapToGridEnabled = enabled
+    this.snapGridSize = Number.isFinite(gridSize) && gridSize > 0 ? gridSize : 1
+    this.graph.setGridSize(enabled ? this.snapGridSize : 1)
   }
 
   /** 供调试/E2E 访问底层 Graph。 */
@@ -546,13 +563,7 @@ export class GraphAdapter {
 
   /** 节点文档绝对位置（pt）：子节点 position() 为父相对坐标，沿父链累加还原。 */
   private absolutePosition(node: Node): { x: number; y: number } {
-    const position = node.position()
-    const parent = node.getParent()
-    if (parent && parent.isNode()) {
-      const parentAbs = this.absolutePosition(parent as Node)
-      return { x: parentAbs.x + position.x, y: parentAbs.y + position.y }
-    }
-    return { x: position.x, y: position.y }
+    return absoluteNodePosition(node as unknown as Parameters<typeof absoluteNodePosition>[0])
   }
 
   /** 节点移动手势合并：mousedown 记录起点，mouseup 对比终点，一次回调。 */
@@ -567,7 +578,12 @@ export class GraphAdapter {
         node.position(before.rawX, before.rawY)
         return
       }
-      const after = this.absolutePosition(node)
+      const absoluteAfter = this.absolutePosition(node)
+      const after = snapGridPosition(absoluteAfter, this.snapToGridEnabled, this.snapGridSize)
+      if (after.x !== absoluteAfter.x || after.y !== absoluteAfter.y) {
+        const raw = node.position()
+        node.position(raw.x + after.x - absoluteAfter.x, raw.y + after.y - absoluteAfter.y)
+      }
       if (after.x !== before.x || after.y !== before.y) {
         this.events.onNodeMoved?.(node.id, { x: before.x, y: before.y }, after)
       }
@@ -667,7 +683,7 @@ export class GraphAdapter {
   /** 变换手势合并：node:resize/node:rotate 记录 before，node:resized/node:rotated 各回调一次。 */
   private bindTransformGestures(): void {
     this.graph.on('node:resize', ({ node }) => {
-      this.resizeGestureBefore = { id: node.id, ...node.position(), ...node.size() }
+      this.resizeGestureBefore = { id: node.id, ...this.absolutePosition(node), ...node.size() }
     })
     this.graph.on('node:resized', ({ node }) => {
       const before = this.resizeGestureBefore
@@ -675,7 +691,7 @@ export class GraphAdapter {
       if (!before || before.id !== node.id) {
         return
       }
-      const after = { ...node.position(), ...node.size() }
+      const after = { ...this.absolutePosition(node), ...node.size() }
       if (
         after.x !== before.x ||
         after.y !== before.y ||

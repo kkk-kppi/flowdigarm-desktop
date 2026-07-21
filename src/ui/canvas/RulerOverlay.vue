@@ -19,7 +19,7 @@
 // 标尺叠层：次/主刻度线画在 canvas（jsdom 下 getContext('2d') 为 null，已判空保护），
 // 主刻度标签用绝对定位 <span> 渲染。pt↔px 换算一律经 ViewportTransform，本文件不写换算公式。
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { ptToUnit, unitToPt, type Unit } from '@/domain/measurement'
+import { rulerPtToUnit, rulerUnitToPt, type Unit } from '@/application/viewport/ruler-measure'
 import { computeRulerScale } from '@/infrastructure/x6/ruler-scale'
 import { ViewportTransform, type ViewportState } from '@/application/viewport/viewport-transform'
 
@@ -56,7 +56,7 @@ const visibleRangePt = computed(() => {
 
 /** 标签值 = 文档 pt 转当前单位后按需保留小数；规范 -0 显示。 */
 function formatTickLabel(pt: number, decimals: number): string {
-  const text = ptToUnit(pt, props.unit).toFixed(decimals)
+  const text = rulerPtToUnit(pt, props.unit).toFixed(decimals)
   return Number(text) === 0 ? (0).toFixed(decimals) : text
 }
 
@@ -68,14 +68,14 @@ interface MajorTick {
 
 const majorTicks = computed<MajorTick[]>(() => {
   const { majorStep, labelDecimals } = scale.value
-  const kMin = Math.ceil(ptToUnit(visibleRangePt.value.from, props.unit) / majorStep - 1e-9)
-  const kMax = Math.floor(ptToUnit(visibleRangePt.value.to, props.unit) / majorStep + 1e-9)
+  const kMin = Math.ceil(rulerPtToUnit(visibleRangePt.value.from, props.unit) / majorStep - 1e-9)
+  const kMax = Math.floor(rulerPtToUnit(visibleRangePt.value.to, props.unit) / majorStep + 1e-9)
   if (kMax - kMin > MAX_MAJOR_TICKS) {
     return []
   }
   const ticks: MajorTick[] = []
   for (let k = kMin; k <= kMax; k++) {
-    const pt = unitToPt(k * majorStep, props.unit)
+    const pt = rulerUnitToPt(k * majorStep, props.unit)
     const screen = transform.value.pointToScreen({ x: pt, y: pt })
     const px = isHorizontal.value ? screen.x : screen.y
     ticks.push({
@@ -104,13 +104,13 @@ function drawTicks(): void {
   context.lineWidth = 1
 
   const { minorStep } = scale.value
-  const kMin = Math.ceil(ptToUnit(visibleRangePt.value.from, props.unit) / minorStep - 1e-9)
-  const kMax = Math.floor(ptToUnit(visibleRangePt.value.to, props.unit) / minorStep + 1e-9)
+  const kMin = Math.ceil(rulerPtToUnit(visibleRangePt.value.from, props.unit) / minorStep - 1e-9)
+  const kMax = Math.floor(rulerPtToUnit(visibleRangePt.value.to, props.unit) / minorStep + 1e-9)
   if (kMax - kMin > MAX_MINOR_TICKS) {
     return
   }
   for (let k = kMin; k <= kMax; k++) {
-    const pt = unitToPt(k * minorStep, props.unit)
+    const pt = rulerUnitToPt(k * minorStep, props.unit)
     const screen = transform.value.pointToScreen({ x: pt, y: pt })
     const px = Math.round(isHorizontal.value ? screen.x : screen.y) + 0.5
     const isMajor = Math.abs(k % 5) === 0 // minorStep = majorStep / 5

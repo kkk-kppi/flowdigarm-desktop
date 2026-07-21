@@ -5,10 +5,7 @@ import { openDiagram, openRecentDiagram, saveDiagram } from '@/application/persi
 import { DiagramFileError } from '@/application/persistence/file-errors'
 
 function validDocument(): DiagramDocument {
-  const document = createEmptyDocument('审批流程')
-  document.id = 'doc-1'
-  document.pages[0].id = 'page-1'
-  return document
+  return createEmptyDocument('审批流程')
 }
 
 function repository(overrides: Partial<DiagramFileRepository> = {}): DiagramFileRepository {
@@ -43,7 +40,7 @@ describe('document file use cases', () => {
     ['URL', () => {
       const document = validDocument()
       document.pages[0].nodes.push({
-        id: 'node-1', shape: 'rect', x: 0, y: 0, width: 10, height: 10, angle: 0, zIndex: 0,
+        id: crypto.randomUUID(), shape: 'rect', x: 0, y: 0, width: 10, height: 10, angle: 0, zIndex: 0,
         style: { fill: '#ffffff', fillOpacity: 1, stroke: '#000000', strokeWidth: 1 },
         link: 'javascript:alert(1)',
       })

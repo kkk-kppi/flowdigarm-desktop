@@ -1,0 +1,20 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "./.opencode/plugins/superpowers/.opencode/plugins/superpowers.js"
+  ],
+  "skills": {
+    "paths": [
+      ".opencode/skills"
+    ]
+  },
+  "provider": {
+    "openai": {
+      "options": {
+        "headerTimeout": 60000,
+        "timeout": 600000,
+        "chunkTimeout": 60000
+      }
+    }
+  }
+}

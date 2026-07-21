@@ -6,7 +6,7 @@
 
 - 入口：文件菜单提供新建、打开、保存、另存为与最近文件；页面标签栏 `src/ui/pages/PageTabs.vue` 管理多页；启动发现恢复快照时显示恢复对话框。所有文件动作经 `FileWorkflowController` 协调 store/repository，Vue 不直接读写文件或调用 Tauri。
 - 前置条件：存在已打开文档（至少一页）；背景页引用目标必须是背景类型页面且不成循环。
-- 成功结果：新建/打开/关闭遇到脏文档时可保存、不保存或取消；文件选择取消保持当前文档。`.flowdiagram` 打开经 Rust 基础校验和 application 完整领域校验；保存使用同目录临时文件、fsync 与原子替换。显式保存只清理捕获 revision 对应的恢复 token；恢复文档以 dirty 状态载入并保留快照，直到显式保存成功。最近文件按置顶、最近顺序显示并受首选项数量限制。
+- 成功结果：新建/打开/关闭遇到脏文档时可保存、不保存或取消；文件选择取消保持当前文档。打开、最近、恢复、自动恢复、保存和 JSON 导出使用同一形状感知校验上下文；当前 schema 的全部 ID 必须是 UUIDv4，完整页面/节点/边/端口/父容器/背景链/数值/颜色/文本/图片/链接结构均校验。旧格式可迁移非 UUID ID 与引用。保存校验先于 repository 写入；失败不写文件、不清恢复、不改变 dirty。有效保存使用同目录临时文件、fsync 与原子替换，只清理捕获 revision 对应的恢复 token。
 - 失败反馈：删除最后一页提示「至少保留一个页面。」；删除被引用背景页提示「该页面被引用为背景页，无法删除。」；空白页名提示「页面名称不能为空。」；背景引用非法提示「背景页设置无效。」；非法文件显示具体中文校验错误且不替换当前文档；失效最近文件提示「最近文件不可用，已从列表移除。」；保存失败提示「无法保存，原文件未被覆盖。」；损坏恢复数据提示「恢复数据已损坏，已忽略。」。页面无图元时「自动调整大小」禁用并提示「页面无图元」。
 - 撤销边界：新建/删除/重命名页面各一条记录；页面设置一次"应用"一条记录（无变化不产生）；"自动调整大小"一条记录；切换页与分页符等视图开关不产生命令、不进入撤销历史。
 - 数据字段：图文件只保存 `DiagramDocument`；SQLite `flowchart-editor.db` 只保存 7 张本机元数据表：迁移版本、设置、最近文件、恢复快照、形状统计、窗口状态和用户模板。最近文件含 path/documentId/name/lastOpenedAt/pinned，恢复快照含 documentId/name/json/sourcePath/updatedAt，时间为 Unix 毫秒 UTC。应用契约见 `src/application/persistence/persistence-ports.ts`，SQLite 不保存用户图文件主体。
@@ -16,11 +16,11 @@
 
 - 入口：应用主窗口中央画布区 `src/ui/canvas/CanvasArea.vue`；Ctrl/Cmd+滚轮缩放，中键或 Space+左键拖拽平移；「视图」菜单提供「放大」「缩小」「适应屏幕」「适应页面」「适应内容」「适应选区」及标尺、网格、参考线、分页符开关，状态栏提供缩放比例、适应屏幕、网格和对齐开关。
 - 前置条件：存在已打开的文档页；页面单位 ∈ mm/cm/in/pt/px（默认 A4、mm）。
-- 成功结果：X6 画布按 cell-mapper 元数据渲染页面节点与边；顶部/左侧标尺随单位、缩放、平移实时换算，主刻度约 60–120 CSS px（1/2/5×10ⁿ 自适应，连续缩放极端值可达约 150）；Ctrl+滚轮以光标为锚缩放（10%–400% 钳制）；中键/Space+左键平移；适应窗口/页面/内容/选择使目标矩形在视口居中；网格开关控制 X6 点阵网格显示；100% 缩放 = 96 CSS px/in。
+- 成功结果：X6 画布按 cell-mapper 元数据渲染页面节点与边；标尺实时换算；Ctrl+滚轮缩放、中键/Space+左键平移及四种适应均为视图操作。网格开关控制点阵显示，参考线开关调用 Snapline enable/disable，对齐开关把移动坐标按当前页 gridSize 吸附或保持原坐标；三者不写文档历史。100% 缩放 = 96 CSS px/in。
 - 失败反馈：视口操作为纯视图状态，无失败路径；空内容时"适应内容"不改变视口（由调用方回退到适应页面）。
 - 撤销边界：缩放、平移、四种适应、标尺/网格/参考线/分页符开关均为视图操作，不进入撤销历史。
 - 数据字段：视口状态 `ViewportState { zoom, panX, panY }`（pan 单位 CSS px，`src/application/viewport/viewport-transform.ts`）；视图设置 `showRulers/showGrid/showGuides/showPageBreaks/snapToGrid/theme`（`src/stores/app-store.ts`，默认值对齐详细设计 §9.4）。
-- 自动化测试位置：`tests/unit/editor/viewport/viewport-transform.test.ts`、`tests/unit/editor/viewport/ruler-scale.test.ts`、`tests/unit/editor/viewport/viewport-controller.test.ts`、`tests/unit/editor/cell-mapper.test.ts`、`tests/unit/stores/app-store.test.ts`、`tests/component/RulerOverlay.test.ts`、`tests/unit/editor/help-registry.test.ts`。
+- 自动化测试位置：`tests/unit/editor/viewport/*`、`tests/unit/editor/graph-adapter-transform.test.ts`、`tests/unit/stores/app-store.test.ts`、`tests/component/CanvasArea.test.ts`、`tests/component/RulerOverlay.test.ts`。
 
 ## 3. 图元创建（库拖入/双击创建/文本与连接工具/图片导入）
 
@@ -36,11 +36,11 @@
 
 - 入口：画布直接交互——单击/框选/Ctrl 多选（X6 Selection，`src/infrastructure/x6/graph-adapter.ts`）；拖动移动；Transform 手柄缩放/旋转；Delete/Backspace 删除；选中边后拖动端点重连、拖动拐点编辑路径。选择真源 `src/stores/selection-store.ts`（保序，首元素为锚点）。
 - 前置条件：图元已存在于当前页；背景页图元不可在前景页选择/交互。
-- 成功结果：移动/缩放/旋转手势结束各产生一条命令（down→up 合并）；缩放最小尺寸按 ShapeDefinition.minSize 钳制（X6 Transform 部件级）；Shift 缩放在 keepAspectOnShiftResize 形状（图片/椭圆）上保持纵横比；旋转角度规范化 0≤a<360；删除节点连带删除其全部关联边；切换页自动清空选择。
+- 成功结果：移动/缩放/旋转手势结束各产生一条命令（down→up 合并）；组合子节点的 X6 父相对坐标在移动和缩放前后均累加父链还原为文档绝对坐标，撤销精确恢复；缩放最小尺寸按 ShapeDefinition.minSize 钳制；Shift 缩放在图片/椭圆保持纵横比；删除节点连带删除关联边。
 - 失败反馈：命令目标不存在时抛「命令目标不存在。」（文档与历史均不变）。
 - 撤销边界：一次拖拽/缩放手势/旋转手势/重连/拐点/删除各一条记录；一次删除多个图元只产生一条「删除图元」记录。
 - 数据字段：`CellMove`/`CellResize`/`CellRotate` before/after（`src/application/commands/{move-cells,resize-cells,rotate-cells}.ts`）；删除快照（`src/application/commands/delete-cells.ts`）；`selectedIds`（`src/stores/selection-store.ts`）。
-- 自动化测试位置：`tests/unit/editor/commands/*`（move-cells/resize-rotate/delete-cells/reconnect-vertices）、`tests/unit/stores/selection-store.test.ts`、`tests/unit/stores/document-store.test.ts`。
+- 自动化测试位置：`tests/unit/editor/commands/*`、`tests/unit/editor/graph-adapter-transform.test.ts`、`tests/unit/stores/{selection-store,document-store}.test.ts`。
 
 ## 5. 剪贴板（系统与应用内复制/剪切/粘贴）
 
@@ -56,7 +56,7 @@
 
 - 入口：覆盖式文本编辑器 `src/ui/text/TextEditorOverlay.vue`（双击节点 / 选中单节点按 F2 或 Enter / 双击边编辑首标签，画布接线 `src/ui/canvas/CanvasArea.vue`）；文本样式控件在紧凑工具栏字体/段落对齐组 `src/ui/toolbar/CompactToolbar.vue` 与属性面板文本区 `src/ui/inspector/PropertyTab.vue`；会话状态机 `src/application/text/text-session.ts`。
 - 前置条件：节点或边已存在；进入编辑时该图元可为空文本（以默认 TextContent 开始）。
-- 成功结果：编辑镜像当前字体样式并按文本区就地覆盖显示；Esc 取消（文档不变），失焦或 Ctrl/Cmd+Enter 提交，Enter 在文本内换行；IME 组合过程不入撤销栈（组合中失焦挂起，上屏后提交）；提交有变更才写文档。批量文本样式（字体/字号/B/I/U/S/字体色/背景色/水平垂直对齐/方向/四边距/段前段后行距）一次控件变更作用于全部选中节点与选中边首标签；多选一致显示值、不一致显示「多个值」（不定态）、无文本禁用。竖排为逐字排版（每字符一行，源文本换行视为换列空行占位），不旋转整段。
+- 成功结果：编辑镜像当前字体样式并按文本区就地覆盖显示；Esc 取消，失焦或 Ctrl/Cmd+Enter 提交；IME 组合结束后结算。边标签命令显式携带“是否已存在”和完整标签快照：撤销新标签会移除它，撤销既有空标签会恢复空值、样式和 position，不会误删。批量文本样式仍一次作用于全部适用目标。
 - 失败反馈：提交文本超过 MAX_TEXT_LENGTH（10000）抛「文本长度超出限制。」（通知栏提示，文档不变）。
 - 撤销边界：一次编辑会话一条「编辑文本」记录（未变更不产生）；一次控件变更的全部目标合并为一条「文本样式」记录；编辑期间画布快捷键挂起。
 - 数据字段：`TextContent/TextStyle/TextBlock/TextParagraph`（`src/domain/diagram.ts`）；`EditTextCommand`（`src/application/commands/edit-text.ts`，node 与 edgeLabel 目标，edgeLabel 可追加新标签）；`TextStyleCommand`（`src/application/commands/text-style-command.ts`，style/block/paragraph 三段浅合并）；聚合 `aggregateTextStyles`（`src/application/inspector/aggregate-style.ts`）；目标构建 `buildTextStyleTargets`（`src/application/inspector/text-style-targets.ts`）；渲染布局 `layoutText/textAreaForNode`（`src/infrastructure/x6/text-layout.ts`）。
@@ -84,7 +84,7 @@
 
 ## 8. 排列（对齐/等距/层序/组合/容器/自动连线）
 
-- 入口：顶部「格式/工具」菜单、节点/多选/容器右键菜单与图层管理面板；全部经 `MenuCommandController` 调用 `src/application/arrangement/*` 和既有组合/容器命令。容器移动时成员一起移动由 `CanvasArea.vue` 收集后代并入同一条移动命令。
+- 入口：顶部「格式/工具」菜单、右键菜单与图层管理面板经 application controller 调用排列和组合命令；容器移动及后代绝对坐标批处理由 `CanvasInteractionController` 编排，Vue 只转发手势。
 - 前置条件：对齐 ≥2 个选中节点；等距 ≥3；自动连线 ≥2（容器除外）；组合 ≥2；加入容器要求目标为 isContainer 节点。
 - 成功结果：对齐以**选择序列第一个图元**为基准（左/水平居中/右/顶/垂直居中/底）；等距按轴几何顺序排序、固定最外两个、相邻边界间空隙相等（`gap=(last.start−first.end−Σmiddle.size)/(n−1)`）；层序四动作（置顶=最大 zIndex+1…/置底/上移一层=相邻交换/下移一层）执行后全页规范化为 1..n；自动连线按选择顺序生成 n−1 条边（页面默认连线类型与箭头，端口为互相对侧最近端口，autoConnectLabel 开时带空标签）；组合创建 group 容器节点（bbox=成员外接矩形，成员 parentId 指向之，ID/数据保留，嵌套允许）；取消组合还原；加入/移出容器显式改变 parentId。
 - 失败反馈：等距 <3 图元抛「等距排列至少需要三个图元。」；间距不足抛「间距不足，无法等距排列。」；非容器目标抛「目标节点不是容器。」；循环成员关系抛「加入容器会形成循环。」；对齐/自动连线/组合有效节点不足时不产生命令（UI 禁用）。
@@ -96,7 +96,7 @@
 
 - 入口：右侧面板的「属性」标签页 `src/ui/inspector/RightPanel.vue`；单节点时显示节点信息、几何、业务数据、样式和文本，选中边时显示边属性，多选时显示可聚合的样式与文本字段。面板可折叠，窗口宽度小于 1100px 时以右侧浮层显示。
 - 前置条件：属性编辑要求当前页存在选择；未选择时显示「未选择图元」。几何与业务数据编辑仅支持恰好选择一个节点；多选或边选中时业务数据控件禁用并说明原因；边属性区要求至少选择一条边。
-- 成功结果：类型和 ID 只读；名称、文本与链接失焦提交；X/Y/宽/高按当前页面单位显示，写入时换算回 pt；角度写入后规范化；节点与边样式支持多选聚合，「多个值」状态不会伪装成某个目标值。业务数据以格式化 JSON 对象编辑，可应用、重置、撤销，并随 `.flowdiagram` 校验、保存、打开和 JSON 导出往返。
+- 成功结果：类型和 ID 只读；名称、文本与链接失焦提交；`PropertyController`/view-model 完成单位显示、解析和命令快照，X/Y 钳制到 ±MAX_PT，宽高钳制到 0..MAX_PT 后再应用形状最小尺寸；保存边界仍重新验证运行时文档。业务数据以格式化 JSON 对象编辑，可应用、重置、撤销并往返。
 - 失败反馈：非数字几何输入不提交；宽高小于形状最小尺寸时按最小尺寸钳制；非法链接在面板显示「仅支持 http、https、mailto 链接。」且文档不变；业务数据 JSON 无效或不是对象时显示中文行内错误且不修改文档。
 - 撤销边界：名称/内容、链接、移动、缩放、旋转、节点样式、边样式、文本样式、连接类型和一次业务数据应用均生成一条记录；业务数据语义未变化时不入栈；展开/折叠区块、重置草稿、切换标签和收起面板不进入撤销历史。
 - 数据字段：`DiagramNode` 的 id/shape/x/y/width/height/angle/zIndex/text/style/link/data/parentId/isContainer/imageHref，`DiagramEdge` 的 source/target/connector/vertices/labels/style/link/zIndex（`src/domain/diagram.ts`）；单位换算在 `src/domain/measurement.ts`；聚合在 `src/application/inspector/aggregate-style.ts`。
@@ -116,7 +116,7 @@
 
 - 入口：「文件→导出」打开 480px 导出对话框；选择当前页/全部页面、SVG/PNG/PDF/JSON、PNG 96/150/300 DPI、文件名和保存位置。对话框只调用 application controller，文件选择和 Tauri invoke 位于 platform adapter。
 - 前置条件：当前文档和活动页存在；文件名清除 Windows 非法字符后非空；保存路径为匹配格式的绝对路径；PNG DPI 只能为 96、150 或 300。
-- 成功结果：TypeScript 从文档快照生成以 pt 为单位的语义 SVG，直接背景页先于前景页、图元按 zIndex、网格/参考线/分页符/选择层不输出。SVG/PDF 仅保留 http/https/mailto 链接；PNG 像素严格为 `round(pt*dpi/72)`；PDF 为按文档页序排列、MediaBox 使用 pt 的单个多页文件；JSON 为单一 `.flowdiagram`。全部页面 SVG/PNG 输出 `{base}-{01}-{安全页名}.{ext}`。
+- 成功结果：编辑器与导出共用背景链解析器，按最旧背景到前景完整渲染且去重/止环，所有非活动层不可交互。TypeScript 生成 pt 语义 SVG；链接注释裁剪到页面边界，部分位于负坐标的链接保留可见矩形，完全在页外的链接省略；Rust 接受 ±MAX_PT 的有符号 x/y 并要求非负宽高。PNG 像素为 `round(pt*dpi/72)`，PDF MediaBox 使用 pt，JSON 为单一 `.flowdiagram`。
 - 失败反馈：目标选择取消不改变状态；并发导出提示「正在导出，请稍候。」；native 失败提示「导出失败，当前文档未受影响：{原因}」。Rust 先验证并生成全部产物，再同步临时文件和事务替换；失败会回滚已有目标且不留下部分新文件。
 - 撤销边界：导出只读取 structured clone 快照，不修改 document、revision、dirty、history 或 PNG 首选项，不产生撤销记录。
 - 数据字段：`ExportPagePayload/ExportLinkAnnotation/NativeExportRequest`（`src/application/export/export-ports.ts`）；语义渲染器 `src/infrastructure/export/svg-export.ts`；原生生成与事务 `src-tauri/src/commands/export_commands.rs`。Rust 依赖锁定 `resvg 0.35.0`，运行时不访问网络。

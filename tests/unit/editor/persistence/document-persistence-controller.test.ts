@@ -1,6 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 import { RenamePageCommand } from '@/application/commands/rename-page'
+import { MoveCellsCommand } from '@/application/commands/move-cells'
 import {
   DocumentPersistenceController,
   type DocumentPersistenceStore,
@@ -12,6 +13,9 @@ import type {
 } from '@/application/persistence/persistence-ports'
 import { createEmptyDocument } from '@/domain/diagram'
 import { serializeDiagramDocument } from '@/domain/document-schema'
+import { MAX_PT } from '@/domain/limits'
+import '@/application/shapes/common-shapes'
+import { shapeRegistry } from '@/application/shapes/shape-registry'
 import { useDocumentStore } from '@/stores/document-store'
 
 function fileRepository(overrides: Partial<DiagramFileRepository> = {}): DiagramFileRepository {
@@ -476,6 +480,44 @@ describe('DocumentPersistenceController', () => {
       dirty: store.dirty,
       activePageId: store.activePageId,
     }).toEqual(before)
+    controller.dispose()
+  })
+
+  it('rejects geometry above MAX_PT before write and retains dirty recovery state', async () => {
+    const writes: RecoverySnapshotWrite[] = []
+    const removed: RemovedRecovery[] = []
+    const save = vi.fn(async () => 'C:/docs/invalid.flowdiagram')
+    const store = useDocumentStore()
+    store.createNodeFromShape('rect', { x: 50, y: 50 })
+    const node = store.activePage!.nodes[0]
+    store.executeCommand(new MoveCellsCommand([{
+      pageId: store.activePageId,
+      nodeId: node.id,
+      before: { x: node.x, y: node.y },
+      after: { x: MAX_PT + 1, y: node.y },
+    }]))
+    const controller = new DocumentPersistenceController(
+      persistenceStore(),
+      fileRepository({ save }),
+      recoveryRepository(writes, removed),
+      vi.fn(),
+      {
+        hasShape: (shape) => shapeRegistry.has(shape),
+        portIds: (shape) => shapeRegistry.portIds(shape),
+        isContainerShape: (shape) => shapeRegistry.get(shape).isContainer,
+      },
+    )
+    await nextTick()
+
+    await expect(controller.save()).resolves.toEqual({
+      ok: false,
+      error: '文档校验失败，未保存：节点位置超出允许范围。',
+    })
+    expect(save).not.toHaveBeenCalled()
+    expect(store.dirty).toBe(true)
+    expect(removed).toEqual([])
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(writes).toEqual([])
     controller.dispose()
   })
 })

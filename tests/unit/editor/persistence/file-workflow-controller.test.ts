@@ -14,10 +14,7 @@ import {
 import { DiagramFileError } from '@/application/persistence/file-errors'
 
 function document(name: string): DiagramDocument {
-  const value = createEmptyDocument(name)
-  value.id = `doc-${name}`
-  value.pages[0].id = `page-${name}`
-  return value
+  return createEmptyDocument(name)
 }
 
 function store(dirty = false): FileWorkflowStore & { newCalls: number } {
@@ -120,6 +117,27 @@ describe('FileWorkflowController', () => {
     await expect(controller.openDocument()).resolves.toBe(false)
     expect(target.document).toBe(valid)
     expect(feedback.errors).toEqual(['文件格式无效，未打开文件。'])
+  })
+
+  it('uses the production shape context to migrate invalid ports while opening', async () => {
+    const opened = createEmptyDocument('端口迁移')
+    opened.pages[0].nodes = [
+      { id: crypto.randomUUID(), shape: 'rect', x: 0, y: 0, width: 80, height: 40, angle: 0, zIndex: 0, style: { fill: '#ffffff', fillOpacity: 1, stroke: '#000000', strokeWidth: 1 } },
+      { id: crypto.randomUUID(), shape: 'rect', x: 100, y: 0, width: 80, height: 40, angle: 0, zIndex: 1, style: { fill: '#ffffff', fillOpacity: 1, stroke: '#000000', strokeWidth: 1 } },
+    ]
+    opened.pages[0].edges = [{
+      id: crypto.randomUUID(), source: { nodeId: opened.pages[0].nodes[0].id, port: 'ghost' },
+      target: { nodeId: opened.pages[0].nodes[1].id, port: 'left' }, connector: 'orthogonal', vertices: [], labels: [],
+      style: { stroke: '#666666', strokeWidth: 1, opacity: 1, dash: 'solid', sourceArrow: 'none', targetArrow: 'arrow' }, zIndex: 2,
+    }]
+    const target = store()
+    const controller = new FileWorkflowController(
+      target, persistence(), files({ open: async () => ({ path: 'C:/ports.flowdiagram', json: serializeDiagramDocument(opened) }) }), recents(), ui(),
+      { hasShape: (shape) => shape === 'rect', portIds: () => ['left', 'right', 'top', 'bottom'], isContainerShape: () => false },
+    )
+
+    await expect(controller.openDocument()).resolves.toBe(true)
+    expect(target.document.pages[0].edges[0].source.port).toBeUndefined()
   })
 
   it('removes only a not-found recent item and keeps the current document', async () => {

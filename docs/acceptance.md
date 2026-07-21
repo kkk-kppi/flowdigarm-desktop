@@ -22,10 +22,10 @@
 
 | 子项 | 状态 | 命令与结果 | 证据 |
 |---|---|---|---|
-| L2.1 文件/最近/自动保存/恢复闭环，保存失败不损坏原文件 | 通过 | 最近 Cargo 44/44、本次 Playwright 17/17 通过；强制失败前后字节一致。 | `tests/unit/editor/persistence`、`e2e/persistence-errors.spec.ts`、`src-tauri/src/persistence/atomic_file.rs` |
-| L2.2 `.flowdiagram` 往返，非法 schema/几何/URL 可读失败且不崩溃 | 通过 | Vitest 文档校验与 Playwright 三类错误用例通过。 | `tests/unit/domain/document-schema.test.ts`、`e2e/persistence-errors.spec.ts` |
+| L2.1 文件/最近/自动保存/恢复闭环，保存失败不损坏原文件 | 通过 | 保存前使用完整上下文校验；越界运行时文档不调用 repository、不删恢复、不清 dirty。 | `tests/unit/editor/persistence/document-persistence-controller.test.ts`、`tests/unit/editor/persistence/{file-workflow-controller,recovery-controller}.test.ts`、`src-tauri/src/persistence/atomic_file.rs` |
+| L2.2 `.flowdiagram` 往返，非法完整 schema/几何/URL/UUID/形状/父子结构可读失败且不崩溃 | 通过 | 表驱动完整 schema、legacy ID 引用迁移和生产 shape/port context 回归通过。 | `tests/unit/domain/document-schema.test.ts`、`tests/unit/editor/persistence/document-persistence-controller.test.ts`、`e2e/persistence-errors.spec.ts` |
 | L2.3 mm/cm/in/pt/px 切换保持内部 pt，标尺与属性即时换算 | 通过 | 度量、属性组件和浏览器 pt 不变量断言通过。 | `tests/unit/domain/measurement.test.ts`、`tests/component/PropertyTab.test.ts`、`e2e/editor-core.spec.ts` |
-| L2.4 标尺、网格、参考线、分页符、缩放、平移及四种适应 | 通过 | 视口/标尺/覆盖层 Vitest 与真实画布 E2E 通过。 | `tests/unit/editor/viewport`、`tests/component/RulerOverlay.test.ts`、`tests/component/PageBreakOverlay.test.ts`、`e2e/canvas-interactions.spec.ts` |
+| L2.4 标尺、网格、参考线、分页符、网格吸附、缩放、平移及四种适应 | 通过 | Canvas 回归断言 Snapline 启停及当前页 gridSize，纯坐标回归断言吸附开/关。 | `tests/component/CanvasArea.test.ts`、`tests/unit/editor/graph-adapter-transform.test.ts`、`tests/unit/editor/viewport`、`e2e/canvas-interactions.spec.ts` |
 | L2.5 页面设置一次应用一条历史，取消不改变页面 | 通过 | 页面设置组件与命令测试通过。 | `tests/component/PageSetupTab.test.ts`、`tests/unit/editor/pages/update-page.test.ts` |
 | L2.6 分页符显示打印分块，关闭后文档不变 | 通过 | 分页计算和覆盖层开关测试通过。 | `tests/unit/editor/pages/page-breaks.test.ts`、`tests/component/PageBreakOverlay.test.ts` |
 
@@ -33,7 +33,7 @@
 
 | 子项 | 状态 | 命令与结果 | 证据 |
 |---|---|---|---|
-| L3.1 规定形状/文本/图片可创建、选择、变换、复制粘贴和删除 | 通过 | 形状注册、创建命令、图片、剪贴板、画布组件及关键路径 E2E 通过；“数据库”按冲突裁决对应圆柱「数据流」。 | `tests/unit/editor/shapes`、`tests/unit/editor/images/image-import.test.ts`、`tests/unit/editor/clipboard`、`e2e/editor-core.spec.ts` |
+| L3.1 规定形状/文本/图片可创建、选择、变换、复制粘贴和删除 | 通过 | 含组合偏移子节点缩放 apply/undo 的绝对坐标回归。 | `tests/unit/editor/graph-adapter-transform.test.ts`、`tests/unit/editor/shapes`、`tests/unit/editor/clipboard`、`e2e/editor-core.spec.ts` |
 | L3.2 双击/F2/Enter 编辑，Esc 取消，失焦/Ctrl/Cmd+Enter 提交，IME 正常 | 通过 | 文本会话、覆盖编辑器和浏览器编辑路径通过。 | `tests/unit/editor/text/text-session.test.ts`、`tests/component/TextEditorOverlay.test.ts`、`e2e/editor-core.spec.ts` |
 | L3.3 全套文字样式可保存、撤销、重做并导出 | 通过 | 文本命令、布局、SVG 导出和 E2E 样式路径通过。 | `tests/unit/editor/commands/text-style-command.test.ts`、`tests/unit/editor/text-layout.test.ts`、`tests/unit/editor/export/svg-export.test.ts` |
 | L3.4 多选 mixed 与批量统一更新 | 通过 | 聚合、属性、工具栏和 E2E mixed 断言通过。 | `tests/unit/editor/aggregate-style.test.ts`、`tests/component/PropertyTab.test.ts`、`e2e/editor-core.spec.ts` |
@@ -44,7 +44,7 @@
 
 | 子项 | 状态 | 命令与结果 | 证据 |
 |---|---|---|---|
-| L4.1 三种连接、端口、重连、标签与基础拐点 | 通过 | 最近端口、重连/拐点命令、连接器映射和真实 X6 手柄 E2E 通过。 | `tests/unit/editor/shapes/nearest-port.test.ts`、`tests/unit/editor/commands/reconnect-vertices.test.ts`、`e2e/canvas-interactions.spec.ts` |
+| L4.1 三种连接、端口、重连、标签与基础拐点 | 通过 | 既有空标签编辑撤销完整恢复值、样式和位置；新增标签撤销仅移除新增项。 | `tests/unit/editor/commands/edit-text.test.ts`、`tests/unit/editor/commands/reconnect-vertices.test.ts`、`e2e/canvas-interactions.spec.ts` |
 | L4.2 跳线只在不相连边交叉处出现且不改拓扑 | 通过 | 四个不同端点构成两条交叉直角边；关闭时真实 X6 SVG 路径无曲线，开启时路径变化并出现两段 cubic 跳弧，前后 source/target/vertices 相同；截图已生成。 | `e2e/canvas-interactions.spec.ts`、`test-results/screenshots/line-jump.png`、`src/infrastructure/x6/edge-connector-map.ts` |
 | L4.3 六种对齐以选择序列第一个形状为基准 | 通过 | 六模式、保序锚点和菜单入口测试通过。 | `tests/unit/editor/arrangement/align-cells.test.ts`、`tests/unit/editor/menus/menu-command-controller.test.ts` |
 | L4.4 水平/垂直等距固定两端且相邻边界等距 | 通过 | 正常、顺序和间距不足测试通过。 | `tests/unit/editor/arrangement/distribute-cells.test.ts` |
@@ -57,18 +57,18 @@
 |---|---|---|---|
 | L5.1 分类/搜索/Top 20/图片/右键/查找替换 | 通过 | 对应单元、组件与菜单 E2E 通过。 | `tests/component/ElementLibrary.test.ts`、`tests/unit/editor/shapes/shape-usage-repository.test.ts`、`tests/component/CanvasContextMenu.test.ts`、`e2e/menus-accessibility.spec.ts` |
 | L5.2 全部替换仅节点/边标签且整批一条历史 | 通过 | 搜索范围、预览/确认和撤销测试通过。 | `tests/unit/editor/search/replace-all-text.test.ts`、`tests/component/FindReplaceTab.test.ts`、`e2e/editor-core.spec.ts` |
-| L5.3 http/https/mailto 白名单、普通点击选择、Ctrl/Cmd+点击打开、前后端拒绝危险协议 | 通过 | 前端 URL 测试、Rust URL 测试和错误 E2E 通过。 | `tests/unit/editor/hyperlink-validator.test.ts`、`src-tauri/src/security/url_policy.rs`、`e2e/persistence-errors.spec.ts` |
-| L5.4 中文 tooltip、复杂帮助入口、四份中文 docs 与实现一致 | 通过 | `pnpm exec vitest run tests/unit/editor/help-registry.test.ts tests/component/ComplexFeatureHelpEntries.test.ts tests/component/FeatureHelp.test.ts`：3 文件、28 测试通过；检查注册表锚点、真实路径、11x7 字段、非骨架文档和注册表复用。 | `tests/unit/editor/help-registry.test.ts`、`tests/component/ComplexFeatureHelpEntries.test.ts`、`docs/README.md`、`docs/features.md`、`docs/interactions.md`、`docs/user-guide.md` |
+| L5.3 http/https/mailto 白名单、普通点击选择、Ctrl/Cmd+点击节点/边打开、前后端拒绝危险协议 | 通过 | 节点和边共用 application 链接控制器；webview 无直接 opener 权限。 | `tests/component/CanvasArea.test.ts`、`tests/unit/editor/canvas-interaction-controller.test.ts`、`tests/unit/platform/window-controller.test.ts`、`src-tauri/src/security/url_policy.rs` |
+| L5.4 中文 tooltip、复杂帮助入口、四份中文 docs 与实现一致 | 通过 | 文档证据契约及 Vue 禁止命令/measurement/platform/invoke 分层扫描通过。 | `tests/unit/docs/documentation-contract.test.ts`、`tests/unit/architecture/vue-layering.test.ts`、`tests/unit/editor/help-registry.test.ts`、`docs/{README,features,interactions,user-guide}.md` |
 
 ## L6 历史、测试、性能与导出
 
 | 子项 | 状态 | 命令与结果 | 证据 |
 |---|---|---|---|
-| L6.1 列出的每次用户动作只产生一条历史 | 通过 | 命令级、store、组件和画布 E2E 均断言单条 history label/revision。 | `tests/unit/editor/commands`、`tests/unit/stores/document-store.test.ts`、`e2e/canvas-interactions.spec.ts` |
+| L6.1 列出的每次用户动作只产生一条历史 | 通过 | 命令级、store、组件和画布 E2E 均断言单条 history；边空标签撤销无数据丢失。 | `tests/unit/editor/commands/edit-text.test.ts`、`tests/unit/editor/commands`、`tests/unit/stores/document-store.test.ts`、`e2e/canvas-interactions.spec.ts` |
 | L6.2 视图不入栈，新命令清 redo | 通过 | 命令历史与视口/应用 store 测试通过。 | `tests/unit/editor/commands/command-history.test.ts`、`tests/unit/editor/viewport/viewport-controller.test.ts`、`tests/unit/stores/app-store.test.ts` |
 | L6.3 Vitest、组件、Rust、Playwright E2E 全部通过 | 通过 | 本任务 `pnpm vitest run` 为 105 文件、890 测试通过，`pnpm playwright test` 为 17/17 通过，当前源码 no-bundle 构建通过；最近 Cargo 仍为 44/44。 | `.superpowers/sdd/reports/task-final-gaps-report.md`、`.superpowers/sdd/reports/task-9b-report.md` |
 | L6.4 500 节点/800 边选择、拖动、缩放、保存无冻结 | 通过 | 四次采样：选择 62.7-91.1ms，缩放 110.0-122.4ms，拖动 73.9-103.5ms，保存 239.9-346.4ms，均低于门禁。 | `e2e/performance.spec.ts`、`test-results/performance.json`、`.superpowers/sdd/reports/task-9b-report.md` |
-| L6.5 SVG/PNG/PDF 导出，安全链接和 PNG DPI 不改文档 | 通过 | Vitest 导出、Rust 导出 6 项集成测试和 E2E 96/150/300 DPI/PDF URI/JSON 断言通过。 | `tests/unit/editor/export`、`src-tauri/tests/export_commands.rs`、`e2e/editor-core.spec.ts` |
+| L6.5 SVG/PNG/PDF 导出，安全链接和 PNG DPI 不改文档 | 通过 | 完整背景链、负坐标部分可见链接裁剪、页外省略及 Rust 有符号坐标导出回归通过。 | `tests/unit/editor/export/svg-export.test.ts`、`src-tauri/tests/export_commands.rs`、`tests/unit/editor/export`、`e2e/editor-core.spec.ts` |
 | L6.6 Windows 与 macOS 分别执行完整关键路径 E2E并留报告/截图 | 未覆盖 | Windows Chromium E2E 已执行；macOS Intel 与 Apple Silicon 本地完整关键路径均未执行。CI 矩阵不能替代证据。 | `.superpowers/sdd/reports/task-9b-report.md`、`.github/workflows/release-gate.yml`（仅配置） |
 
 ## 发布附加项

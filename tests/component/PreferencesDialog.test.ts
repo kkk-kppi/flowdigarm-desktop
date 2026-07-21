@@ -3,7 +3,7 @@ import PreferencesDialog from '@/ui/dialogs/PreferencesDialog.vue'
 import { DEFAULT_EDITOR_PREFERENCES } from '@/application/settings/settings-controller'
 
 describe('PreferencesDialog', () => {
-  it('renders controls for all ten settings and applies one complete value', async () => {
+  it('renders controls for all eleven settings and applies one complete value', async () => {
     const wrapper = mount(PreferencesDialog, {
       props: { modelValue: { ...DEFAULT_EDITOR_PREFERENCES } },
     })
@@ -19,7 +19,7 @@ describe('PreferencesDialog', () => {
     await wrapper.find('[data-testid="preferences-apply"]').trigger('click')
 
     expect(wrapper.emitted('apply')?.[0]?.[0]).toMatchObject({ theme: 'dark', showGrid: true, recentLimit: 12 })
-    expect(Object.keys(wrapper.emitted('apply')?.[0]?.[0] as object)).toHaveLength(10)
+    expect(Object.keys(wrapper.emitted('apply')?.[0]?.[0] as object)).toHaveLength(11)
   })
 
   it('restores defaults in the draft and closes on Escape with focus cleanup', async () => {

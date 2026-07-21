@@ -3,18 +3,23 @@
 // 非法协议保持精确校验提示且不调用平台。
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { createDefaultTextContent, type DiagramDocument } from '@/domain/diagram'
+import { createDefaultTextContent, createEmptyPage, type DiagramDocument, type DiagramPage } from '@/domain/diagram'
 import type { GraphAdapterEvents } from '@/infrastructure/x6/graph-adapter'
 import CanvasArea from '@/ui/canvas/CanvasArea.vue'
 import AppShell from '@/ui/shell/AppShell.vue'
 import type { CanvasController } from '@/application/canvas/canvas-controller'
 import { useDocumentStore } from '@/stores/document-store'
 import { useSelectionStore } from '@/stores/selection-store'
+import { useAppStore } from '@/stores/app-store'
+import { editorServicesKey } from '@/ui/services/editor-services'
 import { createTestDocument } from '../helpers/test-document'
 
 const mocks = vi.hoisted(() => ({
   events: null as GraphAdapterEvents | null,
   openExternalLink: vi.fn(),
+  renderedLayers: [] as DiagramPage[][],
+  guides: [] as boolean[],
+  snapping: [] as Array<[boolean, number]>,
 }))
 
 vi.mock('@/infrastructure/x6/graph-adapter', () => ({
@@ -22,21 +27,19 @@ vi.mock('@/infrastructure/x6/graph-adapter', () => ({
     constructor(_container: HTMLElement, events: GraphAdapterEvents) {
       mocks.events = events
     }
-    renderPage() {}
+    renderPage(layers: DiagramPage[]) { mocks.renderedLayers.push(layers) }
     syncSelection() {}
     syncViewport() {}
     setGridVisible() {}
+    setGuidesVisible(visible: boolean) { mocks.guides.push(visible) }
+    setSnapToGrid(enabled: boolean, gridSize: number) { mocks.snapping.push([enabled, gridSize]) }
     dispose() {}
   },
 }))
 
-vi.mock('@/platform/platform-provider', () => ({
-  usePlatform: () => ({ openExternalLink: mocks.openExternalLink }),
-}))
-
-function linkedDocument(link: string): DiagramDocument {
+function linkedDocument(link: string, edgeLink?: string): DiagramDocument {
   const document = createTestDocument()
-  return {
+  const linked = {
     ...document,
     pages: document.pages.map((page, pageIndex) =>
       pageIndex === 0
@@ -51,6 +54,8 @@ function linkedDocument(link: string): DiagramDocument {
         : page,
     ),
   }
+  linked.pages[0].edges[0].link = edgeLink
+  return linked
 }
 
 function mountCanvas(link: string, attachToBody = false) {
@@ -68,6 +73,29 @@ function mountCanvas(link: string, attachToBody = false) {
         RulerOverlay: true,
         TextEditorOverlay: true,
       },
+      provide: {
+        [editorServicesKey as symbol]: {
+          canvas: {
+            openHyperlink: async (cellId: string, modifiers: { ctrlKey: boolean; metaKey: boolean }) => {
+              if (!(modifiers.ctrlKey || modifiers.metaKey)) return false
+              const page = documentStore.activePage
+              const value = page?.nodes.find(({ id }) => id === cellId)?.link
+                ?? page?.edges.find(({ id }) => id === cellId)?.link
+              if (!value) return false
+              if (value.startsWith('javascript:')) {
+                documentStore.setNotice('仅支持 http、https、mailto 链接。')
+                return true
+              }
+              try { await mocks.openExternalLink(value) } catch { documentStore.setNotice('无法打开链接，请检查系统默认应用。') }
+              return true
+            },
+            hasHyperlink: (cellId: string) => Boolean(
+              documentStore.activePage?.nodes.find(({ id }) => id === cellId)?.link
+              ?? documentStore.activePage?.edges.find(({ id }) => id === cellId)?.link,
+            ),
+          },
+        },
+      },
     },
   })
   return { wrapper, documentStore, selectionStore }
@@ -77,11 +105,14 @@ describe('CanvasArea 超链接点击', () => {
   beforeEach(() => {
     mocks.events = null
     mocks.openExternalLink.mockReset()
+    mocks.renderedLayers = []
+    mocks.guides = []
+    mocks.snapping = []
   })
 
   it('平台拒绝合法链接时捕获 promise 并给出可操作中文提示', async () => {
     mocks.openExternalLink.mockRejectedValue(new Error('no default browser'))
-    const { wrapper, documentStore } = mountCanvas('https://example.com')
+    const { wrapper, documentStore } = mountCanvas('https://example.com', true)
 
     mocks.events!.onNodeClick?.('node-1', { ctrlKey: true, metaKey: false })
     await flushPromises()
@@ -114,6 +145,95 @@ describe('CanvasArea 超链接点击', () => {
     wrapper.unmount()
   })
 
+  it('opens edge links on Ctrl/Cmd click, preserves normal selection, and reports platform rejection', async () => {
+    const document = linkedDocument('https://example.com/node', 'https://example.com/edge')
+    setActivePinia(createPinia())
+    const store = useDocumentStore()
+    store.loadDocument(document)
+    const selection = useSelectionStore()
+    const controller = {
+      openHyperlink: async (cellId: string, modifiers: { ctrlKey: boolean; metaKey: boolean }) => {
+        if (!(modifiers.ctrlKey || modifiers.metaKey)) return false
+        const link = store.activePage!.edges.find(({ id }) => id === cellId)?.link
+        if (!link) return false
+        try { await mocks.openExternalLink(link) } catch { store.setNotice('无法打开链接，请检查系统默认应用。') }
+        return true
+      },
+      hasHyperlink: (cellId: string) => Boolean(store.activePage!.edges.find(({ id }) => id === cellId)?.link),
+    }
+    const wrapper = mount(CanvasArea, {
+      global: {
+        stubs: { PageBreakOverlay: true, PageFrame: true, RulerCorner: true, RulerOverlay: true, TextEditorOverlay: true },
+        provide: { [editorServicesKey as symbol]: { canvas: controller } },
+      },
+    })
+
+    mocks.events!.onSelectionChanged?.(['edge-1'])
+    mocks.events!.onEdgeClick?.('edge-1', { ctrlKey: false, metaKey: false })
+    expect(selection.selectedIds).toEqual(['edge-1'])
+    expect(mocks.openExternalLink).not.toHaveBeenCalled()
+
+    mocks.openExternalLink.mockRejectedValueOnce(new Error('blocked'))
+    mocks.events!.onEdgeClick?.('edge-1', { ctrlKey: true, metaKey: false })
+    await flushPromises()
+    expect(mocks.openExternalLink).toHaveBeenCalledWith('https://example.com/edge')
+    expect(store.lastNotice).toBe('无法打开链接，请检查系统默认应用。')
+    wrapper.unmount()
+  })
+
+  it('applies guide and grid snapping settings initially and after toggles', async () => {
+    const { wrapper, documentStore } = mountCanvas('https://example.com')
+    const appStore = useAppStore()
+    expect(mocks.guides.at(-1)).toBe(true)
+    expect(mocks.snapping.at(-1)).toEqual([true, documentStore.activePage!.canvas.gridSize])
+
+    appStore.toggleGuides()
+    appStore.toggleSnap()
+    await wrapper.vm.$nextTick()
+    expect(mocks.guides.at(-1)).toBe(false)
+    expect(mocks.snapping.at(-1)).toEqual([false, documentStore.activePage!.canvas.gridSize])
+    wrapper.unmount()
+  })
+
+  it('renders a three-level background chain oldest to foreground exactly once', () => {
+    const document = linkedDocument('https://example.com')
+    const oldest = createEmptyPage({ id: 'oldest', type: 'background' })
+    const middle = createEmptyPage({ id: 'middle', type: 'background', backgroundPageId: oldest.id })
+    document.pages = [{ ...document.pages[0], backgroundPageId: middle.id }, middle, oldest]
+    setActivePinia(createPinia())
+    useDocumentStore().loadDocument(document)
+    const wrapper = mount(CanvasArea, {
+      global: { stubs: { PageBreakOverlay: true, PageFrame: true, RulerCorner: true, RulerOverlay: true, TextEditorOverlay: true } },
+    })
+
+    expect(mocks.renderedLayers.at(-1)?.map(({ id }) => id)).toEqual(['oldest', 'middle', 'page-1'])
+    wrapper.unmount()
+  })
+
+  it('blocks destructive shortcuts outside canvas ownership and while application interaction is blocked', () => {
+    const { wrapper, documentStore, selectionStore } = mountCanvas('https://example.com', true)
+    const appStore = useAppStore()
+    const graph = wrapper.find<HTMLElement>('[data-testid="x6-canvas"]')
+    selectionStore.setSelection(['node-1'])
+    const control = document.createElement('button')
+    document.body.append(control)
+    control.focus()
+    control.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }))
+    control.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', ctrlKey: true, bubbles: true }))
+    control.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true }))
+    expect(documentStore.activePage!.nodes).toHaveLength(3)
+
+    appStore.beginInteractionBlock('dialog')
+    graph.element.focus()
+    graph.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }))
+    expect(documentStore.activePage!.nodes).toHaveLength(3)
+    appStore.endInteractionBlock('dialog')
+    graph.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }))
+    expect(documentStore.activePage!.nodes).toHaveLength(2)
+    control.remove()
+    wrapper.unmount()
+  })
+
   it('emits the active page viewport immediately for the status bar', () => {
     const { wrapper } = mountCanvas('https://example.com')
     expect(wrapper.emitted('viewportChange')?.[0]?.[0]).toEqual({ zoom: 1, panX: 0, panY: 0 })
@@ -121,7 +241,7 @@ describe('CanvasArea 超链接点击', () => {
   })
 
   it('Ctrl/Cmd+V invokes the async system-aware paste workflow before reporting an empty clipboard', async () => {
-    const { wrapper, documentStore } = mountCanvas('https://example.com')
+    const { wrapper, documentStore } = mountCanvas('https://example.com', true)
     const read = vi.fn(async () => ({
       nodes: [structuredClone(documentStore.activePage!.nodes[0])],
       edges: [],
@@ -129,7 +249,9 @@ describe('CanvasArea 超链接点击', () => {
     documentStore.clipboard = null
     documentStore.setSystemClipboard({ write: async () => {}, read })
 
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true, cancelable: true }))
+    const graph = wrapper.find<HTMLElement>('[data-testid="x6-canvas"]')
+    graph.element.focus()
+    graph.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true, cancelable: true }))
     expect(documentStore.lastNotice).not.toBe('剪贴板为空。')
     await flushPromises()
 

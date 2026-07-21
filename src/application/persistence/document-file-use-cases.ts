@@ -1,4 +1,4 @@
-import { parseDiagramDocument, serializeDiagramDocument } from '@/domain/document-schema'
+import { parseDiagramDocument, serializeValidatedDiagramDocument, type DocumentValidationContext } from '@/domain/document-schema'
 import type { DiagramDocument } from '@/domain/diagram'
 import type { DiagramFileRepository } from './persistence-ports'
 import { normalizeDiagramFileError } from './file-errors'
@@ -17,10 +17,10 @@ export interface DiagramSaveSnapshot {
   path?: string
 }
 
-export async function openDiagram(repository: DiagramFileRepository): Promise<OpenDiagramResult | null> {
+export async function openDiagram(repository: DiagramFileRepository, context?: DocumentValidationContext): Promise<OpenDiagramResult | null> {
   try {
     const selected = await repository.open()
-    return selected ? parseOpenedDiagram(selected) : null
+    return selected ? parseOpenedDiagram(selected, context) : null
   } catch (error) {
     return { ok: false, error: normalizeDiagramFileError(error).message }
   }
@@ -29,9 +29,10 @@ export async function openDiagram(repository: DiagramFileRepository): Promise<Op
 export async function openRecentDiagram(
   repository: DiagramFileRepository,
   path: string,
+  context?: DocumentValidationContext,
 ): Promise<OpenDiagramResult> {
   try {
-    return parseOpenedDiagram(await repository.read(path))
+    return parseOpenedDiagram(await repository.read(path), context)
   } catch (error) {
     return { ok: false, error: normalizeDiagramFileError(error).message }
   }
@@ -41,10 +42,13 @@ export async function saveDiagram(
   repository: DiagramFileRepository,
   document: DiagramDocument,
   path?: string,
+  context?: DocumentValidationContext,
 ): Promise<SaveDiagramResult> {
+  const serialized = serializeValidatedDiagramDocument(document, context)
+  if (!serialized.ok) return { ok: false, error: `文档校验失败，未保存：${serialized.error}` }
   return saveDiagramSnapshot(repository, {
     name: document.name,
-    json: serializeDiagramDocument(document),
+    json: serialized.json,
     ...(path === undefined ? {} : { path }),
   })
 }
@@ -67,8 +71,8 @@ export async function saveDiagramSnapshot(
   }
 }
 
-function parseOpenedDiagram(input: { path: string; json: string }): OpenDiagramResult {
-  const parsed = parseDiagramDocument(input.json)
+function parseOpenedDiagram(input: { path: string; json: string }, context?: DocumentValidationContext): OpenDiagramResult {
+  const parsed = parseDiagramDocument(input.json, context)
   return parsed.ok
     ? { ok: true, path: input.path, document: parsed.document, warnings: parsed.warnings }
     : parsed

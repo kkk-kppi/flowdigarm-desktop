@@ -78,6 +78,39 @@ fn pdf_has_ordered_pages_exact_media_boxes_and_safe_uri_annotations() {
 }
 
 #[test]
+fn exports_pdf_with_signed_partially_visible_link_coordinates() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("negative-link.pdf");
+    let mut linked = page("P", 72.0, 36.0);
+    linked.links.push(ExportLinkAnnotation {
+        url: "https://example.com".to_owned(),
+        x_pt: -10.0,
+        y_pt: -5.0,
+        width_pt: 20.0,
+        height_pt: 10.0,
+    });
+
+    assert!(export_request(request(&path, "pdf", vec![linked])).is_ok());
+    assert!(path.is_file());
+}
+
+#[test]
+fn accepts_nonnegative_zero_link_extent() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("zero-link.pdf");
+    let mut linked = page("P", 72.0, 36.0);
+    linked.links.push(ExportLinkAnnotation {
+        url: "https://example.com".to_owned(),
+        x_pt: 0.0,
+        y_pt: 0.0,
+        width_pt: 0.0,
+        height_pt: 0.0,
+    });
+
+    assert!(export_request(request(&path, "pdf", vec![linked])).is_ok());
+}
+
+#[test]
 fn svg_and_json_write_atomically_and_return_actual_paths() {
     let dir = tempdir().unwrap();
     let svg_path = dir.path().join("diagram.svg");

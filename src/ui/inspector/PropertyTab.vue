@@ -554,20 +554,8 @@ import {
   type TextParagraph,
   type TextStyle,
 } from '@/domain/diagram'
-import { formatMeasure, unitToPt } from '@/domain/measurement'
-import { ApplyStyleCommand, type StyleTarget } from '@/application/commands/apply-style'
-import { EditTextCommand } from '@/application/commands/edit-text'
-import { MoveCellsCommand } from '@/application/commands/move-cells'
-import { ResizeCellsCommand } from '@/application/commands/resize-cells'
-import { RotateCellsCommand } from '@/application/commands/rotate-cells'
-import { SetLinkCommand } from '@/application/commands/set-link'
-import { SetBusinessDataCommand } from '@/application/commands/set-business-data'
-import { validateHyperlink } from '@/application/links/hyperlink-validator'
-import {
-  TextStyleCommand,
-  type TextStylePatch,
-} from '@/application/commands/text-style-command'
-import { UpdateEdgeConnectorCommand } from '@/application/commands/update-edge-connector'
+import { PropertyController, type TextStylePatch } from '@/application/inspector/property-controller'
+import { geometryDisplayValue } from '@/application/inspector/property-view-model'
 import {
   aggregateField,
   aggregateNodeStyles,
@@ -587,8 +575,6 @@ import {
   parseBusinessDataJson,
 } from '@/application/inspector/business-data-json'
 import {
-  buildTextStyleTargets,
-  pickPatch,
   textContentsForSelection,
 } from '@/application/inspector/text-style-targets'
 import { shapeRegistry } from '@/application/shapes/shape-registry'
@@ -598,6 +584,7 @@ import { useSelectionStore } from '@/stores/selection-store'
 
 const documentStore = useDocumentStore()
 const selectionStore = useSelectionStore()
+const propertyController = new PropertyController((command) => documentStore.executeCommand(command))
 const propertyRoot = ref<HTMLElement | null>(null)
 
 const expanded = reactive({
@@ -673,14 +660,7 @@ function applyBusinessData(): void {
     businessDataDraft.value = formatted
     return
   }
-  documentStore.executeCommand(
-    new SetBusinessDataCommand({
-      pageId,
-      nodeId: node.id,
-      before: node.data,
-      after: result.data,
-    }),
-  )
+  propertyController.setBusinessData(pageId, node, result.data)
   businessDataDraft.value = formatted
 }
 
@@ -816,56 +796,14 @@ function geometryDisplay(field: 'x' | 'y' | 'width' | 'height' | 'angle'): strin
   if (field === 'angle') {
     return String(Math.round(node.angle * 10) / 10)
   }
-  return formatMeasure(node[field], pageUnit.value)
+  return geometryDisplayValue(node[field], pageUnit.value)
 }
 
 function commitGeometry(field: 'x' | 'y' | 'width' | 'height' | 'angle', event: Event): void {
   const node = singleNode.value
   const pageId = page.value?.id
   if (!node || !pageId) return
-  const raw = Number((event.target as HTMLInputElement).value)
-  if (!Number.isFinite(raw)) return
-  if (field === 'angle') {
-    if (raw === node.angle) return
-    documentStore.executeCommand(
-      new RotateCellsCommand([{ pageId, nodeId: node.id, before: node.angle, after: raw }]),
-    )
-    return
-  }
-  const pt = unitToPt(raw, pageUnit.value)
-  if (field === 'x' || field === 'y') {
-    if (pt === node[field]) return
-    documentStore.executeCommand(
-      new MoveCellsCommand([
-        {
-          pageId,
-          nodeId: node.id,
-          before: { x: node.x, y: node.y },
-          after: { x: field === 'x' ? pt : node.x, y: field === 'y' ? pt : node.y },
-        },
-      ]),
-    )
-    return
-  }
-  // 宽/高：按形状 minSize 钳制
-  const min = shapeRegistry.get(node.shape).minSize
-  const clamped = Math.max(pt, field === 'width' ? min.width : min.height)
-  if (clamped === node[field]) return
-  documentStore.executeCommand(
-    new ResizeCellsCommand([
-      {
-        pageId,
-        nodeId: node.id,
-        before: { x: node.x, y: node.y, width: node.width, height: node.height },
-        after: {
-          x: node.x,
-          y: node.y,
-          width: field === 'width' ? clamped : node.width,
-          height: field === 'height' ? clamped : node.height,
-        },
-      },
-    ]),
-  )
+  propertyController.commitGeometry(page.value!, node, field, (event.target as HTMLInputElement).value)
 }
 
 /** 名称/内容失焦提交：有变更才产生 EditTextCommand。 */
@@ -874,16 +812,7 @@ function commitNodeName(event: Event): void {
   const pageId = page.value?.id
   if (!node || !pageId) return
   const value = (event.target as HTMLInputElement | HTMLTextAreaElement).value
-  const before = node.text?.value ?? ''
-  if (value === before) return
-  documentStore.executeCommand(
-    new EditTextCommand({
-      pageId,
-      target: { kind: 'node', nodeId: node.id },
-      before,
-      after: value,
-    }),
-  )
+  propertyController.editNodeText(pageId, node, value)
 }
 
 // ---------- 样式写入（节点/边） ----------
@@ -891,43 +820,20 @@ function commitNodeName(event: Event): void {
 function writeNodeStyle(patch: Partial<NodeStyle>): void {
   const pageId = page.value?.id
   if (!pageId || selectedNodes.value.length === 0) return
-  const targets: StyleTarget[] = selectedNodes.value.map((node) => ({
-    kind: 'node',
-    pageId,
-    cellId: node.id,
-    before: pickPatch(node.style, patch),
-    after: patch,
-  }))
-  documentStore.executeCommand(new ApplyStyleCommand(targets))
+  propertyController.applyNodeStyle(pageId, selectedNodes.value, patch)
 }
 
 function writeEdgeStyle(patch: Partial<EdgeStyle>): void {
   const pageId = page.value?.id
   if (!pageId || selectedEdges.value.length === 0) return
-  const targets: StyleTarget[] = selectedEdges.value.map((edge) => ({
-    kind: 'edge',
-    pageId,
-    cellId: edge.id,
-    before: pickPatch(edge.style, patch),
-    after: patch,
-  }))
-  documentStore.executeCommand(new ApplyStyleCommand(targets))
+  propertyController.applyEdgeStyle(pageId, selectedEdges.value, patch)
 }
-
-const DEFAULT_SHADOW = { color: '#000000', opacity: 0.3, offsetX: 2, offsetY: 2, blur: 4 }
 
 /** 阴影写入：无阴影节点先以默认值补齐再覆盖单字段（before 为原 shadow 或 undefined）。 */
 function writeShadow(patch: Partial<NonNullable<NodeStyle['shadow']>>): void {
   const pageId = page.value?.id
   if (!pageId || selectedNodes.value.length === 0) return
-  const targets: StyleTarget[] = selectedNodes.value.map((node) => ({
-    kind: 'node',
-    pageId,
-    cellId: node.id,
-    before: { shadow: node.style.shadow ? { ...node.style.shadow } : undefined },
-    after: { shadow: { ...DEFAULT_SHADOW, ...node.style.shadow, ...patch } },
-  }))
-  documentStore.executeCommand(new ApplyStyleCommand(targets))
+  propertyController.applyShadow(pageId, selectedNodes.value, patch)
 }
 
 // ---------- 文本样式写入 ----------
@@ -936,9 +842,7 @@ function writeShadow(patch: Partial<NonNullable<NodeStyle['shadow']>>): void {
 function writeTextPatch(patch: TextStylePatch): void {
   const current = page.value
   if (!current) return
-  const targets = buildTextStyleTargets(current, selectionStore.selectedIds, patch)
-  if (targets.length === 0) return
-  documentStore.executeCommand(new TextStyleCommand({ pageId: current.id, targets }))
+  propertyController.applyTextStyle(current, selectionStore.selectedIds, patch)
 }
 
 /** 字形布尔切换：下一值经共享纯函数（mixed 或不全 true → true；全 true → false）。 */
@@ -952,15 +856,7 @@ function toggleStyleBool(key: 'bold' | 'italic' | 'underline' | 'strikethrough')
 function writeConnector(connector: ConnectorKind): void {
   const pageId = page.value?.id
   if (!pageId || selectedEdges.value.length === 0) return
-  if (selectedEdges.value.every((edge) => edge.connector === connector)) return
-  documentStore.executeCommand(
-    new UpdateEdgeConnectorCommand({
-      pageId,
-      edgeIds: selectedEdges.value.map((edge) => edge.id),
-      before: selectedEdges.value.map((edge) => edge.connector),
-      after: connector,
-    }),
-  )
+  propertyController.updateConnector(pageId, selectedEdges.value, connector)
 }
 
 function commitEdgeLabel(event: Event): void {
@@ -968,16 +864,7 @@ function commitEdgeLabel(event: Event): void {
   const pageId = page.value?.id
   if (!edge || !pageId) return
   const value = (event.target as HTMLInputElement).value
-  const before = edge.labels[0]?.text.value ?? ''
-  if (value === before) return
-  documentStore.executeCommand(
-    new EditTextCommand({
-      pageId,
-      target: { kind: 'edgeLabel', edgeId: edge.id, labelIndex: 0 },
-      before,
-      after: value,
-    }),
-  )
+  propertyController.editEdgeLabel(page.value!, edge, value)
 }
 
 // ---------- 链接 ----------
@@ -1003,20 +890,12 @@ function commitLink(kind: 'node' | 'edge', event: Event): void {
     linkError.value = null
     return
   }
-  const error = validateHyperlink(value)
+  const error = propertyController.setLink(pageId, kind, cell, value)
   if (error) {
     linkError.value = error
     return
   }
   linkError.value = null
-  documentStore.executeCommand(
-    new SetLinkCommand({
-      pageId,
-      target: { kind, cellId: cell.id },
-      before: cell.link,
-      after: value === '' ? undefined : value,
-    }),
-  )
 }
 </script>
 

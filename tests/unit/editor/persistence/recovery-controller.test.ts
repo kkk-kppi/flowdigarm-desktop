@@ -43,6 +43,29 @@ describe('RecoveryController', () => {
     expect(recovery.removed).toEqual([])
   })
 
+  it('uses the production shape context while validating recovery snapshots', async () => {
+    const value = createEmptyDocument('恢复端口')
+    value.pages[0].nodes = [
+      { id: crypto.randomUUID(), shape: 'rect', x: 0, y: 0, width: 80, height: 40, angle: 0, zIndex: 0, style: { fill: '#ffffff', fillOpacity: 1, stroke: '#000000', strokeWidth: 1 } },
+      { id: crypto.randomUUID(), shape: 'rect', x: 100, y: 0, width: 80, height: 40, angle: 0, zIndex: 1, style: { fill: '#ffffff', fillOpacity: 1, stroke: '#000000', strokeWidth: 1 } },
+    ]
+    value.pages[0].edges = [{
+      id: crypto.randomUUID(), source: { nodeId: value.pages[0].nodes[0].id, port: 'ghost' },
+      target: { nodeId: value.pages[0].nodes[1].id }, connector: 'orthogonal', vertices: [], labels: [],
+      style: { stroke: '#666666', strokeWidth: 1, opacity: 1, dash: 'solid', sourceArrow: 'none', targetArrow: 'arrow' }, zIndex: 2,
+    }]
+    const recovery = repository(snapshot(serializeDiagramDocument(value)))
+    const loaded: DiagramDocument[] = []
+    const controller = new RecoveryController(
+      { restoreDocument: (document) => loaded.push(document) }, recovery, vi.fn(),
+      { hasShape: (shape) => shape === 'rect', portIds: () => ['left', 'right'], isContainerShape: () => false },
+    )
+
+    await controller.checkStartup()
+    expect(controller.restore()).toBe(true)
+    expect(loaded[0].pages[0].edges[0].source.port).toBeUndefined()
+  })
+
   it('reports and conditionally removes a corrupt startup snapshot', async () => {
     const recovery = repository(snapshot('{"schemaVersion":0}'))
     const showError = vi.fn()

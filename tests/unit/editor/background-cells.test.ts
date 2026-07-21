@@ -20,6 +20,12 @@ describe('toBackgroundCell', () => {
     expect(background.zIndex).toBeLessThan(foreground.zIndex)
   })
 
+  it('uses a deeper offset so transitive backgrounds keep oldest-to-foreground order', () => {
+    const page = createEmptyPage({ nodes: [createTestNode({ id: 'n-1', zIndex: 3 })] })
+    const [cell] = pageToCells(page)
+    expect(toBackgroundCell(cell, 3).zIndex).toBeLessThan(toBackgroundCell(cell, 2).zIndex)
+  })
+
   it('背景边同样压底并携带 data 标记', () => {
     const page = createEmptyPage({
       nodes: [createTestNode({ id: 'n-1' }), createTestNode({ id: 'n-2' })],

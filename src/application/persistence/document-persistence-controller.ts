@@ -1,5 +1,5 @@
 import type { DiagramDocument } from '@/domain/diagram'
-import { serializeDiagramDocument } from '@/domain/document-schema'
+import { serializeValidatedDiagramDocument, type DocumentValidationContext } from '@/domain/document-schema'
 import { AutosaveController } from './autosave-controller'
 import {
   openDiagram,
@@ -42,19 +42,20 @@ export class DocumentPersistenceController {
     private readonly files: DiagramFileRepository,
     private readonly recovery: RecoveryRepository,
     onError: (message: string) => void = () => {},
+    private readonly validationContext?: DocumentValidationContext,
   ) {
-    this.autosave = new AutosaveController(recovery, 2000, onError)
+    this.autosave = new AutosaveController(recovery, 2000, onError, validationContext)
     this.unsubscribe = store.subscribe(() => this.handleStoreChange())
   }
 
   async open(): Promise<OpenDiagramResult | null> {
-    const result = await openDiagram(this.files)
+    const result = await openDiagram(this.files, this.validationContext)
     if (result?.ok) this.store.replaceDocument(result.document, result.path)
     return result
   }
 
   async openRecent(path: string): Promise<OpenDiagramResult> {
-    const result = await openRecentDiagram(this.files, path)
+    const result = await openRecentDiagram(this.files, path, this.validationContext)
     if (result.ok) this.store.replaceDocument(result.document, result.path)
     return result
   }
@@ -69,12 +70,9 @@ export class DocumentPersistenceController {
 
   private async saveSnapshot(forcePicker: boolean): Promise<SaveDiagramResult> {
     const snapshot = this.store.snapshot()
-    let json: string
-    try {
-      json = serializeDiagramDocument(snapshot.document)
-    } catch {
-      return { ok: false, error: '无法保存，原文件未被覆盖。' }
-    }
+    const serialized = serializeValidatedDiagramDocument(snapshot.document, this.validationContext)
+    if (!serialized.ok) return { ok: false, error: saveValidationError(serialized.error) }
+    const json = serialized.json
     const captured: CapturedSave = {
       documentId: snapshot.document.id,
       documentEpoch: snapshot.documentEpoch,
@@ -154,4 +152,11 @@ export class DocumentPersistenceController {
   private versionToken(captured: CapturedSave): string {
     return `${captured.documentEpoch}:${captured.revision}`
   }
+}
+
+function saveValidationError(error: string): string {
+  if (error.includes('节点位置超出允许范围')) {
+    return '文档校验失败，未保存：节点位置超出允许范围。'
+  }
+  return `文档校验失败，未保存：${error.replace(/^文件校验失败：/, '')}`
 }

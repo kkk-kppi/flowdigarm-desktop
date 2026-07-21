@@ -15,7 +15,7 @@
 
 ## 架构与单位
 
-依赖方向为 `ui -> application -> domain`，`infrastructure` 实现 application/domain 定义的端口。Vue 组件不直接调用 Tauri invoke、文件系统或 SQLite；平台能力通过 `src/platform/desktop-platform.ts` 注入。X6 是渲染和交互适配器，文档与撤销历史由领域模型和命令维护，不使用 X6 History 作为业务真源。
+依赖方向为 `ui -> application -> domain`，`infrastructure` 实现 application/domain 定义的端口。Vue 组件不导入命令、领域单位换算或平台模块，也不直接构造命令、调用 Tauri invoke、文件系统或 SQLite；画布与属性意图分别进入 `CanvasInteractionController`、`PropertyController` 和应用 view-model。平台能力通过装配层注入。X6 是渲染和交互适配器，文档与撤销历史由领域模型和命令维护，不使用 X6 History 作为业务真源。
 
 文档中的唯一逻辑长度单位是 pt。换算固定为 1in=72pt、1cm=72/2.54pt、1mm=72/25.4pt、1px=72/96pt；屏幕 100% 缩放时 1in=96 CSS px。页面单位切换只改变标尺和属性显示，不改节点、页面和拐点的内部 pt 几何，devicePixelRatio 不写入文件。
 
@@ -60,7 +60,7 @@ docs/                       产品、开发、用户、发布与验收文档
 
 ## 文件与本机数据
 
-用户图文件扩展名为 `.flowdiagram`，内容是 UTF-8 JSON，顶层结构为 `DiagramDocument`。文件保存前后均经过 schema、UUID、有限几何、页面背景引用、端口与 URL 协议校验；保存使用同目录临时文件、同步和原子替换，失败不应覆盖原文件。图片以受限 PNG/JPEG/WebP data URL 嵌入图文件，单张导入上限为 5 MiB。
+用户图文件扩展名为 `.flowdiagram`，内容是 UTF-8 JSON，顶层结构为 `DiagramDocument`。当前 schema 要求文档、页、节点和边 ID 均为 UUIDv4；只有无 schemaVersion 的旧格式迁移可重映射旧 ID 及边、父容器和背景引用。打开、最近文件、恢复、自动恢复、保存和 JSON 导出共用注入形状注册表的完整校验边界，覆盖页面设置、形状、节点/边完整结构、端口、父容器/循环、有限数值、颜色、透明度、文本、图片和安全链接。保存前校验失败时不写文件、不删除恢复、不标记已保存；保存使用同目录临时文件、同步和原子替换。图片以受限 PNG/JPEG/WebP data URL 嵌入，单张导入上限为 5 MiB。
 
 SQLite 数据库不保存图文件主体，只保存本机元数据。自动恢复在脏文档最后变化约 2 秒后写快照；恢复后的文档仍为未保存状态，只有显式保存成功才删除对应版本快照。文件格式和恢复行为详见 `docs/features.md`，用户操作见 `docs/user-guide.md`。
 
@@ -73,7 +73,7 @@ SQLite 数据库不保存图文件主体，只保存本机元数据。自动恢�
 ## 安全边界
 
 - 外链只允许 http、https、mailto；前端与 Rust 双重校验，普通点击不打开链接。
-- Tauri 能力声明采用最小权限，UI 经 typed platform adapter 使用原生能力。
+- Tauri webview 不持有 opener URL 权限；UI 经 application controller 调用自定义 Rust `open_external_link`，Rust 校验协议后使用 opener。
 - 文件打开、剪贴板导入与图片导入均校验大小、结构和内容；导出先生成全部临时产物，再事务替换目标。
 - 证书、私钥、密码和公证凭据不得提交。CI 只从环境 secrets 读取变量，缺失时必须明确记录未签名，而不是报告签名通过。
 - 应用离线工作，不上传图文件、最近文件、恢复快照或形状使用统计。

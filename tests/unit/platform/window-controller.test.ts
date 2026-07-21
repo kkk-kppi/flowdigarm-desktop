@@ -36,6 +36,7 @@ describe('TauriWindowController', () => {
       'core:window:allow-destroy',
       'core:window:allow-start-dragging',
     ]))
+    expect(capability.permissions).not.toContain('opener:allow-open-url')
   })
 
   it('delegates minimize and maximize controls', async () => {

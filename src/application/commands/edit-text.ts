@@ -7,20 +7,26 @@ import {
   type DiagramDocument,
   type DiagramEdge,
   type DiagramNode,
+  type EdgeLabel,
 } from '@/domain/diagram'
 import { MAX_TEXT_LENGTH } from '@/domain/limits'
 import type { EditorCommand } from './editor-command'
+import type { TextTarget } from '@/application/text/text-target'
 
-export type TextTarget =
-  | { kind: 'node'; nodeId: string }
-  | { kind: 'edgeLabel'; edgeId: string; labelIndex: number }
+export type { TextTarget } from '@/application/text/text-target'
 
-export interface EditTextInput {
+type EdgeEditTextInput = {
   pageId: string
-  target: TextTarget
+  target: Extract<TextTarget, { kind: 'edgeLabel' }>
   before: string
   after: string
+  /** Existing full snapshot; null means this command appends the label. */
+  edgeLabelBefore: EdgeLabel | null
 }
+
+export type EditTextInput =
+  | { pageId: string; target: Extract<TextTarget, { kind: 'node' }>; before: string; after: string }
+  | EdgeEditTextInput
 
 export class EditTextCommand implements EditorCommand {
   readonly id = crypto.randomUUID()
@@ -31,7 +37,10 @@ export class EditTextCommand implements EditorCommand {
     if (input.after.length > MAX_TEXT_LENGTH) {
       throw new Error('文本长度超出限制。')
     }
-    this.input = { ...input, target: { ...input.target } }
+    const edgeInput = input as EdgeEditTextInput
+    this.input = input.target.kind === 'edgeLabel'
+      ? { ...edgeInput, target: { ...edgeInput.target }, edgeLabelBefore: edgeInput.edgeLabelBefore ? structuredClone(edgeInput.edgeLabelBefore) : null }
+      : { ...input, target: { ...input.target } }
   }
 
   apply(document: DiagramDocument): DiagramDocument {
@@ -87,13 +96,8 @@ export class EditTextCommand implements EditorCommand {
     if (!page || !edge || target.labelIndex > edge.labels.length) {
       throw new Error('命令目标不存在。')
     }
-    // apply 时 labelIndex === labels.length → 追加新标签；revert 时该新增标签位于末尾，
-    // 判定规则（before === '' 且指向末位）将其移除。退化情形（编辑既有空文本末位标签）
-    // 撤销会丢弃该空标签，与实际编辑流（会话不产生空值命令）不冲突。
-    const removesAppended =
-      mode === 'revert' &&
-      this.input.before === '' &&
-      target.labelIndex === edge.labels.length - 1
+    const edgeInput = this.input as EdgeEditTextInput
+    const removesAppended = mode === 'revert' && edgeInput.edgeLabelBefore === null
     return {
       ...document,
       pages: document.pages.map((p) =>
@@ -103,7 +107,10 @@ export class EditTextCommand implements EditorCommand {
               edges: p.edges.map((item): DiagramEdge => {
                 if (item.id !== target.edgeId) return item
                 if (removesAppended) {
-                  return { ...item, labels: item.labels.slice(0, target.labelIndex) }
+                  return {
+                    ...item,
+                    labels: item.labels.filter((_, index) => index !== target.labelIndex),
+                  }
                 }
                 if (mode === 'apply' && target.labelIndex === item.labels.length) {
                   return {
@@ -112,6 +119,17 @@ export class EditTextCommand implements EditorCommand {
                       ...item.labels,
                       { text: createDefaultTextContent(value), position: 0.5 },
                     ],
+                  }
+                }
+                if (mode === 'revert' && edgeInput.edgeLabelBefore) {
+                  const snapshot = edgeInput.edgeLabelBefore
+                  return {
+                    ...item,
+                    labels: item.labels.map((label, index) =>
+                      index === target.labelIndex
+                        ? structuredClone(snapshot)
+                        : label,
+                    ),
                   }
                 }
                 return {

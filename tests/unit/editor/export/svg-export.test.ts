@@ -70,6 +70,20 @@ describe('renderPageSvg', () => {
     expect(result.links).toEqual([{ url: 'https://example.com/?a=1&b=2', xPt: 10, yPt: 20, widthPt: 80, heightPt: 40 }])
   })
 
+  it('clips partially visible negative link annotations and omits wholly outside links', () => {
+    const page = createEmptyPage({
+      id: 'page', name: 'P', pageSize: { width: 100, height: 100 },
+      nodes: [
+        createTestNode({ id: 'partial', x: -10, y: -5, width: 30, height: 20, link: 'https://example.com/partial' }),
+        createTestNode({ id: 'outside', x: -50, y: -50, width: 10, height: 10, link: 'https://example.com/outside' }),
+      ],
+    })
+
+    expect(renderPageSvg({ ...createEmptyDocument(), pages: [page] }, page.id).links).toEqual([
+      { url: 'https://example.com/partial', xPt: 0, yPt: 0, widthPt: 20, heightPt: 15 },
+    ])
+  })
+
   it('renders image nodes as only safe images and leaves invalid image bodies unpainted', () => {
     const imageText = createDefaultTextContent('不可渲染')
     imageText.style.background = '#ff0000'

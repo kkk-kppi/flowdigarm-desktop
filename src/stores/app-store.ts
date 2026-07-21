@@ -24,6 +24,7 @@ interface AppViewSettings {
   rightPanelMode: 'properties' | 'find'
   layerManagerOpen: boolean
   helpId: string | null
+  interactionBlocks: string[]
 }
 
 export const useAppStore = defineStore('app', {
@@ -43,7 +44,11 @@ export const useAppStore = defineStore('app', {
     rightPanelMode: 'properties',
     layerManagerOpen: false,
     helpId: null,
+    interactionBlocks: [],
   }),
+  getters: {
+    interactionBlocked: (state) => state.interactionBlocks.length > 0,
+  },
   actions: {
     applyPreferences(settings: EditorPreferences) {
       Object.assign(this, settings)
@@ -85,6 +90,12 @@ export const useAppStore = defineStore('app', {
     },
     closeHelp() {
       this.helpId = null
+    },
+    beginInteractionBlock(source: string) {
+      if (!this.interactionBlocks.includes(source)) this.interactionBlocks.push(source)
+    },
+    endInteractionBlock(source: string) {
+      this.interactionBlocks = this.interactionBlocks.filter((item) => item !== source)
     },
   },
 })

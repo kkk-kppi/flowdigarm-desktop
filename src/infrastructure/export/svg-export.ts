@@ -167,9 +167,18 @@ export function renderPageSvg(document: DiagramDocument, pageId: string): Render
     .join('')
   const width = number(page.pageSize.width)
   const height = number(page.pageSize.height)
+  const clippedLinks = links.flatMap((link) => {
+    const left = Math.max(0, link.xPt)
+    const top = Math.max(0, link.yPt)
+    const right = Math.min(page.pageSize.width, link.xPt + link.widthPt)
+    const bottom = Math.min(page.pageSize.height, link.yPt + link.heightPt)
+    return right > left && bottom > top
+      ? [{ ...link, xPt: left, yPt: top, widthPt: right - left, heightPt: bottom - top }]
+      : []
+  })
   const defs = '<defs><marker id="arrow-end" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="context-stroke"/></marker><marker id="arrow-start" markerWidth="8" markerHeight="8" refX="1" refY="4" orient="auto-start-reverse"><path d="M8 0 L0 4 L8 8 Z" fill="context-stroke"/></marker></defs>'
   return {
     svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}pt" height="${height}pt" viewBox="0 0 ${width} ${height}">${defs}<rect width="100%" height="100%" fill="${xml(page.canvas.background)}"/>${content}</svg>`,
-    links,
+    links: clippedLinks,
   }
 }

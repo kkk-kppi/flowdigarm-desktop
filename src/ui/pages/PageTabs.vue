@@ -95,12 +95,16 @@
 // 命令（新建/删除/重命名）经 document-store 执行；切换页与缩放为视图行为，不产生命令。
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { DiagramPage } from '@/domain/diagram'
-import { AddPageCommand } from '@/application/commands/add-page'
-import { RemovePageCommand } from '@/application/commands/remove-page'
-import { RenamePageCommand } from '@/application/commands/rename-page'
+import { PageTabsController } from '@/application/pages/page-tabs-controller'
 import { useDocumentStore } from '@/stores/document-store'
 
 const documentStore = useDocumentStore()
+const pageTabsController = new PageTabsController({
+  getDocument: () => documentStore.document,
+  getActivePageId: () => documentStore.activePageId,
+  execute: (command) => documentStore.executeCommand(command),
+  switchPage: (pageId) => documentStore.switchPage(pageId),
+})
 
 const pages = computed(() => documentStore.document.pages)
 
@@ -137,9 +141,7 @@ function commitRename(page: DiagramPage): void {
   if (name.length === 0 || name === page.name) {
     return // 空白或 unchanged 视为取消
   }
-  documentStore.executeCommand(
-    new RenamePageCommand({ pageId: page.id, before: page.name, after: name }),
-  )
+  pageTabsController.rename(page, name)
 }
 
 function cancelRename(): void {
@@ -162,16 +164,7 @@ function cancelDelete(): void {
 
 function confirmDelete(pageId: string): void {
   try {
-    // 删除活动页时先切到存活页，让删除命令落在存活页的命令栈中（撤销可用）
-    if (documentStore.activePageId === pageId) {
-      const fallback = documentStore.document.pages.find((page) => page.id !== pageId)
-      if (fallback) {
-        documentStore.switchPage(fallback.id)
-      }
-    }
-    documentStore.executeCommand(
-      new RemovePageCommand({ pageId, document: documentStore.document }),
-    )
+    pageTabsController.remove(pageId)
     confirmingDeleteId.value = null
   } catch (error) {
     deleteError.value = error instanceof Error ? error.message : String(error)
@@ -180,9 +173,7 @@ function confirmDelete(pageId: string): void {
 
 // ---- 新建页 ----
 function addPage(): void {
-  const command = new AddPageCommand({})
-  documentStore.executeCommand(command)
-  documentStore.switchPage(command.pageId)
+  pageTabsController.add()
 }
 
 // ---- 缩放控件（绑定当前页 ViewportController，视图行为不入历史） ----

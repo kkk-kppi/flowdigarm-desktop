@@ -5,14 +5,18 @@
 import type { CellMetadata } from './cell-mapper'
 
 /** 背景页 cells 的 zIndex 整体偏移量（压到前景之下；领域 zIndex 为非负小值）。 */
-export const BACKGROUND_Z_OFFSET = 1000
+export const BACKGROUND_Z_OFFSET = 2_000_001
 
 /** 背景页 cells 的 data 标记：interacting 与 Selection filter 据此禁止交互/选择。 */
 export const BACKGROUND_CELL_DATA = { background: true } as const
 
 /** 由 cell-mapper 元数据生成背景页 cell 元数据：zIndex 压底 + data 标记（不改原对象）。 */
-export function toBackgroundCell(meta: CellMetadata): CellMetadata {
-  return { ...meta, zIndex: meta.zIndex - BACKGROUND_Z_OFFSET, data: { ...BACKGROUND_CELL_DATA } }
+export function toBackgroundCell(meta: CellMetadata, depth = 1): CellMetadata {
+  return {
+    ...meta,
+    zIndex: meta.zIndex - BACKGROUND_Z_OFFSET * Math.max(1, depth),
+    data: { ...BACKGROUND_CELL_DATA },
+  }
 }
 
 /** 判断 cell data 是否为背景页标记。 */

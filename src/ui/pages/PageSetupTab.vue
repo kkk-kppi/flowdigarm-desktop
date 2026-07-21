@@ -22,7 +22,7 @@
             min="0"
             data-testid="custom-width"
             title="自定义宽度"
-            :value="formatMeasure(draft.widthPt, draft.unit)"
+            :value="formatPageMeasure(draft.widthPt, draft.unit)"
             @change="onCustomSizeChange('width', $event)"
           />
         </label>
@@ -34,7 +34,7 @@
             min="0"
             data-testid="custom-height"
             title="自定义高度"
-            :value="formatMeasure(draft.heightPt, draft.unit)"
+            :value="formatPageMeasure(draft.heightPt, draft.unit)"
             @change="onCustomSizeChange('height', $event)"
           />
         </label>
@@ -92,8 +92,8 @@
         <button
           type="button"
           data-testid="fit-page"
-          :disabled="!fitCommand"
-          :title="fitCommand ? '按内容自动调整页面大小' : '页面无图元'"
+          :disabled="!canFitPage"
+          :title="canFitPage ? '按内容自动调整页面大小' : '页面无图元'"
           @click="fitPage"
         >
           自动调整大小
@@ -187,17 +187,12 @@ import { computed, reactive, ref, watch } from 'vue'
 import QuickHelpButton from '@/ui/help/QuickHelpButton.vue'
 import type { ConnectorKind, Orientation, PageUnit } from '@/domain/diagram'
 import { paperSizeFor, type PaperPreset } from '@/domain/paper-presets'
-import { formatMeasure, unitToPt } from '@/domain/measurement'
-import {
-  pageSettingsEqual,
-  pageSettingsSnapshotOf,
-  UpdatePageCommand,
-  type PageSettingsSnapshot,
-} from '@/application/commands/update-page'
-import { createFitPageCommand, type FitPageToContentCommand } from '@/application/commands/fit-page-to-content'
+import { PageSetupController, type PageSettingsSnapshot } from '@/application/pages/page-setup-controller'
+import { formatPageMeasure, parsePageLength } from '@/application/pages/page-setup-view-model'
 import { useDocumentStore } from '@/stores/document-store'
 
 const documentStore = useDocumentStore()
+const pageSetupController = new PageSetupController((command) => documentStore.executeCommand(command))
 
 interface Draft {
   preset: PaperPreset
@@ -250,10 +245,7 @@ const backgroundPageOptions = computed(() =>
 )
 
 /** 自动调整大小命令（无图元页为 null → 按钮禁用）。 */
-const fitCommand = computed<FitPageToContentCommand | null>(() => {
-  const page = documentStore.activePage
-  return page ? createFitPageCommand(page) : null
-})
+const canFitPage = computed(() => pageSetupController.canFit(documentStore.activePage))
 
 /** 重置草稿为页面当前值（不产生命令）。 */
 function resetDraft(): void {
@@ -316,10 +308,8 @@ function setOrientation(orientation: Orientation): void {
 /** 自定义尺寸输入：按当前单位解析为 pt；非法输入忽略。 */
 function onCustomSizeChange(kind: 'width' | 'height', event: Event): void {
   const value = Number((event.target as HTMLInputElement).value)
-  if (!Number.isFinite(value) || value <= 0) {
-    return
-  }
-  const pt = unitToPt(value, draft.unit)
+  const pt = parsePageLength(value, draft.unit)
+  if (pt === null || pt === 0) return
   if (kind === 'width') {
     draft.widthPt = pt
   } else {
@@ -328,8 +318,8 @@ function onCustomSizeChange(kind: 'width' | 'height', event: Event): void {
 }
 
 function fitPage(): void {
-  if (fitCommand.value) {
-    documentStore.executeCommand(fitCommand.value)
+  const page = documentStore.activePage
+  if (page && pageSetupController.fit(page)) {
     // 命令已改写页面尺寸/方向：同步草稿，避免后续「应用」打包旧值静默回退 fit
     resetDraft()
   }
@@ -341,7 +331,6 @@ function applySettings(): void {
   if (!page) {
     return
   }
-  const before = pageSettingsSnapshotOf(page)
   const after: PageSettingsSnapshot = {
     pageSize: { preset: draft.preset, width: draft.widthPt, height: draft.heightPt },
     orientation: draft.orientation,
@@ -353,11 +342,8 @@ function applySettings(): void {
     background: draft.background,
     backgroundPageId: draft.backgroundPageId === '' ? undefined : draft.backgroundPageId,
   }
-  if (pageSettingsEqual(before, after)) {
-    return
-  }
   try {
-    documentStore.executeCommand(new UpdatePageCommand({ pageId: page.id, before, after }))
+    pageSetupController.apply(page, after)
     applyError.value = ''
   } catch (error) {
     applyError.value = error instanceof Error ? error.message : String(error)

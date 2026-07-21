@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "主窗口默认能力：核心运行时、文件选择与外部链接的最小权限。实际文件读写只经受校验的 Rust command。",
+  "description": "主窗口默认能力：核心运行时与文件选择的最小权限。文件读写和外部链接只经受校验的 Rust command。",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -10,7 +10,6 @@
     "core:window:allow-destroy",
     "core:window:allow-start-dragging",
     "dialog:allow-open",
-    "dialog:allow-save",
-    "opener:allow-open-url"
+    "dialog:allow-save"
   ]
 }

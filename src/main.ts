@@ -19,6 +19,8 @@ import { useDocumentStore } from '@/stores/document-store'
 import { useSelectionStore } from '@/stores/selection-store'
 import { useAppStore } from '@/stores/app-store'
 import { SystemClipboard } from '@/infrastructure/clipboard/system-clipboard'
+import { shapeDocumentValidationContext } from '@/application/shapes/document-validation-context'
+import { CanvasInteractionController } from '@/application/canvas/canvas-interaction-controller'
 import { createUnsavedDialogService, editorServicesKey, type EditorServices } from '@/ui/services/editor-services'
 import type { ApplicationResourceTracker, ApplicationResources } from '@/e2e/resource-tracker'
 import './styles/tokens.css'
@@ -107,6 +109,7 @@ const persistenceController = new DocumentPersistenceController(
   runtime.files,
   runtime.recovery,
   (message) => documentStore.setNotice(message),
+  shapeDocumentValidationContext,
 )
 const { unsaved, ui: fileWorkflowUi } = createUnsavedDialogService(
   (message) => documentStore.setNotice(message),
@@ -117,11 +120,13 @@ const fileWorkflowController = new FileWorkflowController(
   runtime.files,
   runtime.recents,
   fileWorkflowUi,
+  shapeDocumentValidationContext,
 )
 const recoveryController = new RecoveryController(
   documentStore,
   runtime.recovery,
   (message) => documentStore.setNotice(message),
+  shapeDocumentValidationContext,
 )
 const settingsController = new SettingsController(
   {
@@ -138,7 +143,16 @@ resourceTracker?.trackController(settingsController)
 const windowController = runtime.createWindowController(() => fileWorkflowController.requestClose())
 const exportController = new ExportController({
   snapshot: () => ({ document: documentStore.document, activePageId: documentStore.activePageId }),
-}, runtime.exporter)
+}, runtime.exporter, shapeDocumentValidationContext)
+const canvasInteractionController = new CanvasInteractionController({
+  getDocument: () => documentStore.document,
+  getActivePageId: () => documentStore.activePageId,
+  executeCommand: (command) => documentStore.executeCommand(command),
+  setNotice: (message) => documentStore.setNotice(message),
+  openExternalLink: (url) => runtime.desktop.openExternalLink(url),
+  select: (ids) => selectionStore.setSelection(ids),
+  recordShapeUsage: (shape) => { void documentStore.recordShapeUsage(shape) },
+})
 const services: EditorServices = {
   file: fileWorkflowController,
   recovery: recoveryController,
@@ -152,6 +166,7 @@ const services: EditorServices = {
   export: exportController,
   window: windowController,
   unsaved,
+  canvas: canvasInteractionController,
 }
 app.provide(editorServicesKey, services)
 

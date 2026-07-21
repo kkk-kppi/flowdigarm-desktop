@@ -14,7 +14,7 @@
           @maximize="onWindowCommand('maximize')"
           @close="onWindowCommand('close')"
         />
-        <MenuBar :menus="menus" @execute="onMenuExecute" />
+        <MenuBar :menus="menus" @execute="onMenuExecute" @open-change="menuOpen = $event" />
         <CompactToolbar />
         <PageTabs />
         <div class="shell-main" data-testid="shell-main">
@@ -89,7 +89,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, nextTick, onMounted, provide, reactive, ref, watch } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue'
 import CanvasArea from '@/ui/canvas/CanvasArea.vue'
 import CompactToolbar from '@/ui/toolbar/CompactToolbar.vue'
 import ElementLibrary from '@/ui/shapes/ElementLibrary.vue'
@@ -120,7 +120,7 @@ import type { CanvasController } from '@/application/canvas/canvas-controller'
 import { LayerManagerController } from '@/application/layers/layer-manager-controller'
 import { FindController } from '@/application/search/find-controller'
 import { isAutoConnectEligibleNode } from '@/application/arrangement/auto-connect'
-import { formatMeasure } from '@/domain/measurement'
+import { geometryDisplayValue } from '@/application/inspector/property-view-model'
 import type { ViewportState } from '@/application/viewport/viewport-transform'
 import { useAppStore } from '@/stores/app-store'
 import { useDocumentStore } from '@/stores/document-store'
@@ -155,6 +155,7 @@ const preferencesOpen = ref(false)
 const preferencesReturnFocus = ref<HTMLElement | null>(null)
 const exportOpen = ref(false)
 const exportReturnFocus = ref<HTMLElement | null>(null)
+const menuOpen = ref(false)
 const unsavedReturnFocus = ref<HTMLElement | null>(null)
 const viewport = reactive<ViewportState>({ zoom: 1, panX: 0, panY: 0 })
 
@@ -163,12 +164,14 @@ const editorReady = computed(() => startupComplete.value && recoverySnapshot.val
 const modalOpen = computed(() => Boolean(
   containerPickerRequest.value || unsavedRequest.value || recoverySnapshot.value || preferencesOpen.value || exportOpen.value,
 ))
+const interactionBlocked = computed(() => modalOpen.value || menuOpen.value || appStore.helpId !== null)
 const currentPreferences = computed<EditorPreferences>(() => ({
   theme: appStore.theme,
   showRulers: appStore.showRulers,
   showGrid: appStore.showGrid,
   showGuides: appStore.showGuides,
   showPageBreaks: appStore.showPageBreaks,
+  snapToGrid: appStore.snapToGrid,
   defaultZoom: appStore.defaultZoom,
   defaultPageUnit: appStore.defaultPageUnit,
   defaultConnector: appStore.defaultConnector,
@@ -189,7 +192,7 @@ const anchorPosition = computed(() => {
   const page = documentStore.activePage
   const anchor = page?.nodes.find((node) => node.id === selectionStore.anchorId)
   if (!page || !anchor) return null
-  return { x: `${formatMeasure(anchor.x, page.unit)} ${page.unit}`, y: `${formatMeasure(anchor.y, page.unit)} ${page.unit}` }
+  return { x: `${geometryDisplayValue(anchor.x, page.unit)} ${page.unit}`, y: `${geometryDisplayValue(anchor.y, page.unit)} ${page.unit}` }
 })
 const selectionSummary = computed(() => {
   const page = documentStore.activePage
@@ -431,6 +434,13 @@ watch(unsavedRequest, (request, previous) => {
     void nextTick(() => { unsavedReturnFocus.value = null })
   }
 })
+
+watch(interactionBlocked, (blocked) => {
+  if (blocked) appStore.beginInteractionBlock('shell-overlay')
+  else appStore.endInteractionBlock('shell-overlay')
+}, { immediate: true })
+
+onBeforeUnmount(() => appStore.endInteractionBlock('shell-overlay'))
 
 function openHelp(helpId: string, request: MenuInvocation): void {
   helpReturnFocus.value = request.trigger?.isConnected ? request.trigger : null

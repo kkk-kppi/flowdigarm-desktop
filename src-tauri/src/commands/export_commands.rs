@@ -63,6 +63,10 @@ fn finite_range(value: f64, allow_zero: bool) -> bool {
     value.is_finite() && value <= MAX_PAGE_PT && (value > 0.0 || (allow_zero && value == 0.0))
 }
 
+fn finite_position(value: f64) -> bool {
+    value.is_finite() && value.abs() <= MAX_PAGE_PT
+}
+
 fn validate_request(input: &NativeExportRequest) -> Result<(), String> {
     let path = Path::new(&input.path);
     if !path.is_absolute() || input.path.contains('\0') || path.file_name().is_none() {
@@ -114,10 +118,10 @@ fn validate_request(input: &NativeExportRequest) -> Result<(), String> {
             if validate_url(&link.url).is_err() {
                 return Err("导出链接协议不允许。".to_owned());
             }
-            if !finite_range(link.x_pt, true)
-                || !finite_range(link.y_pt, true)
-                || !finite_range(link.width_pt, false)
-                || !finite_range(link.height_pt, false)
+            if !finite_position(link.x_pt)
+                || !finite_position(link.y_pt)
+                || !finite_range(link.width_pt, true)
+                || !finite_range(link.height_pt, true)
             {
                 return Err("导出链接区域无效。".to_owned());
             }

@@ -65,7 +65,7 @@ import { nextTick, onBeforeUnmount, onMounted, ref, type ComponentPublicInstance
 import type { MenuDefinition, MenuItem } from '@/application/menus/menu-model'
 
 const props = defineProps<{ menus: MenuDefinition[] }>()
-const emit = defineEmits<{ execute: [id: string, trigger: HTMLButtonElement | null] }>()
+const emit = defineEmits<{ execute: [id: string, trigger: HTMLButtonElement | null]; openChange: [open: boolean] }>()
 const root = ref<HTMLElement | null>(null)
 const triggers: HTMLButtonElement[] = []
 const itemElements: HTMLButtonElement[] = []
@@ -87,6 +87,7 @@ function setItem(value: Element | ComponentPublicInstance | null, index: number)
 }
 function toggleMenu(index: number): void {
   openIndex.value = openIndex.value === index ? -1 : index
+  emit('openChange', openIndex.value !== -1)
   activeItem.value = 0
   submenuIndex.value = -1
 }
@@ -107,6 +108,7 @@ function onTriggerKeydown(event: KeyboardEvent, index: number): void {
   else if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
     event.preventDefault()
     openIndex.value = index
+    emit('openChange', true)
     activeItem.value = 0
     void nextTick(() => itemElements[0]?.focus())
   } else if (event.key === 'Escape') close(true)
@@ -155,6 +157,7 @@ function runItem(item: MenuItem | undefined): void {
 function close(restoreFocus: boolean): void {
   const trigger = triggers[openIndex.value]
   openIndex.value = -1
+  emit('openChange', false)
   submenuIndex.value = -1
   if (restoreFocus) void nextTick(() => trigger?.focus())
 }
@@ -162,7 +165,10 @@ function onDocumentMouseDown(event: MouseEvent): void {
   if (!root.value?.contains(event.target as Node)) close(false)
 }
 onMounted(() => document.addEventListener('mousedown', onDocumentMouseDown))
-onBeforeUnmount(() => document.removeEventListener('mousedown', onDocumentMouseDown))
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', onDocumentMouseDown)
+  emit('openChange', false)
+})
 </script>
 
 <style scoped>

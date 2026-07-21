@@ -28,7 +28,8 @@
 import { computed, nextTick, onMounted, ref } from 'vue'
 import type { TextContent } from '@/domain/diagram'
 import { TextEditSession } from '@/application/text/text-session'
-import { EditTextCommand, type TextTarget } from '@/application/commands/edit-text'
+import type { TextTarget } from '@/application/text/text-target'
+import { TextEditController } from '@/application/text/text-edit-controller'
 import { ViewportTransform, type ViewportState } from '@/application/viewport/viewport-transform'
 import { useDocumentStore } from '@/stores/document-store'
 
@@ -45,6 +46,10 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'close'): void }>()
 
 const documentStore = useDocumentStore()
+const textEditController = new TextEditController(
+  () => documentStore.document,
+  (command) => documentStore.executeCommand(command),
+)
 
 const draft = ref(props.content.value)
 const session = new TextEditSession(props.content.value)
@@ -131,14 +136,7 @@ function commitAndClose(): void {
   const result = session.commit()
   if (result) {
     try {
-      documentStore.executeCommand(
-        new EditTextCommand({
-          pageId: props.pageId,
-          target: props.target,
-          before: session.originalValue,
-          after: result.value,
-        }),
-      )
+      textEditController.commit(props.pageId, props.target, session.originalValue, result.value)
     } catch (error) {
       documentStore.setNotice(error instanceof Error ? error.message : String(error))
     }

@@ -12,18 +12,29 @@ import {
   createEmptyDocument,
   createEmptyPage,
 } from '@/domain/diagram'
-import { MAX_TEXT_LENGTH } from '@/domain/limits'
+import { MAX_PT, MAX_TEXT_LENGTH } from '@/domain/limits'
 import {
   migrateDocument,
   parseDiagramDocument,
   serializeDiagramDocument,
+  type DocumentValidationContext,
 } from '@/domain/document-schema'
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), '../../fixtures')
 const readFixture = (name: string): string => readFileSync(join(fixturesDir, name), 'utf-8')
 
 const RECT_PORTS = ['left', 'right', 'top', 'bottom']
-const portResolver = (shape: string): string[] => (shape === 'rect' ? RECT_PORTS : [])
+const validationContext: DocumentValidationContext = {
+  hasShape: (shape) => ['rect', 'group', 'image', 'text'].includes(shape),
+  portIds: (shape) => (shape === 'rect' ? RECT_PORTS : []),
+  isContainerShape: (shape) => shape === 'group',
+}
+const IDS = {
+  nodeA: '10000000-0000-4000-8000-000000000001',
+  nodeB: '10000000-0000-4000-8000-000000000002',
+  edge: '10000000-0000-4000-8000-000000000003',
+  parent: '10000000-0000-4000-8000-000000000004',
+}
 
 function makeNode(id: string, overrides: Partial<DiagramNode> = {}): DiagramNode {
   return {
@@ -58,16 +69,16 @@ function makeValidDocument(): DiagramDocument {
   const doc = createEmptyDocument('测试流程图')
   const page = doc.pages[0]
   page.nodes.push(
-    makeNode('节点甲', { text: createDefaultTextContent('开始') }),
-    makeNode('节点乙', { text: createDefaultTextContent('结束') }),
+    makeNode(IDS.nodeA, { text: createDefaultTextContent('开始') }),
+    makeNode(IDS.nodeB, { text: createDefaultTextContent('结束') }),
   )
-  page.edges.push(makeEdge('连线一', '节点甲', '节点乙'))
+  page.edges.push(makeEdge(IDS.edge, IDS.nodeA, IDS.nodeB))
   return doc
 }
 
 describe('fixtures 解析', () => {
   it('valid.flowdiagram：合法文档解析成功且无警告', () => {
-    const result = parseDiagramDocument(readFixture('valid.flowdiagram'), portResolver)
+    const result = parseDiagramDocument(readFixture('valid.flowdiagram'), validationContext)
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.warnings).toEqual([])
@@ -88,7 +99,7 @@ describe('fixtures 解析', () => {
   })
 
   it('legacy.flowdiagram：旧版文档迁移为唯一前景页', () => {
-    const result = parseDiagramDocument(readFixture('legacy.flowdiagram'), portResolver)
+    const result = parseDiagramDocument(readFixture('legacy.flowdiagram'), validationContext)
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.document.schemaVersion).toBe(CURRENT_SCHEMA_VERSION)
@@ -130,7 +141,7 @@ describe('构造用例校验', () => {
 
   it('重复 ID 拒绝', () => {
     const doc = makeValidDocument()
-    doc.pages[0].nodes.push(makeNode('节点甲'))
+    doc.pages[0].nodes.push(makeNode(IDS.nodeA))
     const result = parseDiagramDocument(serializeDiagramDocument(doc))
     expect(result.ok).toBe(false)
     if (result.ok) return
@@ -170,7 +181,7 @@ describe('构造用例校验', () => {
 
   it('边引用不存在的节点拒绝', () => {
     const doc = makeValidDocument()
-    doc.pages[0].edges.push(makeEdge('连线-悬空', '节点甲', '不存在的节点'))
+    doc.pages[0].edges.push(makeEdge('10000000-0000-4000-8000-000000000099', IDS.nodeA, '10000000-0000-4000-8000-000000000098'))
     const result = parseDiagramDocument(serializeDiagramDocument(doc))
     expect(result.ok).toBe(false)
     if (result.ok) return
@@ -179,14 +190,14 @@ describe('构造用例校验', () => {
 
   it('缺失端口的旧文件迁移为节点中心锚定并加警告', () => {
     const doc = makeValidDocument()
-    doc.pages[0].edges[0] = makeEdge('连线一', '节点甲', '节点乙', {
-      source: { nodeId: '节点甲', port: '不存在的端口' },
-      target: { nodeId: '节点乙', port: 'left' },
+    doc.pages[0].edges[0] = makeEdge(IDS.edge, IDS.nodeA, IDS.nodeB, {
+      source: { nodeId: IDS.nodeA, port: '不存在的端口' },
+      target: { nodeId: IDS.nodeB, port: 'left' },
     })
-    const result = parseDiagramDocument(serializeDiagramDocument(doc), portResolver)
+    const result = parseDiagramDocument(serializeDiagramDocument(doc), validationContext)
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.warnings).toContain('边 连线一 的端口缺失，已锚定到节点中心。')
+    expect(result.warnings).toContain(`边 ${IDS.edge} 的端口缺失，已锚定到节点中心。`)
     expect(result.document.pages[0].edges[0].source.port).toBeUndefined()
     expect(result.document.pages[0].edges[0].target.port).toBe('left')
   })
@@ -240,6 +251,63 @@ describe('构造用例校验', () => {
     expect(parseDiagramDocument('"只是一段文本"')).toEqual({ ok: false, error: '文件格式无效，未打开文件。' })
     expect(parseDiagramDocument('[1,2,3]')).toEqual({ ok: false, error: '文件格式无效，未打开文件。' })
   })
+
+  it.each([
+    ['document UUID', (raw: any) => { raw.id = 'not-a-uuid' }],
+    ['page UUID', (raw: any) => { raw.pages[0].id = 'not-a-uuid' }],
+    ['unknown shape', (raw: any) => { raw.pages[0].nodes[0].shape = 'ghost' }],
+    ['missing canvas', (raw: any) => { raw.pages[0].canvas = null }],
+    ['default arrow enum', (raw: any) => { raw.pages[0].defaultArrow = 'triple' }],
+    ['page boolean', (raw: any) => { raw.pages[0].autoConnectLabel = 'yes' }],
+    ['node opacity', (raw: any) => { raw.pages[0].nodes[0].style.fillOpacity = 2 }],
+    ['node stroke width', (raw: any) => { raw.pages[0].nodes[0].style.strokeWidth = MAX_PT + 1 }],
+    ['text style', (raw: any) => { raw.pages[0].nodes[0].text.style.bold = 'yes' }],
+    ['text block', (raw: any) => { raw.pages[0].nodes[0].text.block = null }],
+    ['edge connector', (raw: any) => { raw.pages[0].edges[0].connector = 'zigzag' }],
+    ['edge vertex', (raw: any) => { raw.pages[0].edges[0].vertices = [{ x: Infinity, y: 0 }] }],
+    ['edge labels', (raw: any) => { raw.pages[0].edges[0].labels = null }],
+    ['edge opacity', (raw: any) => { raw.pages[0].edges[0].style.opacity = -1 }],
+    ['edge link', (raw: any) => { raw.pages[0].edges[0].link = 'javascript:alert(1)' }],
+    ['missing parent', (raw: any) => { raw.pages[0].nodes[0].parentId = IDS.parent }],
+  ])('rejects invalid persisted %s', (_name, mutate) => {
+    const raw = JSON.parse(serializeDiagramDocument(makeValidDocument()))
+    mutate(raw)
+    expect(parseDiagramDocument(JSON.stringify(raw), validationContext).ok).toBe(false)
+  })
+
+  it('rejects non-container parents and parent cycles', () => {
+    const nonContainer = makeValidDocument()
+    nonContainer.pages[0].nodes[1].parentId = IDS.nodeA
+    expect(parseDiagramDocument(serializeDiagramDocument(nonContainer), validationContext).ok).toBe(false)
+
+    const cyclic = makeValidDocument()
+    cyclic.pages[0].nodes[0] = makeNode(IDS.nodeA, { shape: 'group', isContainer: true, parentId: IDS.nodeB })
+    cyclic.pages[0].nodes[1] = makeNode(IDS.nodeB, { shape: 'group', isContainer: true, parentId: IDS.nodeA })
+    expect(parseDiagramDocument(serializeDiagramDocument(cyclic), validationContext).ok).toBe(false)
+  })
+
+  it('only legacy migration remaps non-UUID IDs and every reference', () => {
+    const legacy = {
+      id: 'legacy-doc', name: '旧文档', nodes: [
+        makeNode('parent', { shape: 'group', isContainer: true }),
+        makeNode('child', { parentId: 'parent' }),
+      ],
+      edges: [makeEdge('edge', 'parent', 'child')],
+    }
+    const parsed = parseDiagramDocument(JSON.stringify(legacy), validationContext)
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    const page = parsed.document.pages[0]
+    expect([parsed.document.id, page.id, ...page.nodes.map(({ id }) => id), ...page.edges.map(({ id }) => id)])
+      .toEqual(expect.arrayContaining([expect.stringMatching(/^[0-9a-f-]{36}$/i)]))
+    expect(page.nodes[1].parentId).toBe(page.nodes[0].id)
+    expect(page.edges[0].source.nodeId).toBe(page.nodes[0].id)
+    expect(page.edges[0].target.nodeId).toBe(page.nodes[1].id)
+
+    const current = makeValidDocument()
+    current.pages[0].nodes[0].id = 'legacy-node'
+    expect(parseDiagramDocument(serializeDiagramDocument(current), validationContext).ok).toBe(false)
+  })
 })
 
 describe('序列化与迁移', () => {
@@ -247,7 +315,7 @@ describe('序列化与迁移', () => {
     const doc = makeValidDocument()
     const json = serializeDiagramDocument(doc)
     expect(json).toContain('\n  "schemaVersion"') // 2 空格缩进
-    const result = parseDiagramDocument(json, portResolver)
+    const result = parseDiagramDocument(json, validationContext)
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.warnings).toEqual([])

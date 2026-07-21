@@ -1,4 +1,4 @@
-import { serializeDiagramDocument } from '@/domain/document-schema'
+import { serializeValidatedDiagramDocument, type DocumentValidationContext } from '@/domain/document-schema'
 import type { DiagramDocument } from '@/domain/diagram'
 import type { RecoveryRepository, RecoverySnapshotWrite } from './persistence-ports'
 
@@ -15,16 +15,24 @@ export class AutosaveController {
     private readonly repository: RecoveryRepository,
     private readonly delayMs = 2000,
     private readonly onError: (message: string) => void = () => {},
+    private readonly validationContext?: DocumentValidationContext,
   ) {}
 
   schedule(document: DiagramDocument, versionToken: string, sourcePath?: string): void {
     if (this.disposed) return
     this.cancelTimer()
+    const serialized = serializeValidatedDiagramDocument(document, this.validationContext)
+    if (!serialized.ok) {
+      this.pending = null
+      this.pendingReady = false
+      this.onError(AUTOSAVE_ERROR)
+      return
+    }
     this.pending = {
       documentId: document.id,
       versionToken,
       name: document.name,
-      json: serializeDiagramDocument(document),
+      json: serialized.json,
       ...(sourcePath === undefined ? {} : { sourcePath }),
     }
     this.pendingReady = false

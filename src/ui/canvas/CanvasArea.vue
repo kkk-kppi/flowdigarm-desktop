@@ -62,9 +62,8 @@
 // 视口控制器按页取自 PageManager，切换页时重渲染并应用该页视口状态（每页首次显示时 fitToPage 居中）。
 // 本文件不写 pt↔px 换算公式（一律经 ViewportController/ViewportTransform）。
 // X6 手势回流一律转为命令经 document-store.executeCommand 执行（一次手势一条记录）。
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
-  createDefaultEdgeStyle,
   createDefaultTextContent,
   type DiagramDocument,
   type DiagramEdge,
@@ -73,27 +72,18 @@ import {
 } from '@/domain/diagram'
 import type { ViewportController } from '@/application/viewport/viewport-controller'
 import { ViewportTransform, type ViewportState } from '@/application/viewport/viewport-transform'
-import { resolveBackgroundPage } from '@/application/pages/background-page-resolver'
+import { resolvePageBackgroundChain } from '@/application/pages/page-background-chain'
 import { computeRestoredSelection } from '@/application/selection/restore-selection'
 import { GraphAdapter, type EdgeEndpointRef } from '@/infrastructure/x6/graph-adapter'
 import { textAreaForNode } from '@/infrastructure/x6/text-layout'
-import type { TextTarget } from '@/application/commands/edit-text'
+import type { TextTarget } from '@/application/text/text-target'
 import { shapeRegistry } from '@/application/shapes/shape-registry'
 import '@/application/shapes/common-shapes' // 模块副作用：注册内置形状
-import { CreateCellsCommand } from '@/application/commands/create-cells'
-import { MoveCellsCommand } from '@/application/commands/move-cells'
-import { ResizeCellsCommand } from '@/application/commands/resize-cells'
-import { RotateCellsCommand } from '@/application/commands/rotate-cells'
-import { ReconnectEdgeCommand } from '@/application/commands/reconnect-edge'
-import { UpdateEdgeVerticesCommand } from '@/application/commands/update-edge-vertices'
-import { collectDescendantIds } from '@/application/arrangement/descendants'
 import { isAutoConnectEligibleNode } from '@/application/arrangement/auto-connect'
-import { hasApplicableFormatPaintTarget } from '@/application/commands/apply-format-paint'
-import { openCellHyperlink, shouldOpenHyperlink } from '@/application/links/open-hyperlink'
+import { hasApplicableFormatPaintTarget } from '@/application/format-paint/format-paint-target'
 import { contextMenuItems, type ContextKind } from '@/application/menus/context-menu-model'
 import { validContainerMembers, validContainerTargets } from '@/application/menus/container-picker-options'
 import { isContainerNode } from '@/application/shapes/container-node'
-import { usePlatform } from '@/platform/platform-provider'
 import { useAppStore } from '@/stores/app-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { useFormatPaintStore } from '@/stores/format-paint-store'
@@ -104,6 +94,7 @@ import RulerCorner from './RulerCorner.vue'
 import RulerOverlay from './RulerOverlay.vue'
 import TextEditorOverlay from '@/ui/text/TextEditorOverlay.vue'
 import CanvasContextMenu from '@/ui/components/CanvasContextMenu.vue'
+import { editorServicesKey } from '@/ui/services/editor-services'
 
 interface MenuControllerPort { execute(id: string, invocation?: { trigger?: HTMLElement | null }): void }
 const props = defineProps<{ menuController?: MenuControllerPort }>()
@@ -113,14 +104,15 @@ const appStore = useAppStore()
 const documentStore = useDocumentStore()
 const selectionStore = useSelectionStore()
 const formatPaintStore = useFormatPaintStore()
-const platform = usePlatform()
+const services = inject(editorServicesKey, null)
+const interactionController = services?.canvas
 
 /** Ctrl/Cmd 实时状态（链接打开的 Ctrl/Cmd+点击判定与选择抑制）。 */
 const ctrlMetaHeld = ref(false)
 
 const activePage = computed(() => documentStore.activePage)
-const backgroundPage = computed(() =>
-  resolveBackgroundPage(documentStore.document, documentStore.activePageId),
+const pageLayers = computed(() =>
+  resolvePageBackgroundChain(documentStore.document, documentStore.activePageId),
 )
 const pageUnit = computed<PageUnit>(() => activePage.value?.unit ?? 'mm')
 
@@ -148,7 +140,7 @@ function renderActivePage(): void {
   // 渲染前快照领域选择：renderPage 的 clearCells 经 X6 事件链同步清空 store，
   // 渲染后再读 store 已为空（恢复变死代码）；已删除图元由快照过滤丢弃
   const restored = computeRestoredSelection([...selectionStore.selectedIds], page)
-  adapter.renderPage(page, backgroundPage.value)
+  adapter.renderPage(pageLayers.value)
   // 重建后恢复选择：store 与 X6 双侧一致（store 在渲染事件链中已被清空，须自快照恢复）
   selectionStore.setSelection(restored)
   adapter.syncSelection(restored)
@@ -263,7 +255,7 @@ function createShapeAtViewportCenter(shapeType: string): void {
     x: rect.width / 2,
     y: rect.height / 2,
   })
-  documentStore.createNodeFromShape(shapeType, centerPt)
+  interactionController?.createShapeAtCenter(shapeType, centerPt)
 }
 
 /** 图元库拖拽起点（App 经 shapeDragStartKey 转发）：X6 Dnd 拖拽预览。 */
@@ -317,6 +309,7 @@ defineExpose({
 })
 
 function openContextMenu(args: { kind: 'blank' | 'node' | 'edge'; cellId?: string; x: number; y: number }): void {
+  appStore.beginInteractionBlock('canvas-context-menu')
   let kind: ContextKind = args.kind
   if (args.cellId && selectionStore.selectedIds.includes(args.cellId) && selectionStore.count > 1) {
     kind = 'multi'
@@ -365,6 +358,7 @@ function focusCanvas(): void {
 }
 function closeContextMenu(): void {
   contextMenu.value = null
+  appStore.endInteractionBlock('canvas-context-menu')
   focusCanvas()
 }
 
@@ -384,6 +378,7 @@ function onWindowKeyDown(event: KeyboardEvent): void {
   if (isEditableTarget(event.target)) {
     return
   }
+  if (appStore.interactionBlocked || document.activeElement !== containerRef.value) return
   if (editingSession.value) {
     return // 编辑期间挂起画布快捷键（避免 Delete 删节点等）
   }
@@ -448,25 +443,8 @@ onMounted(() => {
       selectionStore.setSelection(ids)
     },
     onNodeMoved: (id, before, after) => {
-      // 容器移动时后代一起移动：收集后代 id 一并纳入同一条 MoveCellsCommand（领域为绝对 pt）
-      const page = activePage.value
-      const dx = after.x - before.x
-      const dy = after.y - before.y
-      const moves = [{ pageId: documentStore.activePageId, nodeId: id, before, after }]
-      if (page && (dx !== 0 || dy !== 0)) {
-        for (const descendantId of collectDescendantIds(page, [id])) {
-          const descendant = page.nodes.find((n) => n.id === descendantId)
-          if (!descendant) continue
-          moves.push({
-            pageId: documentStore.activePageId,
-            nodeId: descendant.id,
-            before: { x: descendant.x, y: descendant.y },
-            after: { x: descendant.x + dx, y: descendant.y + dy },
-          })
-        }
-      }
       try {
-        documentStore.executeCommand(new MoveCellsCommand(moves))
+        interactionController?.moveNode(id, before, after)
         skipDocumentRenderFor = documentStore.document
       } catch (error) {
         skipDocumentRenderFor = null
@@ -480,21 +458,14 @@ onMounted(() => {
         return
       }
       // Ctrl/Cmd+点击带链接节点 = 打开链接（普通点击走选择，X6 已处理）
-      const node = activePage.value?.nodes.find((n) => n.id === nodeId)
-      if (node?.link && shouldOpenHyperlink(modifiers)) {
-        void openCellHyperlink(platform, node.link).then((error) => {
-          if (error) {
-            documentStore.setNotice(error)
-          }
-        }).catch(() => {
-          documentStore.setNotice('无法打开链接，请检查系统默认应用。')
-        })
-      }
+      void interactionController?.openHyperlink(nodeId, modifiers)
     },
-    onEdgeClick: (edgeId) => {
+    onEdgeClick: (edgeId, modifiers) => {
       if (formatPaintStore.mode !== 'off') {
         formatPaintStore.applyTo(edgeId)
+        return
       }
+      void interactionController?.openHyperlink(edgeId, modifiers)
     },
     onBlankClick: () => {
       if (formatPaintStore.mode !== 'off') {
@@ -509,80 +480,28 @@ onMounted(() => {
       }
       // Ctrl/Cmd+点击带链接节点 = 打开链接，不改变选择
       if (ctrlMetaHeld.value) {
-        const node = activePage.value?.nodes.find((n) => n.id === cellId)
-        return node?.link !== undefined
+        return interactionController?.hasHyperlink(cellId) === true
       }
       return false
     },
     onCreateEdgeRequest: ({ source, target }) => {
-      const page = activePage.value
-      if (!page) {
-        return
-      }
-      // 页面默认连线类型与箭头：none→无箭头；single→末端箭头；double→双端箭头
-      const style = createDefaultEdgeStyle()
-      style.sourceArrow = page.defaultArrow === 'double' ? 'arrow' : 'none'
-      style.targetArrow = page.defaultArrow === 'none' ? 'none' : 'arrow'
-      const edge: Omit<DiagramEdge, 'zIndex'> & { zIndex?: number } = {
-        id: crypto.randomUUID(),
-        source: { nodeId: source.nodeId, port: source.port },
-        target: { nodeId: target.nodeId, port: target.port },
-        connector: page.defaultConnector,
-        vertices: [],
-        labels: [],
-        style,
-        zIndex: undefined,
-      }
-      documentStore.executeCommand(new CreateCellsCommand({ pageId: page.id, edges: [edge] }))
+      interactionController?.createEdge(source, target)
     },
     onReconnectRequest: ({ edgeId, end, endpoint }: { edgeId: string; end: 'source' | 'target'; endpoint: EdgeEndpointRef }) => {
-      const edge = findEdge(edgeId)
-      if (!edge) {
-        return
-      }
-      documentStore.executeCommand(
-        new ReconnectEdgeCommand({
-          pageId: documentStore.activePageId,
-          edgeId,
-          end,
-          before: { ...edge[end] },
-          after: { nodeId: endpoint.nodeId, port: endpoint.port },
-        }),
-      )
+      interactionController?.reconnectEdge(edgeId, end, endpoint)
     },
     onVerticesChanged: ({ edgeId, vertices }) => {
-      const edge = findEdge(edgeId)
-      if (!edge) {
-        return
-      }
-      documentStore.executeCommand(
-        new UpdateEdgeVerticesCommand({
-          pageId: documentStore.activePageId,
-          edgeId,
-          before: edge.vertices.map((v) => ({ ...v })),
-          after: vertices,
-        }),
-      )
+      interactionController?.updateVertices(edgeId, vertices)
     },
     onResizeGesture: ({ nodeId, before, after }) => {
-      documentStore.executeCommand(
-        new ResizeCellsCommand([
-          { pageId: documentStore.activePageId, nodeId, before, after },
-        ]),
-      )
+      interactionController?.resizeNode(nodeId, before, after)
     },
     onRotateGesture: ({ nodeId, before, after }) => {
-      documentStore.executeCommand(
-        new RotateCellsCommand([{ pageId: documentStore.activePageId, nodeId, before, after }]),
-      )
+      interactionController?.rotateNode(nodeId, before, after)
     },
     onShapeDropped: ({ shapeType, topLeftPt }) => {
       // 放置点为节点左上角；createNodeFromShape 以中心定位，按默认尺寸换算
-      const def = shapeRegistry.get(shapeType)
-      documentStore.createNodeFromShape(shapeType, {
-        x: topLeftPt.x + def.defaultSize.width / 2,
-        y: topLeftPt.y + def.defaultSize.height / 2,
-      })
+      interactionController?.createShapeAtTopLeft(shapeType, topLeftPt)
     },
     onNodeDblClick: (nodeId) => {
       openNodeTextEditor(nodeId)
@@ -593,6 +512,8 @@ onMounted(() => {
   })
   renderActivePage()
   adapter.setGridVisible(appStore.showGrid)
+  adapter.setGuidesVisible(appStore.showGuides)
+  adapter.setSnapToGrid(appStore.snapToGrid, activePage.value?.canvas.gridSize ?? 1)
   bindViewport()
   fitPageIfFirst()
 
@@ -608,14 +529,14 @@ onMounted(() => {
     resizeObserver.observe(container)
   }
 
-  window.addEventListener('keydown', onWindowKeyDown)
-  window.addEventListener('keyup', onWindowKeyUp)
+  container.addEventListener('keydown', onWindowKeyDown)
+  container.addEventListener('keyup', onWindowKeyUp)
   window.addEventListener('blur', onWindowBlur)
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', onWindowKeyDown)
-  window.removeEventListener('keyup', onWindowKeyUp)
+  containerRef.value?.removeEventListener('keydown', onWindowKeyDown)
+  containerRef.value?.removeEventListener('keyup', onWindowKeyUp)
   window.removeEventListener('blur', onWindowBlur)
   resizeObserver?.disconnect()
   resizeObserver = null
@@ -623,6 +544,7 @@ onBeforeUnmount(() => {
   unsubscribeViewport = null
   adapter?.dispose()
   adapter = null
+  appStore.endInteractionBlock('canvas-context-menu')
 })
 
 // 切换页：重渲染（含背景页）并应用该页视口状态；进行中的文本编辑随页切换关闭
@@ -634,6 +556,16 @@ watch(
     renderActivePage()
     fitPageIfFirst()
   },
+)
+
+watch(
+  () => appStore.showGuides,
+  (visible) => adapter?.setGuidesVisible(visible),
+)
+
+watch(
+  [() => appStore.snapToGrid, () => activePage.value?.canvas.gridSize],
+  ([enabled, gridSize]) => adapter?.setSnapToGrid(Boolean(enabled), gridSize ?? 1),
 )
 
 // 文档内容/设置变化：重渲染当前页（含页面尺寸、背景页引用变化）

@@ -14,6 +14,7 @@
           <label><input v-model="draft.showGrid" data-testid="preference-show-grid" type="checkbox"> 网格</label>
           <label><input v-model="draft.showGuides" data-testid="preference-show-guides" type="checkbox"> 参考线</label>
           <label><input v-model="draft.showPageBreaks" data-testid="preference-show-page-breaks" type="checkbox"> 分页符</label>
+          <label><input v-model="draft.snapToGrid" data-testid="preference-snap-to-grid" type="checkbox"> 网格吸附</label>
         </fieldset>
         <label>默认缩放
           <input v-model.number="draft.defaultZoom" data-testid="preference-default-zoom" type="number" min="0.1" max="8" step="0.1">

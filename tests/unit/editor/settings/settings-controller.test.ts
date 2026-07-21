@@ -52,7 +52,7 @@ describe('SettingsController', () => {
     expect(css).toContain("[data-reduced-motion='reduce']")
   })
 
-  it('loads all ten valid persisted settings into runtime state', async () => {
+  it('loads all eleven valid persisted settings into runtime state', async () => {
     const target = store()
     const values = {
       'theme.mode': 'dark',
@@ -60,6 +60,7 @@ describe('SettingsController', () => {
       'editor.showGrid': true,
       'editor.showGuides': false,
       'editor.showPageBreaks': true,
+      'editor.snapToGrid': false,
       'editor.defaultZoom': 1.5,
       'editor.defaultPageUnit': 'cm',
       'editor.defaultConnector': 'curved',
@@ -72,7 +73,7 @@ describe('SettingsController', () => {
 
     expect(target.settings).toEqual({
       theme: 'dark', showRulers: false, showGrid: true, showGuides: false,
-      showPageBreaks: true, defaultZoom: 1.5, defaultPageUnit: 'cm',
+      showPageBreaks: true, snapToGrid: false, defaultZoom: 1.5, defaultPageUnit: 'cm',
       defaultConnector: 'curved', recentLimit: 12, pngDpi: 300,
     })
   })
@@ -119,7 +120,7 @@ describe('SettingsController', () => {
     await controller.apply(next)
 
     expect(target.settings).toEqual(next)
-    expect(persisted.writes).toHaveLength(10)
+    expect(persisted.writes).toHaveLength(11)
     expect(target.notices).toEqual(['设置保存失败，本次运行仍会生效。'])
   })
 

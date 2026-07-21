@@ -1,5 +1,5 @@
 import type { DiagramDocument } from '@/domain/diagram'
-import { parseDiagramDocument } from '@/domain/document-schema'
+import { parseDiagramDocument, type DocumentValidationContext } from '@/domain/document-schema'
 import type { SaveDiagramResult } from './document-file-use-cases'
 import type {
   DiagramFileRepository,
@@ -36,6 +36,7 @@ export class FileWorkflowController {
     private readonly files: DiagramFileRepository,
     private readonly recents: RecentDocumentRepository,
     private readonly ui: FileWorkflowUi,
+    private readonly validationContext?: DocumentValidationContext,
   ) {}
 
   async newDocument(): Promise<boolean> {
@@ -82,7 +83,7 @@ export class FileWorkflowController {
         }
         return false
       }
-      const parsed = parseDiagramDocument(opened.json)
+      const parsed = parseDiagramDocument(opened.json, this.validationContext)
       if (!parsed.ok) {
         this.ui.showError(parsed.error)
         return false
@@ -133,7 +134,7 @@ export class FileWorkflowController {
   }
 
   private loadOpened(opened: { path: string; json: string }): boolean {
-    const parsed = parseDiagramDocument(opened.json)
+    const parsed = parseDiagramDocument(opened.json, this.validationContext)
     if (!parsed.ok) {
       this.ui.showError(parsed.error)
       return false

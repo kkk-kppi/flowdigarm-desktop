@@ -4,6 +4,7 @@ import type { RecentDocument, RecoverySnapshot } from '@/application/persistence
 import type { EditorPreferences } from '@/application/settings/settings-controller'
 import type { WindowController } from '@/platform/window-controller'
 import type { ExportController } from '@/application/export/export-controller'
+import type { CanvasInteractionController } from '@/application/canvas/canvas-interaction-controller'
 
 type UnsavedChoice = 'save' | 'discard' | 'cancel'
 
@@ -38,6 +39,7 @@ export interface EditorServices {
   export: Pick<ExportController, 'chooseDestination' | 'export'>
   window: WindowController
   unsaved: UnsavedDialogService
+  canvas?: Pick<CanvasInteractionController, 'moveNode' | 'createEdge' | 'reconnectEdge' | 'updateVertices' | 'resizeNode' | 'rotateNode' | 'createShapeAtCenter' | 'createShapeAtTopLeft' | 'openHyperlink' | 'hasHyperlink'>
 }
 
 export const editorServicesKey: InjectionKey<EditorServices> = Symbol('editor-services')

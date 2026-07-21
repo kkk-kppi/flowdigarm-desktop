@@ -93,6 +93,7 @@ describe('编辑文本命令（edgeLabel 目标）', () => {
     const command = new EditTextCommand({
       pageId: 'page-1',
       target: { kind: 'edgeLabel', edgeId: 'edge-1', labelIndex: 0 },
+      edgeLabelBefore: structuredClone(document.pages[0].edges[0].labels[0]),
       before: '是',
       after: '条件成立',
     })
@@ -111,6 +112,7 @@ describe('编辑文本命令（edgeLabel 目标）', () => {
     const command = new EditTextCommand({
       pageId: 'page-1',
       target: { kind: 'edgeLabel', edgeId: 'edge-1', labelIndex: 1 },
+      edgeLabelBefore: null,
       before: '',
       after: '备注',
     })
@@ -124,11 +126,33 @@ describe('编辑文本命令（edgeLabel 目标）', () => {
     expect(restored.pages[0].edges[0].labels[0].text.value).toBe('是')
   })
 
+  it('restores the full existing empty edge label snapshot instead of deleting it', () => {
+    const document = documentWithEdgeLabel()
+    const original = createDefaultTextContent('')
+    original.style.bold = true
+    original.style.color = '#123456'
+    document.pages[0].edges[0].labels[0] = { text: original, position: 0.25 }
+    const command = new EditTextCommand({
+      pageId: 'page-1',
+      target: { kind: 'edgeLabel', edgeId: 'edge-1', labelIndex: 0 },
+      edgeLabelBefore: structuredClone(document.pages[0].edges[0].labels[0]),
+      before: '',
+      after: 'edited',
+    })
+
+    const restored = command.revert(command.apply(document))
+
+    expect(restored.pages[0].edges[0].labels).toEqual([
+      { text: original, position: 0.25 },
+    ])
+  })
+
   it('labelIndex > labels.length 抛「命令目标不存在。」', () => {
     const document = documentWithEdgeLabel()
     const command = new EditTextCommand({
       pageId: 'page-1',
       target: { kind: 'edgeLabel', edgeId: 'edge-1', labelIndex: 3 },
+      edgeLabelBefore: null,
       before: '',
       after: '甲',
     })
@@ -140,6 +164,7 @@ describe('编辑文本命令（edgeLabel 目标）', () => {
     const command = new EditTextCommand({
       pageId: 'page-1',
       target: { kind: 'edgeLabel', edgeId: 'edge-x', labelIndex: 0 },
+      edgeLabelBefore: null,
       before: '',
       after: '甲',
     })

@@ -6,13 +6,31 @@ import { createTestDocument } from '../../../helpers/test-document'
 
 function setup() {
   const document = createTestDocument()
-  document.pages.push(createEmptyPage({ id: 'page-2', name: '非法<>页/二' }))
+  const pageId = '10000000-0000-4000-8000-000000000001'
+  const nodeIds = [
+    '10000000-0000-4000-8000-000000000002',
+    '10000000-0000-4000-8000-000000000003',
+    '10000000-0000-4000-8000-000000000004',
+  ]
+  const edgeIds = [
+    '10000000-0000-4000-8000-000000000005',
+    '10000000-0000-4000-8000-000000000006',
+  ]
+  document.id = '10000000-0000-4000-8000-000000000000'
+  document.pages[0].id = pageId
+  document.pages[0].nodes.forEach((node, index) => { node.id = nodeIds[index] })
+  document.pages[0].edges.forEach((edge, index) => {
+    edge.id = edgeIds[index]
+    edge.source.nodeId = nodeIds[index]
+    edge.target.nodeId = nodeIds[index + 1]
+  })
+  document.pages.push(createEmptyPage({ id: '10000000-0000-4000-8000-000000000007', name: '非法<>页/二' }))
   const requests: NativeExportRequest[] = []
   const exporter: DiagramExporter = {
     chooseDestination: vi.fn(async () => 'C:/exports/流程.svg'),
     export: vi.fn(async (request) => { requests.push(request); return ['C:/exports/流程.svg'] }),
   }
-  const state = { document, activePageId: 'page-1', revision: 7, dirty: true }
+  const state = { document, activePageId: pageId, revision: 7, dirty: true }
   const controller = new ExportController({ snapshot: () => state }, exporter)
   return { controller, exporter, requests, state }
 }
@@ -45,9 +63,9 @@ describe('ExportController', () => {
 
   it('serializes the active page with its complete background chain from oldest to foreground', async () => {
     const { controller, requests, state } = setup()
-    const oldest = createEmptyPage({ id: 'background-oldest', name: '最旧背景', type: 'background' })
-    const middle = createEmptyPage({ id: 'background-middle', name: '中间背景', type: 'background', backgroundPageId: oldest.id })
-    const direct = createEmptyPage({ id: 'background-direct', name: '直接背景', type: 'background', backgroundPageId: middle.id })
+    const oldest = createEmptyPage({ id: '20000000-0000-4000-8000-000000000001', name: '最旧背景', type: 'background' })
+    const middle = createEmptyPage({ id: '20000000-0000-4000-8000-000000000002', name: '中间背景', type: 'background', backgroundPageId: oldest.id })
+    const direct = createEmptyPage({ id: '20000000-0000-4000-8000-000000000003', name: '直接背景', type: 'background', backgroundPageId: middle.id })
     state.document.pages.unshift(direct, oldest, middle)
     state.document.pages.find(({ id }) => id === state.activePageId)!.backgroundPageId = direct.id
 
@@ -58,11 +76,11 @@ describe('ExportController', () => {
     const json = requests[0].documentJson ?? ''
     const serialized = JSON.parse(json)
     expect(serialized.pages.map(({ id }: { id: string }) => id)).toEqual([
-      'background-oldest', 'background-middle', 'background-direct', 'page-1',
+      oldest.id, middle.id, direct.id, state.activePageId,
     ])
-    expect(serialized.pages[1].backgroundPageId).toBe('background-oldest')
-    expect(serialized.pages[2].backgroundPageId).toBe('background-middle')
-    expect(serialized.pages[3].backgroundPageId).toBe('background-direct')
+    expect(serialized.pages[1].backgroundPageId).toBe(oldest.id)
+    expect(serialized.pages[2].backgroundPageId).toBe(middle.id)
+    expect(serialized.pages[3].backgroundPageId).toBe(direct.id)
     expect(parseDiagramDocument(json).ok).toBe(true)
   })
 

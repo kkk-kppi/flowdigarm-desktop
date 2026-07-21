@@ -185,7 +185,7 @@
 import { computed, onBeforeUnmount, onMounted } from 'vue'
 import QuickHelpButton from '@/ui/help/QuickHelpButton.vue'
 import type { TextBlock, TextStyle } from '@/domain/diagram'
-import { TextStyleCommand, type TextStylePatch } from '@/application/commands/text-style-command'
+import { PropertyController, type TextStylePatch } from '@/application/inspector/property-controller'
 import { aggregateTextStyles, type Aggregate } from '@/application/inspector/aggregate-style'
 import {
   alignPressed,
@@ -195,10 +195,7 @@ import {
   toggledStyleBool,
 } from '@/application/inspector/aggregate-display'
 import { fontFamilies, fontSizes } from '@/application/inspector/font-presets'
-import {
-  buildTextStyleTargets,
-  textContentsForSelection,
-} from '@/application/inspector/text-style-targets'
+import { textContentsForSelection } from '@/application/inspector/text-style-targets'
 import { useDocumentStore } from '@/stores/document-store'
 import { useFormatPaintStore } from '@/stores/format-paint-store'
 import { useSelectionStore } from '@/stores/selection-store'
@@ -206,6 +203,7 @@ import { useSelectionStore } from '@/stores/selection-store'
 const documentStore = useDocumentStore()
 const selectionStore = useSelectionStore()
 const formatPaintStore = useFormatPaintStore()
+const propertyController = new PropertyController((command) => documentStore.executeCommand(command))
 
 /** 格式刷按钮禁用：off 模式下需恰好 1 个选中图元；armed（once/continuous）时保持可用以显示状态。 */
 const formatPainterDisabled = computed(
@@ -292,9 +290,7 @@ function isActiveValue(agg: Aggregate<unknown>, option: string): boolean {
 function writeTextPatch(patch: TextStylePatch): void {
   const page = documentStore.activePage
   if (!page) return
-  const targets = buildTextStyleTargets(page, selectionStore.selectedIds, patch)
-  if (targets.length === 0) return
-  documentStore.executeCommand(new TextStyleCommand({ pageId: page.id, targets }))
+  propertyController.applyTextStyle(page, selectionStore.selectedIds, patch)
 }
 
 /** 字形布尔切换：下一值经共享纯函数（mixed 或不全 true → true；全 true → false）。 */
