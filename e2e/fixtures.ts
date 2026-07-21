@@ -65,29 +65,32 @@ export async function captureX6CellBeforeRebuild(page: Page, id: string): Promis
 export async function waitForRebuiltX6Cell(page: Page, id: string, captured: CapturedX6Cell) {
   try {
     await expect.poll(() => page.evaluate(({ id, revision, oldCell }) => {
-      const cell = document.querySelector<SVGElement>(`.x6-cell[data-cell-id="${id}"]`)
-      const visibleWithBox = cell
-        ? [cell, ...cell.querySelectorAll<SVGElement>('*')].some((element) => {
-            const style = getComputedStyle(element)
-            const box = element.getBoundingClientRect()
-            return style.display !== 'none'
-              && style.visibility !== 'hidden'
-              && (box.width > 0 || box.height > 0)
-          })
-        : false
+      const state = window.__FLOW_E2E__?.snapshot()
+      const documentHasCell = state?.document.pages.some((diagramPage) =>
+        diagramPage.nodes.some((node) => node.id === id)
+          || diagramPage.edges.some((edge) => edge.id === id),
+      ) ?? false
+      const cells = [...document.querySelectorAll<SVGElement>('.x6-cell[data-cell-id]')]
+        .filter((candidate) => candidate.dataset.cellId === id)
+      const cell = cells[0]
+      const box = cell?.getBoundingClientRect()
       return {
-        revisionAdvanced: (window.__FLOW_E2E__?.snapshot().revision ?? revision) !== revision,
+        revisionAdvanced: (state?.revision ?? revision) !== revision,
+        documentHasCell,
+        cellCount: cells.length,
         oldDetached: oldCell.isConnected === false,
         newAttached: cell?.isConnected === true,
         identityChanged: cell !== null && cell !== oldCell,
-        visibleWithBox,
+        hasCompleteBox: box ? box.width > 0 && box.height > 0 : false,
       }
     }, { id, revision: captured.revision, oldCell: captured.handle })).toEqual({
       revisionAdvanced: true,
+      documentHasCell: true,
+      cellCount: 1,
       oldDetached: true,
       newAttached: true,
       identityChanged: true,
-      visibleWithBox: true,
+      hasCompleteBox: true,
     })
   } finally {
     await captured.handle.dispose()
@@ -100,12 +103,29 @@ export async function waitForRebuiltX6Cell(page: Page, id: string, captured: Cap
 
 export async function waitForCreatedX6Cell(page: Page, id: string, revision: number) {
   await expect.poll(() => page.evaluate(({ id, revision }) => {
-    const cell = document.querySelector<SVGElement>(`.x6-cell[data-cell-id="${id}"]`)
+    const state = window.__FLOW_E2E__?.snapshot()
+    const documentHasCell = state?.document.pages.some((diagramPage) =>
+      diagramPage.nodes.some((node) => node.id === id)
+        || diagramPage.edges.some((edge) => edge.id === id),
+    ) ?? false
+    const cells = [...document.querySelectorAll<SVGElement>('.x6-cell[data-cell-id]')]
+      .filter((candidate) => candidate.dataset.cellId === id)
+    const cell = cells[0]
+    const box = cell?.getBoundingClientRect()
     return {
-      revisionAdvanced: (window.__FLOW_E2E__?.snapshot().revision ?? revision) > revision,
+      revisionAdvanced: (state?.revision ?? revision) > revision,
+      documentHasCell,
+      cellCount: cells.length,
       attached: cell?.isConnected === true,
+      hasCompleteBox: box ? box.width > 0 && box.height > 0 : false,
     }
-  }, { id, revision })).toEqual({ revisionAdvanced: true, attached: true })
+  }, { id, revision })).toEqual({
+    revisionAdvanced: true,
+    documentHasCell: true,
+    cellCount: 1,
+    attached: true,
+    hasCompleteBox: true,
+  })
 
   const handle = await page.$<SVGElement>(`.x6-cell[data-cell-id="${id}"]`)
   if (!handle) throw new Error(`Cannot capture created X6 cell ${id}`)
