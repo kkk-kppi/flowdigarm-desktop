@@ -91,3 +91,16 @@ Implemented file UX, recent files, guarded close, startup recovery, ten persiste
 - Full TypeScript: `pnpm test` -> `92 passed` files, `807 passed` tests.
 - Build/typecheck: `pnpm build` succeeded; the existing ~874 kB chunk-size warning remains non-blocking.
 - Rust was unchanged, so the optional Cargo suite was not rerun.
+
+## Final Gap Remediation (2026-07-21)
+
+- Container classification now has one application/shapes predicate: explicit `isContainer: true` or a registered container shape definition. Clipboard hierarchy validation, membership, picker/menu state, canvas context, and auto-connect eligibility consume it; a `group` parent no longer needs a redundant flag while an ordinary parent remains invalid.
+- Menu commands move focus to the persistent top-level trigger before emitting, so File -> New unsaved cancellation returns to the File button instead of retaining a detached submenu item.
+- Startup awaits best-effort settings before loading recents with the resulting `appStore.recentLimit`; settings/recent failures cannot skip recovery, and the startup gate remains until recovery lookup settles.
+
+## Final Gap Verification
+
+- RED: the focused run failed all four intended boundaries: registered group parent acceptance, deferred recent loading, persisted limit `12`, and File -> New cancel focus return.
+- Focused container/clipboard/menu/canvas/startup matrix: `7 passed` files, `75 passed` tests.
+- Full TypeScript: `pnpm vitest run` -> `92 passed` files, `810 passed` tests.
+- Build/typecheck: `pnpm build` succeeded; the existing 873.62 kB chunk-size warning remains non-blocking.

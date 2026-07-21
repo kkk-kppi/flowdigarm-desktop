@@ -8,8 +8,8 @@ import { createGroupCommand, createUngroupCommand } from '@/application/commands
 import { createAddToContainerCommand, createRemoveFromContainerCommand } from '@/application/commands/container-membership'
 import { hasApplicableFormatPaintTarget } from '@/application/commands/apply-format-paint'
 import { ungroupOrRemoveDisabledReason } from '@/application/menus/context-menu-model'
+import { isContainerNode } from '@/application/shapes/container-node'
 import {
-  isContainerNode,
   validContainerMembers,
   validContainerTargets,
 } from '@/application/menus/container-picker-options'

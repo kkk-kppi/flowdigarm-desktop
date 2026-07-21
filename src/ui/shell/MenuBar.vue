@@ -147,8 +147,10 @@ function onMenuKeydown(event: KeyboardEvent): void {
 function runItem(item: MenuItem | undefined): void {
   if (!item || item.disabledReason) return
   if (item.children) { submenuIndex.value = activeItem.value; return }
-  emit('execute', item.id, triggers[openIndex.value] ?? null)
-  close(true)
+  const trigger = triggers[openIndex.value] ?? null
+  close(false)
+  trigger?.focus()
+  emit('execute', item.id, trigger)
 }
 function close(restoreFocus: boolean): void {
   const trigger = triggers[openIndex.value]

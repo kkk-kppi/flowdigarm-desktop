@@ -294,13 +294,32 @@ describe('AppShell 组装', () => {
     const wrapper = mountShellWithServices(services)
     await flushPromises()
 
-    expect(loadRecent).toHaveBeenCalledOnce()
+    expect(loadRecent).not.toHaveBeenCalled()
     expect(checkStartup).not.toHaveBeenCalled()
     rejectSettings(new Error('settings db'))
     await flushPromises()
 
+    expect(loadRecent).toHaveBeenCalledWith(DEFAULT_EDITOR_PREFERENCES.recentLimit)
     expect(checkStartup).toHaveBeenCalledOnce()
     expect(wrapper.find('[data-testid="canvas-area-stub"]').exists()).toBe(true)
+  })
+
+  it('loads recents with the persisted recent limit after settings complete', async () => {
+    const loadRecent = vi.fn(async () => [])
+    const services = fakeServices({
+      settings: {
+        load: vi.fn(async () => ({ ...DEFAULT_EDITOR_PREFERENCES, recentLimit: 12 })),
+        apply: vi.fn(async () => {}),
+      },
+      file: { ...fakeServices().file, loadRecent },
+    })
+
+    mountShellWithServices(services)
+    await flushPromises()
+
+    expect(loadRecent).toHaveBeenCalledOnce()
+    expect(loadRecent).toHaveBeenCalledWith(12)
+    expect(services.recovery.checkStartup).toHaveBeenCalledOnce()
   })
 
   it('shows a notice and opens the editor when recovery lookup fails', async () => {
@@ -361,6 +380,42 @@ describe('AppShell 组装', () => {
 
     expect(document.activeElement).toBe(nativeCloseOrigin)
     nativeCloseOrigin.remove()
+    wrapper.unmount()
+  })
+
+  it('returns File New cancel focus to the persistent File menu trigger', async () => {
+    const request = ref<{ action: 'new' | 'open' | 'close' } | null>(null)
+    const choose = vi.fn((choice: 'save' | 'discard' | 'cancel') => {
+      if (choice === 'cancel') request.value = null
+    })
+    const base = fakeServices()
+    const services = fakeServices({
+      file: {
+        ...base.file,
+        newDocument: vi.fn(async () => {
+          request.value = { action: 'new' }
+          return false
+        }),
+      },
+      unsaved: { request, choose },
+    })
+    const wrapper = mountShellWithServices(services, true)
+    await flushPromises()
+    const fileTrigger = wrapper.find<HTMLButtonElement>('[data-menu-id="file"]')
+
+    fileTrigger.element.focus()
+    await fileTrigger.trigger('click')
+    const newItem = wrapper.find<HTMLButtonElement>('[data-command-id="file-new"]')
+    newItem.element.focus()
+    await newItem.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[aria-labelledby="unsaved-title"]').exists()).toBe(true)
+
+    await wrapper.find('[data-testid="unsaved-cancel"]').trigger('click')
+    await flushPromises()
+
+    expect(choose).toHaveBeenCalledWith('cancel')
+    expect(document.activeElement).toBe(fileTrigger.element)
     wrapper.unmount()
   })
 

@@ -97,7 +97,7 @@ import RecoveryDialog from '@/ui/dialogs/RecoveryDialog.vue'
 import PreferencesDialog from '@/ui/dialogs/PreferencesDialog.vue'
 import { shapeDragStartKey } from '@/ui/shapes/shape-drag-key'
 import { createMainMenus } from '@/application/menus/menu-model'
-import { isContainerNode } from '@/application/menus/container-picker-options'
+import { isContainerNode } from '@/application/shapes/container-node'
 import {
   MenuCommandController,
   type ContainerMembershipSelection,
@@ -446,17 +446,20 @@ function onViewportChange(state: ViewportState): void {
 
 onMounted(async () => {
   if (!services) return
-  const [settingsResult, recentResult] = await Promise.allSettled([
-    services.settings.load(),
-    services.file.loadRecent(appStore.recentLimit),
-  ])
-  if (settingsResult.status === 'fulfilled') {
-    documentStore.configureDefaults(settingsResult.value)
+  let startupDependencyFailed = false
+  try {
+    const settings = await services.settings.load()
+    appStore.applyPreferences(settings)
+    documentStore.configureDefaults(settings)
+  } catch {
+    startupDependencyFailed = true
   }
-  if (recentResult.status === 'fulfilled') {
-    recentDocuments.value = recentResult.value
+  try {
+    recentDocuments.value = await services.file.loadRecent(appStore.recentLimit)
+  } catch {
+    startupDependencyFailed = true
   }
-  if (settingsResult.status === 'rejected' || recentResult.status === 'rejected') {
+  if (startupDependencyFailed) {
     documentStore.setNotice('启动设置或最近文件加载失败，已使用安全默认设置。')
   }
   try {

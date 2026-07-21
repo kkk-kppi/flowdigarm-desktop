@@ -5,6 +5,7 @@
 import { createDefaultEdgeStyle, createDefaultTextContent, type DiagramEdge, type DiagramNode, type DiagramPage } from '@/domain/diagram'
 import { CreateCellsCommand, type NewCell } from '@/application/commands/create-cells'
 import { nearestPortId } from '@/application/shapes/nearest-port'
+import { isContainerNode } from '@/application/shapes/container-node'
 import { shapeRegistry } from '@/application/shapes/shape-registry'
 import '@/application/shapes/common-shapes' // 模块副作用：注册内置形状
 
@@ -14,7 +15,7 @@ function centerOf(node: DiagramNode): { x: number; y: number } {
 
 /** 组合和显式容器不可作为自动连线端点。 */
 export function isAutoConnectEligibleNode(node: DiagramNode): boolean {
-  return node.shape !== 'group' && node.isContainer !== true
+  return !isContainerNode(node)
 }
 
 /** 生成一条「自动连线」命令；有效节点（页面内存在且非容器）不足 2 个 → null。 */

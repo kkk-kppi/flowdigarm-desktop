@@ -82,6 +82,23 @@ describe('SystemClipboard', () => {
     expect(notice).toHaveBeenCalledWith('系统剪贴板内容无效，已使用应用内剪贴板。')
   })
 
+  it('accepts a registered group parent without a redundant isContainer flag', async () => {
+    const candidate = payload()
+    candidate.nodes = [
+      { ...candidate.nodes[0], shape: 'group' },
+      { ...candidate.nodes[0], id: secondNodeId, parentId: nodeId },
+    ]
+    const clipboardApi = api()
+    clipboardApi.text = JSON.stringify({
+      mime: FLOWDIAGRAM_CLIPBOARD_MIME,
+      version: 1,
+      payload: candidate,
+    })
+    const clipboard = new SystemClipboard(clipboardApi, vi.fn())
+
+    await expect(clipboard.read()).resolves.toEqual(candidate)
+  })
+
   it.each([
     ['missing shape', (value: any) => { delete value.nodes[0].shape }],
     ['missing node style', (value: any) => { delete value.nodes[0].style }],

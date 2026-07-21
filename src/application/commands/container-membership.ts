@@ -1,10 +1,9 @@
 // src/application/commands/container-membership.ts
 // 容器成员关系命令：加入容器/移出容器（详细设计 §12）。
-// container 必须 isContainer；加入时防环——成员不得包含容器自身及其祖先（沿 parentId 链）。
+// container 必须由显式标记或形状定义声明为容器；加入时防环——成员不得包含容器自身及其祖先（沿 parentId 链）。
 // 成员数据与 ID 保留（仅改 parentId）；before/after 逐成员记录，可逆。
-import type { DiagramDocument, DiagramNode, DiagramPage } from '@/domain/diagram'
-import { shapeRegistry } from '@/application/shapes/shape-registry'
-import '@/application/shapes/common-shapes' // 模块副作用：注册内置形状
+import type { DiagramDocument, DiagramPage } from '@/domain/diagram'
+import { isContainerNode } from '@/application/shapes/container-node'
 import type { EditorCommand } from './editor-command'
 
 interface MembershipChange {
@@ -55,14 +54,6 @@ export class ContainerMembershipCommand implements EditorCommand {
       ),
     }
   }
-}
-
-/** 容器判定：节点显式 isContainer 或形状定义为容器。 */
-function isContainerNode(node: DiagramNode): boolean {
-  return (
-    node.isContainer === true ||
-    (shapeRegistry.has(node.shape) && shapeRegistry.get(node.shape).isContainer)
-  )
 }
 
 /** 沿 parentId 链收集祖先 id（不含自身；环安全）。 */

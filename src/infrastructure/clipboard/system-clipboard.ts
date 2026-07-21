@@ -1,4 +1,5 @@
 import type { ClipboardPayload, ClipboardRepository } from '@/application/clipboard/clipboard-service'
+import { isContainerNode } from '@/application/shapes/container-node'
 import { MAX_EDGES_PER_PAGE, MAX_FILE_BYTES, MAX_NODES_PER_PAGE, MAX_TEXT_LENGTH } from '@/domain/limits'
 import {
   isAllowedHyperlinkProtocol,
@@ -88,7 +89,7 @@ function parsePayload(text: string): ClipboardPayload {
   for (const node of nodes) {
     if (node.parentId === undefined) continue
     const parent = nodesById.get(node.parentId)
-    if (!parent || parent.isContainer !== true) throw new Error('invalid clipboard parent')
+    if (!parent || !isContainerNode(parent)) throw new Error('invalid clipboard parent')
   }
   const checkedAncestry = new Set<string>()
   for (const node of nodes) {

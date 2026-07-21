@@ -90,7 +90,8 @@ import { isAutoConnectEligibleNode } from '@/application/arrangement/auto-connec
 import { hasApplicableFormatPaintTarget } from '@/application/commands/apply-format-paint'
 import { openCellHyperlink, shouldOpenHyperlink } from '@/application/links/open-hyperlink'
 import { contextMenuItems, type ContextKind } from '@/application/menus/context-menu-model'
-import { isContainerNode, validContainerMembers, validContainerTargets } from '@/application/menus/container-picker-options'
+import { validContainerMembers, validContainerTargets } from '@/application/menus/container-picker-options'
+import { isContainerNode } from '@/application/shapes/container-node'
 import { usePlatform } from '@/platform/platform-provider'
 import { useAppStore } from '@/stores/app-store'
 import { useDocumentStore } from '@/stores/document-store'
@@ -319,7 +320,7 @@ function openContextMenu(args: { kind: 'blank' | 'node' | 'edge'; cellId?: strin
     kind = 'multi'
   } else if (args.kind === 'node' && args.cellId) {
     const node = activePage.value?.nodes.find((item) => item.id === args.cellId)
-    kind = node?.isContainer || node?.shape === 'group' ? 'container' : 'node'
+    kind = node && isContainerNode(node) ? 'container' : 'node'
     selectionStore.setSelection([args.cellId])
   } else if (args.kind === 'edge' && args.cellId) {
     selectionStore.setSelection([args.cellId])

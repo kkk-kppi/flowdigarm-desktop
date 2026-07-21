@@ -1,5 +1,5 @@
 // tests/unit/editor/container-membership.test.ts
-// 通用容器成员关系：加入/移出各一条记录可逆；container 必须 isContainer；
+// 通用容器成员关系：加入/移出各一条记录可逆；container 必须由标记或形状定义声明；
 // 防环（成员不得包含容器自身及其祖先）；成员数据与 ID 保留。
 import { describe, expect, it } from 'vitest'
 import { createEmptyPage, type DiagramPage } from '@/domain/diagram'
@@ -14,8 +14,8 @@ function containerPage(): DiagramPage {
   return createEmptyPage({
     id: 'page-1',
     nodes: [
-      createTestNode({ id: 'container', shape: 'group', isContainer: true, zIndex: 0 }),
-      createTestNode({ id: 'inner', shape: 'group', isContainer: true, zIndex: 1, parentId: 'container' }),
+      createTestNode({ id: 'container', shape: 'group', zIndex: 0 }),
+      createTestNode({ id: 'inner', shape: 'group', zIndex: 1, parentId: 'container' }),
       createTestNode({ id: 'a', zIndex: 2, data: { 保留: true } }),
       createTestNode({ id: 'b', zIndex: 3 }),
       createTestNode({ id: 'plain', zIndex: 4 }), // 非容器

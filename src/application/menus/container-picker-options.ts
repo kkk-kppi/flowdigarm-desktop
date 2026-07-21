@@ -1,10 +1,5 @@
 import type { DiagramNode, DiagramPage } from '@/domain/diagram'
-import { shapeRegistry } from '@/application/shapes/shape-registry'
-import '@/application/shapes/common-shapes'
-
-export function isContainerNode(node: DiagramNode): boolean {
-  return node.isContainer === true || (shapeRegistry.has(node.shape) && shapeRegistry.get(node.shape).isContainer)
-}
+import { isContainerNode } from '@/application/shapes/container-node'
 
 function ancestorIds(page: DiagramPage, nodeId: string): Set<string> {
   const byId = new Map(page.nodes.map((node) => [node.id, node]))
