@@ -39,7 +39,13 @@ interface ApplicationRuntime {
 }
 
 async function createApplicationRuntime(): Promise<ApplicationRuntime> {
-  if (import.meta.env.VITE_E2E === '1') {
+  const [{ invoke, isTauri }, platform, shapeUsage, window] = await Promise.all([
+    import('@tauri-apps/api/core'),
+    import('@/platform/tauri-desktop-platform'),
+    import('@/infrastructure/persistence/tauri-shape-usage-repository'),
+    import('@/platform/tauri-window-controller'),
+  ])
+  if (import.meta.env.VITE_E2E === '1' || !isTauri()) {
     const { createBrowserE2EPlatform } = await import('@/platform/browser-e2e-platform')
     const browser = createBrowserE2EPlatform()
     return {
@@ -55,12 +61,6 @@ async function createApplicationRuntime(): Promise<ApplicationRuntime> {
       e2e: browser,
     }
   }
-  const [{ invoke }, platform, shapeUsage, window] = await Promise.all([
-    import('@tauri-apps/api/core'),
-    import('@/platform/tauri-desktop-platform'),
-    import('@/infrastructure/persistence/tauri-shape-usage-repository'),
-    import('@/platform/tauri-window-controller'),
-  ])
   return {
     files: platform.tauriDiagramFileRepository,
     recovery: platform.tauriRecoveryRepository,
@@ -218,6 +218,7 @@ app.onUnmount(disposeLifecycle)
 app.mount('#app')
 }
 
-void bootstrap().catch(() => {
+void bootstrap().catch((err) => {
+  console.error(err)
   document.body.textContent = '应用启动失败，请重新启动。'
 })
