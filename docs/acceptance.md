@@ -66,7 +66,7 @@
 |---|---|---|---|
 | L6.1 列出的每次用户动作只产生一条历史 | 通过 | 命令级、store、组件和画布 E2E 均断言单条 history label/revision。 | `tests/unit/editor/commands`、`tests/unit/stores/document-store.test.ts`、`e2e/canvas-interactions.spec.ts` |
 | L6.2 视图不入栈，新命令清 redo | 通过 | 命令历史与视口/应用 store 测试通过。 | `tests/unit/editor/commands/command-history.test.ts`、`tests/unit/editor/viewport/viewport-controller.test.ts`、`tests/unit/stores/app-store.test.ts` |
-| L6.3 Vitest、组件、Rust、Playwright E2E 全部通过 | 通过 | 本任务 `pnpm vitest run` 为 105 文件、889 测试通过，`pnpm playwright test` 为 17/17 通过，当前源码 no-bundle 构建通过；最近 Cargo 仍为 44/44。 | `.superpowers/sdd/reports/task-final-gaps-report.md`、`.superpowers/sdd/reports/task-9b-report.md` |
+| L6.3 Vitest、组件、Rust、Playwright E2E 全部通过 | 通过 | 本任务 `pnpm vitest run` 为 105 文件、890 测试通过，`pnpm playwright test` 为 17/17 通过，当前源码 no-bundle 构建通过；最近 Cargo 仍为 44/44。 | `.superpowers/sdd/reports/task-final-gaps-report.md`、`.superpowers/sdd/reports/task-9b-report.md` |
 | L6.4 500 节点/800 边选择、拖动、缩放、保存无冻结 | 通过 | 四次采样：选择 62.7-91.1ms，缩放 110.0-122.4ms，拖动 73.9-103.5ms，保存 239.9-346.4ms，均低于门禁。 | `e2e/performance.spec.ts`、`test-results/performance.json`、`.superpowers/sdd/reports/task-9b-report.md` |
 | L6.5 SVG/PNG/PDF 导出，安全链接和 PNG DPI 不改文档 | 通过 | Vitest 导出、Rust 导出 6 项集成测试和 E2E 96/150/300 DPI/PDF URI/JSON 断言通过。 | `tests/unit/editor/export`、`src-tauri/tests/export_commands.rs`、`e2e/editor-core.spec.ts` |
 | L6.6 Windows 与 macOS 分别执行完整关键路径 E2E并留报告/截图 | 未覆盖 | Windows Chromium E2E 已执行；macOS Intel 与 Apple Silicon 本地完整关键路径均未执行。CI 矩阵不能替代证据。 | `.superpowers/sdd/reports/task-9b-report.md`、`.github/workflows/release-gate.yml`（仅配置） |
@@ -79,7 +79,7 @@
 | Windows NSIS/MSI 安装与签名 | 未覆盖 | 工作流已配置；未使用真实证书 secrets 构建、安装和验证。 |
 | macOS app/DMG 两架构 | 未覆盖 | 仅有 runner/target 配置，没有本地构建、安装和关键路径报告。 |
 | macOS 签名与公证 | 未覆盖 | 未使用真实 Apple secrets 执行签名或公证。 |
-| 业务数据 JSON 编辑入口 | 通过 | 单节点可格式化编辑 JSON 对象；解析错误、非对象拒绝、应用/重置、单条历史、撤销和禁用状态均通过。证据：`tests/unit/editor/business-data-json.test.ts`、`tests/unit/editor/commands/set-business-data.test.ts`、`tests/component/PropertyTab.test.ts`。 |
+| 业务数据 JSON 编辑入口 | 通过 | 单节点可格式化编辑 JSON 对象；解析错误、非对象拒绝、应用/重置、单条历史、撤销和禁用状态均通过。未保存草稿不受样式或移动命令的不可变节点替换影响，持久业务数据或选择变化时会同步重置。证据：`tests/unit/editor/business-data-json.test.ts`、`tests/unit/editor/commands/set-business-data.test.ts`、`tests/component/PropertyTab.test.ts`。 |
 
 ## 结论
 

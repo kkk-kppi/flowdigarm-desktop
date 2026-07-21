@@ -684,7 +684,14 @@ function applyBusinessData(): void {
   businessDataDraft.value = formatted
 }
 
-watch(singleNode, resetBusinessDataDraft, { immediate: true })
+watch(
+  [
+    () => singleNode.value?.id,
+    () => formattedBusinessData(singleNode.value?.data),
+  ],
+  resetBusinessDataDraft,
+  { immediate: true },
+)
 
 // ---------- 聚合 ----------
 

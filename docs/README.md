@@ -2,7 +2,7 @@
 
 流程图编辑器是一款面向 Windows 10/11 与 macOS（Intel、Apple Silicon）的离线桌面制图工具。它使用 Tauri 2、Vue 3、TypeScript 和 AntV X6 构建，支持多页流程图、图元与连线编辑、文本和样式、组合容器、查找替换、恢复以及 SVG/PNG/PDF/JSON 导出。编辑、保存和导出不依赖网络服务，界面与错误反馈使用简体中文。
 
-当前产品范围是单机流程图编辑与本地文件交付。不包含 Linux 发布、云同步、多人协作、在线模板市场、自动更新、业务数据 JSON 可视化编辑器或矢量 PDF 内容输出。
+当前产品范围是单机流程图编辑与本地文件交付。不包含 Linux 发布、云同步、多人协作、在线模板市场、自动更新或矢量 PDF 内容输出。
 
 ## 平台与技术栈
 
@@ -82,6 +82,6 @@ SQLite 数据库不保存图文件主体，只保存本机元数据。自动恢�
 
 - PDF 的页面尺寸和安全链接注释按 pt 输出，但页面绘制内容当前是 72 pixels/in 的栅格内容；需要矢量内容时使用 SVG。
 - 主前端 bundle 仍有 Vite 大 chunk 警告，当前不影响构建门禁。
-- 领域模型保留节点 `data` 扩展字段并可文件往返，但当前 UI 没有业务数据 JSON 编辑入口。
+- 节点业务数据 JSON 编辑已实现：解析与对象校验位于 `src/application/inspector/business-data-json.ts`，可撤销写入命令位于 `src/application/commands/set-business-data.ts`，单节点编辑、应用与重置入口位于 `src/ui/inspector/PropertyTab.vue`；自动化证据为 `tests/unit/editor/business-data-json.test.ts`、`tests/unit/editor/commands/set-business-data.test.ts`、`tests/component/PropertyTab.test.ts`。
 - macOS Intel 与 Apple Silicon 的本地完整关键路径 E2E 尚未执行；工作流配置不能视为通过证据。
 - Windows/macOS 的真实证书签名、Apple 公证以及签名安装包人工安装验证尚未执行。

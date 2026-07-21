@@ -4,6 +4,9 @@
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import PropertyTab from '@/ui/inspector/PropertyTab.vue'
+import { ApplyStyleCommand } from '@/application/commands/apply-style'
+import { MoveCellsCommand } from '@/application/commands/move-cells'
+import { SetBusinessDataCommand } from '@/application/commands/set-business-data'
 import { useDocumentStore } from '@/stores/document-store'
 import { useSelectionStore } from '@/stores/selection-store'
 import {
@@ -108,6 +111,63 @@ describe('PropertyTab 单节点', () => {
     )
     expect(wrapper.find('[data-testid="business-data-error"]').exists()).toBe(false)
     expect(store.canUndo).toBe(false)
+  })
+
+  it('仅在持久业务数据或所选节点变化时重置业务数据草稿', async () => {
+    const document = createTestDocument()
+    document.pages[0].nodes[0].data = { 状态: '已保存' }
+    document.pages[0].nodes[1].data = { 状态: '另一节点' }
+    const { wrapper, store, selection } = mountTab(document)
+    await select(wrapper, selection, ['node-1'])
+    const textarea = wrapper.find('[data-testid="business-data-json"]')
+    const unsavedDraft = '{"状态":"未保存"}'
+    await textarea.setValue(unsavedDraft)
+
+    store.executeCommand(
+      new ApplyStyleCommand([
+        {
+          kind: 'node',
+          pageId: 'page-1',
+          cellId: 'node-1',
+          before: { fill: '#FFFFFF' },
+          after: { fill: '#ff0000' },
+        },
+      ]),
+    )
+    await wrapper.vm.$nextTick()
+    expect((textarea.element as HTMLTextAreaElement).value).toBe(unsavedDraft)
+
+    store.executeCommand(
+      new MoveCellsCommand([
+        {
+          pageId: 'page-1',
+          nodeId: 'node-1',
+          before: { x: 10, y: 20 },
+          after: { x: 30, y: 40 },
+        },
+      ]),
+    )
+    await wrapper.vm.$nextTick()
+    expect((textarea.element as HTMLTextAreaElement).value).toBe(unsavedDraft)
+
+    store.executeCommand(
+      new SetBusinessDataCommand({
+        pageId: 'page-1',
+        nodeId: 'node-1',
+        before: { 状态: '已保存' },
+        after: { 状态: '外部更新' },
+      }),
+    )
+    await wrapper.vm.$nextTick()
+    expect((textarea.element as HTMLTextAreaElement).value).toBe(
+      JSON.stringify({ 状态: '外部更新' }, null, 2),
+    )
+
+    await textarea.setValue('{"状态":"第二份未保存草稿"}')
+    await select(wrapper, selection, ['node-2'])
+    expect((textarea.element as HTMLTextAreaElement).value).toBe(
+      JSON.stringify({ 状态: '另一节点' }, null, 2),
+    )
   })
 
   it('节点信息：类型只读、名称=文本值、ID 小字只读', async () => {
