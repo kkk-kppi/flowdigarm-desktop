@@ -2,7 +2,7 @@
 
 **验收日期：** 2026-07-21
 
-**分支：** `feat/flowchart-editor-v1`
+**分支：** `feat/final-review-fixes`
 
 **本次执行平台：** Windows x64
 **整体状态：** **未完成（存在未覆盖）**
@@ -25,7 +25,7 @@
 | L2.1 文件/最近/自动保存/恢复闭环，保存失败不损坏原文件 | 通过 | 保存前使用完整上下文校验；越界运行时文档不调用 repository、不删恢复、不清 dirty。 | `tests/unit/editor/persistence/document-persistence-controller.test.ts`、`tests/unit/editor/persistence/{file-workflow-controller,recovery-controller}.test.ts`、`src-tauri/src/persistence/atomic_file.rs` |
 | L2.2 `.flowdiagram` 往返，非法完整 schema/几何/URL/UUID/形状/父子结构可读失败且不崩溃 | 通过 | 表驱动完整 schema、legacy ID 引用迁移和生产 shape/port context 回归通过。 | `tests/unit/domain/document-schema.test.ts`、`tests/unit/editor/persistence/document-persistence-controller.test.ts`、`e2e/persistence-errors.spec.ts` |
 | L2.3 mm/cm/in/pt/px 切换保持内部 pt，标尺与属性即时换算 | 通过 | 度量、属性组件和浏览器 pt 不变量断言通过。 | `tests/unit/domain/measurement.test.ts`、`tests/component/PropertyTab.test.ts`、`e2e/editor-core.spec.ts` |
-| L2.4 标尺、网格、参考线、分页符、网格吸附、缩放、平移及四种适应 | 通过 | Canvas 回归断言 Snapline 启停及当前页 gridSize，纯坐标回归断言吸附开/关。 | `tests/component/CanvasArea.test.ts`、`tests/unit/editor/graph-adapter-transform.test.ts`、`tests/unit/editor/viewport`、`e2e/canvas-interactions.spec.ts` |
+| L2.4 标尺、网格、参考线、分页符、网格吸附、缩放、平移及四种适应 | 通过 | Canvas 回归断言 Snapline 启停及当前页 gridSize；纯坐标回归断言吸附开/关；吸附开关不影响视觉网格大小。 | `tests/component/CanvasArea.test.ts`、`tests/unit/editor/graph-adapter-transform.test.ts`、`tests/unit/editor/graph-adapter-snap.test.ts`、`tests/unit/editor/viewport`、`e2e/canvas-interactions.spec.ts` |
 | L2.5 页面设置一次应用一条历史，取消不改变页面 | 通过 | 页面设置组件与命令测试通过。 | `tests/component/PageSetupTab.test.ts`、`tests/unit/editor/pages/update-page.test.ts` |
 | L2.6 分页符显示打印分块，关闭后文档不变 | 通过 | 分页计算和覆盖层开关测试通过。 | `tests/unit/editor/pages/page-breaks.test.ts`、`tests/component/PageBreakOverlay.test.ts` |
 
@@ -66,8 +66,8 @@
 |---|---|---|---|
 | L6.1 列出的每次用户动作只产生一条历史 | 通过 | 命令级、store、组件和画布 E2E 均断言单条 history；边空标签撤销无数据丢失。 | `tests/unit/editor/commands/edit-text.test.ts`、`tests/unit/editor/commands`、`tests/unit/stores/document-store.test.ts`、`e2e/canvas-interactions.spec.ts` |
 | L6.2 视图不入栈，新命令清 redo | 通过 | 命令历史与视口/应用 store 测试通过。 | `tests/unit/editor/commands/command-history.test.ts`、`tests/unit/editor/viewport/viewport-controller.test.ts`、`tests/unit/stores/app-store.test.ts` |
-| L6.3 Vitest、组件、Rust、Playwright E2E 全部通过 | 通过 | 本任务 `pnpm vitest run` 为 105 文件、890 测试通过，`pnpm playwright test` 为 17/17 通过，当前源码 no-bundle 构建通过；最近 Cargo 仍为 44/44。 | `.superpowers/sdd/reports/task-final-gaps-report.md`、`.superpowers/sdd/reports/task-9b-report.md` |
-| L6.4 500 节点/800 边选择、拖动、缩放、保存无冻结 | 通过 | 四次采样：选择 62.7-91.1ms，缩放 110.0-122.4ms，拖动 73.9-103.5ms，保存 239.9-346.4ms，均低于门禁。 | `e2e/performance.spec.ts`、`test-results/performance.json`、`.superpowers/sdd/reports/task-9b-report.md` |
+| L6.3 Vitest、组件、Rust、Playwright E2E 全部通过 | 通过 | 最终验证：`pnpm vitest run` 112 文件、926 测试通过；`pnpm playwright test` 17/17 通过；`cargo test --locked` 46 测试通过；`pnpm tauri build --no-bundle` 通过。 | `.superpowers/sdd/reports/task-final-gaps-report.md`、`.superpowers/sdd/reports/final-branch-review.md` |
+| L6.4 500 节点/800 边选择、拖动、缩放、保存无冻结 | 通过 | 四次采样：选择 48.9-63.3ms，缩放 89.2-93.3ms，拖动 52.4-96.9ms，保存 264.8-329.4ms，均低于门禁。 | `e2e/performance.spec.ts`、`test-results/performance.json`、`.superpowers/sdd/reports/task-9b-report.md` |
 | L6.5 SVG/PNG/PDF 导出，安全链接和 PNG DPI 不改文档 | 通过 | 完整背景链、负坐标部分可见链接裁剪、页外省略及 Rust 有符号坐标导出回归通过。 | `tests/unit/editor/export/svg-export.test.ts`、`src-tauri/tests/export_commands.rs`、`tests/unit/editor/export`、`e2e/editor-core.spec.ts` |
 | L6.6 Windows 与 macOS 分别执行完整关键路径 E2E并留报告/截图 | 未覆盖 | Windows Chromium E2E 已执行；macOS Intel 与 Apple Silicon 本地完整关键路径均未执行。CI 矩阵不能替代证据。 | `.superpowers/sdd/reports/task-9b-report.md`、`.github/workflows/release-gate.yml`（仅配置） |
 
@@ -75,7 +75,7 @@
 
 | 项目 | 状态 | 说明 |
 |---|---|---|
-| Windows release no-bundle 与进程启动 smoke | 通过 | 当前源码 `pnpm tauri build --no-bundle -- -- --locked` 通过，exe 为 15,497,216 bytes；最终验证 PID 33096 存活 8 秒后停止。仅证明进程启动存活，不代表窗口内容或完整桌面关键路径通过。 |
+| Windows release no-bundle 与进程启动 smoke | 通过 | 当前源码 `pnpm tauri build --no-bundle` 通过，exe 为 15,497,216 bytes；最终验证 PID 33096 存活 8 秒后停止。仅证明进程启动存活，不代表窗口内容或完整桌面关键路径通过。 |
 | Windows NSIS/MSI 安装与签名 | 未覆盖 | 工作流已配置；未使用真实证书 secrets 构建、安装和验证。 |
 | macOS app/DMG 两架构 | 未覆盖 | 仅有 runner/target 配置，没有本地构建、安装和关键路径报告。 |
 | macOS 签名与公证 | 未覆盖 | 未使用真实 Apple secrets 执行签名或公证。 |
