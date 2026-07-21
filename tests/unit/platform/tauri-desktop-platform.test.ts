@@ -1,7 +1,9 @@
 import { invoke } from '@tauri-apps/api/core'
+import { open } from '@tauri-apps/plugin-dialog'
 import {
   normalizeDiagramSavePath,
   tauriDesktopPlatform,
+  tauriImageRepository,
   tauriRecoveryRepository,
 } from '@/platform/tauri-desktop-platform'
 
@@ -41,5 +43,31 @@ describe('tauri recovery adapter', () => {
       json: '{}',
     })).rejects.toThrow('自动恢复快照数据无效。')
     expect(invoke).not.toHaveBeenCalled()
+  })
+})
+
+describe('tauri image adapter', () => {
+  beforeEach(() => {
+    vi.mocked(invoke).mockReset()
+    vi.mocked(open).mockReset()
+  })
+
+  it('returns null on picker cancellation without invoking Rust', async () => {
+    vi.mocked(open).mockResolvedValue(null)
+    await expect(tauriImageRepository.pickAndRead()).resolves.toBeNull()
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it('filters safe image types and invokes read_image with the selected path', async () => {
+    vi.mocked(open).mockResolvedValue('C:/images/photo.webp')
+    vi.mocked(invoke).mockResolvedValue({ dataUrl: 'data:image/webp;base64,AA==', width: 2, height: 1 })
+
+    await expect(tauriImageRepository.pickAndRead()).resolves.toMatchObject({ width: 2, height: 1 })
+    expect(open).toHaveBeenCalledWith({
+      multiple: false,
+      directory: false,
+      filters: [{ name: '图片文件', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+    })
+    expect(invoke).toHaveBeenCalledWith('read_image', { path: 'C:/images/photo.webp' })
   })
 })

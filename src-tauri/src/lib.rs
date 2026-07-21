@@ -40,7 +40,8 @@ pub fn run() {
             commands::file_commands::get_settings,
             commands::file_commands::set_setting,
             commands::file_commands::record_shape_usage,
-            commands::file_commands::top_shape_usage
+            commands::file_commands::top_shape_usage,
+            commands::image_commands::read_image
         ])
         .run(tauri::generate_context!())
     {

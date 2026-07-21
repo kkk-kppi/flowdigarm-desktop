@@ -17,7 +17,12 @@ import { COMMAND_HISTORY_LIMIT } from '@/application/commands/command-history'
 import { CreateCellsCommand } from '@/application/commands/create-cells'
 import { createDeleteCellsCommand } from '@/application/commands/delete-cells'
 import { PageManager } from '@/application/pages/page-manager'
-import { copyCells, createPasteCommand, type ClipboardPayload } from '@/application/clipboard/clipboard-service'
+import {
+  copyCells,
+  createPasteCommand,
+  type ClipboardPayload,
+  type ClipboardRepository,
+} from '@/application/clipboard/clipboard-service'
 import { shapeRegistry } from '@/application/shapes/shape-registry'
 import '@/application/shapes/common-shapes' // 模块副作用：注册 14 个内置形状
 import {
@@ -40,6 +45,7 @@ interface DocumentState {
   lastNotice: string | null
   /** 常用形状统计版本号：recordShapeUsage 完成后递增（驱动图元库常用区刷新）。 */
   shapeUsageVersion: number
+  systemClipboardConfigured: boolean
 }
 
 // PageManager 含命令栈/视口等可变对象，不走响应式；按 store 实例关联，loadDocument 时重建。
@@ -47,6 +53,7 @@ const pageManagers = new WeakMap<object, PageManager>()
 
 // 常用形状仓库：接口注入（默认 InMemory；Task 8 经 setShapeUsageRepository 换 SQLite 实现）。
 const shapeUsageRepositories = new WeakMap<object, ShapeUsageRepository>()
+const systemClipboards = new WeakMap<object, ClipboardRepository>()
 
 interface RevisionTracker {
   next: number
@@ -176,6 +183,7 @@ export const useDocumentStore = defineStore('document', {
       pasteCount: 0,
       lastNotice: null,
       shapeUsageVersion: 0,
+      systemClipboardConfigured: false,
     }
   },
   getters: {
@@ -198,6 +206,9 @@ export const useDocumentStore = defineStore('document', {
     canRedo(): boolean {
       void this.document
       return this.pageManager.historyFor(this.activePageId).canRedo
+    },
+    canPaste(state): boolean {
+      return state.clipboard !== null || state.systemClipboardConfigured
     },
     currentRevision(): number {
       void this.document
@@ -229,6 +240,10 @@ export const useDocumentStore = defineStore('document', {
     },
     replaceDocument(document: DiagramDocument, path?: string) {
       this.loadDocument(document, path)
+    },
+    restoreDocument(document: DiagramDocument, path?: string) {
+      this.loadDocument(document, path)
+      this.dirty = true
     },
     /** 在当前页命令栈执行命令并置 dirty；apply 抛错时文档与栈不变。 */
     executeCommand(command: EditorCommand) {
@@ -281,7 +296,7 @@ export const useDocumentStore = defineStore('document', {
       this.filePath = path
     },
     /** 复制当前页选中图元到应用内剪贴板（仅内部边）；空选/选择失效不动作。 */
-    copySelection() {
+    async copySelection() {
       const selection = useSelectionStore()
       const page = this.activePage
       if (!page || selection.selectedIds.length === 0) {
@@ -293,9 +308,14 @@ export const useDocumentStore = defineStore('document', {
       }
       this.clipboard = markRaw(payload)
       this.pasteCount = 0 // 新 payload 起新偏移序列
+      try {
+        await systemClipboards.get(this)?.write(payload)
+      } catch {
+        this.setNotice('系统剪贴板不可用，已使用应用内剪贴板。')
+      }
     },
     /** 剪切 = 复制 + 一条「删除图元」命令（删除后清空选择）；空选/选择失效不动作。 */
-    cutSelection() {
+    async cutSelection() {
       const selection = useSelectionStore()
       const page = this.activePage
       if (!page || selection.selectedIds.length === 0) {
@@ -307,10 +327,16 @@ export const useDocumentStore = defineStore('document', {
       if (nodeIds.length === 0 && edgeIds.length === 0) {
         return
       }
-      this.clipboard = markRaw(copyCells(page, ids))
+      const payload = copyCells(page, ids)
+      this.clipboard = markRaw(payload)
       this.pasteCount = 0
       this.executeCommand(createDeleteCellsCommand(page, nodeIds, edgeIds))
       selection.clear()
+      try {
+        await systemClipboards.get(this)?.write(payload)
+      } catch {
+        this.setNotice('系统剪贴板不可用，已使用应用内剪贴板。')
+      }
     },
     /** 删除当前选择（一条「删除图元」命令，Delete/Backspace 入口）；空选/选择失效不动作。 */
     deleteSelection() {
@@ -329,12 +355,24 @@ export const useDocumentStore = defineStore('document', {
       selection.clear()
     },
     /** 粘贴：pasteCount 递增并生成粘贴命令（逐次偏移 12pt）；无 payload 不动作。 */
-    pasteClipboard() {
-      if (!this.clipboard) {
-        return
+    async pasteClipboard() {
+      let payload = this.clipboard
+      if (!payload) {
+        try {
+          payload = await systemClipboards.get(this)?.read() ?? null
+        } catch {
+          this.setNotice('系统剪贴板不可用，已使用应用内剪贴板。')
+        }
+        if (!payload) return
+        this.clipboard = markRaw(payload)
+        this.pasteCount = 0
       }
       this.pasteCount += 1
-      this.executeCommand(createPasteCommand(this.clipboard, this.activePageId, this.pasteCount))
+      this.executeCommand(createPasteCommand(payload, this.activePageId, this.pasteCount))
+    },
+    setSystemClipboard(clipboard: ClipboardRepository) {
+      systemClipboards.set(this, clipboard)
+      this.systemClipboardConfigured = true
     },
     /**
      * 从形状创建节点并选中：默认样式/尺寸来自 ShapeDefinition，text 留空待编辑（Task 6b）。

@@ -13,12 +13,10 @@
 
 <script setup lang="ts">
 // 应用根组件：外壳布局全部由 AppShell 组装；此处仅初始化文档并渲染全局通知。
-// TODO(Task 8)：文件新建/打开/保存接线后替换此处的 newDocument 初始化。
 import AppShell from '@/ui/shell/AppShell.vue'
 import { useDocumentStore } from '@/stores/document-store'
 
 const documentStore = useDocumentStore()
-documentStore.newDocument()
 </script>
 
 <style scoped>

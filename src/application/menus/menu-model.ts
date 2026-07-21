@@ -1,3 +1,5 @@
+import type { RecentDocument } from '@/application/persistence/persistence-ports'
+
 export interface MenuItem {
   id: string
   label: string
@@ -7,6 +9,7 @@ export interface MenuItem {
   separatorBefore?: boolean
   checked?: boolean
   disabledReason?: string
+  title?: string
 }
 
 export interface MenuDefinition {
@@ -29,6 +32,8 @@ export interface MenuState {
   showGrid?: boolean
   showGuides?: boolean
   showPageBreaks?: boolean
+  recentDocuments?: RecentDocument[]
+  fileBusy?: boolean
 }
 
 function disabled(condition: boolean, reason: string): string | undefined {
@@ -36,6 +41,12 @@ function disabled(condition: boolean, reason: string): string | undefined {
 }
 
 export function createMainMenus(state: MenuState): MenuDefinition[] {
+  const fileBusyReason = state.fileBusy ? '文件操作正在进行。' : undefined
+  const recentItems = state.recentDocuments?.map((document, index) => ({
+    id: `file-recent-${index}`,
+    label: `${document.pinned ? '置顶 · ' : ''}${document.name}`,
+    title: document.path,
+  }))
   const selectionReason = disabled(state.hasSelection, '请先选择图元。')
   const twoNodesReason = disabled(state.selectedNodeCount >= 2, '至少选择两个节点。')
   const autoConnectReason = disabled(state.eligibleNodeCount >= 2, '至少选择两个可自动连线的节点。')
@@ -45,11 +56,11 @@ export function createMainMenus(state: MenuState): MenuDefinition[] {
   return [
     {
       id: 'file', label: '文件', items: [
-        { id: 'file-new', label: '新建', shortcut: 'Ctrl+N' },
-        { id: 'file-open', label: '打开', shortcut: 'Ctrl+O' },
-        { id: 'file-save', label: '保存', shortcut: 'Ctrl+S' },
-        { id: 'file-save-as', label: '另存为', shortcut: 'Ctrl+Shift+S' },
-        { id: 'file-recent', label: '最近文件', separatorBefore: true },
+        { id: 'file-new', label: '新建', shortcut: 'Ctrl+N', disabledReason: fileBusyReason },
+        { id: 'file-open', label: '打开', shortcut: 'Ctrl+O', disabledReason: fileBusyReason },
+        { id: 'file-save', label: '保存', shortcut: 'Ctrl+S', disabledReason: fileBusyReason },
+        { id: 'file-save-as', label: '另存为', shortcut: 'Ctrl+Shift+S', disabledReason: fileBusyReason },
+        { id: 'file-recent', label: '最近文件', separatorBefore: true, children: recentItems?.length ? recentItems : undefined, disabledReason: fileBusyReason },
         { id: 'file-export', label: '导出', helpId: 'export' },
         { id: 'file-page-setup', label: '页面设置', helpId: 'page-setup' },
       ],
@@ -87,7 +98,7 @@ export function createMainMenus(state: MenuState): MenuDefinition[] {
         { id: 'insert-diamond', label: '菱形' },
         { id: 'insert-text', label: '文本框' },
         { id: 'insert-edge', label: '连接线', helpId: 'connect' },
-        { id: 'insert-image', label: '外部图片' },
+        { id: 'insert-image', label: '外部图片', disabledReason: fileBusyReason },
       ],
     },
     {
@@ -124,7 +135,7 @@ export function createMainMenus(state: MenuState): MenuDefinition[] {
         },
         { id: 'tool-find', label: '查找替换', separatorBefore: true, helpId: 'find-replace' },
         { id: 'tool-layers', label: '图层管理', helpId: 'layer-manager' },
-        { id: 'tool-preferences', label: '首选项', helpId: 'preferences' },
+        { id: 'tool-preferences', label: '首选项', helpId: 'preferences', disabledReason: fileBusyReason },
       ],
     },
     {

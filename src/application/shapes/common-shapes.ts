@@ -210,7 +210,7 @@ const COMMON_SHAPES: ShapeDefinition[] = [
     type: 'image',
     label: '图片',
     category: 'image',
-    body: { markup: 'rect' },
+    body: { markup: 'image' },
     defaultSize: BASIC_SIZE,
     minSize: { width: 24, height: 24 },
     textAreaInset: DEFAULT_INSET,

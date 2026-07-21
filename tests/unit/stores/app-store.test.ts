@@ -16,6 +16,25 @@ describe('app-store 视图设置', () => {
     expect(store.showPageBreaks).toBe(false)
     expect(store.snapToGrid).toBe(true)
     expect(store.theme).toBe('system')
+    expect(store.defaultZoom).toBe(1)
+    expect(store.defaultPageUnit).toBe('mm')
+    expect(store.defaultConnector).toBe('orthogonal')
+    expect(store.recentLimit).toBe(50)
+    expect(store.pngDpi).toBe(150)
+  })
+
+  it('一次应用十项首选项', () => {
+    const store = useAppStore()
+    store.applyPreferences({
+      theme: 'light', showRulers: false, showGrid: true, showGuides: false,
+      showPageBreaks: true, defaultZoom: 2, defaultPageUnit: 'in',
+      defaultConnector: 'straight', recentLimit: 20, pngDpi: 300,
+    })
+    expect(store.$state).toMatchObject({
+      theme: 'light', showRulers: false, showGrid: true, showGuides: false,
+      showPageBreaks: true, defaultZoom: 2, defaultPageUnit: 'in',
+      defaultConnector: 'straight', recentLimit: 20, pngDpi: 300,
+    })
   })
 
   it('toggle 动作逐项取反且互不影响', () => {

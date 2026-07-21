@@ -19,7 +19,7 @@ export interface ShapeDefinition {
    * path 字符串以 0..100 坐标描述形状轮廓，渲染时按节点 bbox 缩放（X6 侧经 refD 实现，
    * 缩略图经 SVG viewBox 实现）。
    */
-  body: { markup: 'rect' | 'ellipse' | 'path'; path?: string; roundedRadius?: number }
+  body: { markup: 'rect' | 'ellipse' | 'path' | 'image'; path?: string; roundedRadius?: number }
   defaultSize: { width: number; height: number } // pt
   minSize: { width: number; height: number } // pt
   ports: PortDef[]

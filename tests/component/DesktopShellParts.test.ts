@@ -9,6 +9,7 @@ describe('desktop shell bars', () => {
 
   it('shows dirty title and emits all window controls with accessible tooltips', async () => {
     const wrapper = mount(TitleBar, { props: { fileName: '示例.flowdiagram', dirty: true } })
+    expect(wrapper.find('[data-testid="titlebar"]').attributes('data-tauri-drag-region')).toBeDefined()
     expect(wrapper.text()).toContain('流程图编辑器 - 示例.flowdiagram*未保存')
     for (const [testid, event] of [['minimize', 'minimize'], ['maximize', 'maximize'], ['close', 'close']] as const) {
       const button = wrapper.find(`[data-testid="title-${testid}"]`)

@@ -60,6 +60,14 @@ export class DocumentPersistenceController {
   }
 
   async save(): Promise<SaveDiagramResult> {
+    return this.saveSnapshot(false)
+  }
+
+  async saveAs(): Promise<SaveDiagramResult> {
+    return this.saveSnapshot(true)
+  }
+
+  private async saveSnapshot(forcePicker: boolean): Promise<SaveDiagramResult> {
     const snapshot = this.store.snapshot()
     let json: string
     try {
@@ -76,7 +84,7 @@ export class DocumentPersistenceController {
     const result = await saveDiagramSnapshot(this.files, {
       name: snapshot.document.name,
       json,
-      ...(snapshot.filePath === null ? {} : { path: snapshot.filePath }),
+      ...(snapshot.filePath === null || forcePicker ? {} : { path: snapshot.filePath }),
     })
     if (!result.ok) return result
 

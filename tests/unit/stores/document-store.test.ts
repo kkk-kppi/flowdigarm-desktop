@@ -9,7 +9,7 @@ import { RenamePageCommand } from '@/application/commands/rename-page'
 import { AddPageCommand } from '@/application/commands/add-page'
 import { RemovePageCommand } from '@/application/commands/remove-page'
 import { createEmptyDocument, createEmptyPage, type DiagramDocument } from '@/domain/diagram'
-import { createTestEdge, createTestNode } from '../../helpers/test-document'
+import { createTestDocument, createTestEdge, createTestNode } from '../../helpers/test-document'
 
 function twoPageDocument(): DiagramDocument {
   return {
@@ -532,6 +532,15 @@ describe('document-store 剪贴板与创建', () => {
     expect(store.lastNotice).toBe('剪贴板为空。')
     store.clearNotice()
     expect(store.lastNotice).toBeNull()
+  })
+
+  it('restoreDocument loads the recovery source path but remains dirty until explicit save', () => {
+    const store = useDocumentStore()
+    const recovered = createTestDocument()
+    store.restoreDocument(recovered, 'C:/docs/recovered.flowdiagram')
+    expect(store.document).toBe(recovered)
+    expect(store.filePath).toBe('C:/docs/recovered.flowdiagram')
+    expect(store.dirty).toBe(true)
   })
 })
 

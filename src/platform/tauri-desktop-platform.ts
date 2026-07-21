@@ -6,9 +6,11 @@ import type {
   RecoveryRepository,
   SettingsRepository,
 } from '@/application/persistence/persistence-ports'
+import type { ImageReadResult, ImageRepository } from '@/application/images/image-import'
 import type { DesktopPlatform } from './desktop-platform'
 
 const diagramFilter = [{ name: '流程图文件 (*.flowdiagram)', extensions: ['flowdiagram'] }]
+const imageFilter = [{ name: '图片文件', extensions: ['png', 'jpg', 'jpeg', 'webp'] }]
 
 export function normalizeDiagramSavePath(path: string): string {
   const fileName = path.slice(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1)
@@ -55,6 +57,14 @@ export const tauriRecentDocumentRepository: RecentDocumentRepository = {
 export const tauriSettingsRepository: SettingsRepository = {
   all: () => invoke('get_settings'),
   set: (key, value) => invoke<void>('set_setting', { key, valueJson: JSON.stringify(value) }),
+}
+
+export const tauriImageRepository: ImageRepository = {
+  async pickAndRead() {
+    const path = await open({ multiple: false, directory: false, filters: imageFilter })
+    if (!path || typeof path !== 'string') return null
+    return invoke<ImageReadResult>('read_image', { path })
+  },
 }
 
 export const tauriDesktopPlatform: DesktopPlatform = {

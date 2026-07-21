@@ -10,6 +10,11 @@ export interface ClipboardPayload {
   edges: DiagramEdge[]
 }
 
+export interface ClipboardRepository {
+  write(payload: ClipboardPayload): Promise<void>
+  read(): Promise<ClipboardPayload | null>
+}
+
 /** 粘贴偏移步长：12pt × pasteIndex。 */
 const PASTE_OFFSET_PT = 12
 

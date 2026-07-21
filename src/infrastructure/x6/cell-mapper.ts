@@ -70,6 +70,12 @@ function dashArrayOf(dash: 'solid' | 'dash' | 'dot' | 'dashdot' | undefined): st
 }
 
 function nodeStyleOf(node: DiagramNode): Record<string, unknown> {
+  if (node.shape === 'image' && node.imageHref) {
+    return {
+      'image/xlinkHref': node.imageHref,
+      'image/preserveAspectRatio': 'xMidYMid meet',
+    }
+  }
   const style: Record<string, unknown> = {
     'body/fill': node.style.fill,
     'body/fillOpacity': node.style.fillOpacity,

@@ -16,3 +16,27 @@
   --inspector-w: 280px;
   --ruler-size: 20px;
 }
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-bg: #111827;
+  --color-panel: #1f2937;
+  --color-border: #4b5563;
+  --color-primary: #78a7ff;
+  --color-text: #f3f4f6;
+  --color-text-secondary: #cbd5e1;
+}
+
+:root[data-contrast='more'] {
+  --color-border: currentColor;
+  --color-text-secondary: var(--color-text);
+}
+
+:root[data-reduced-motion='reduce'] *,
+:root[data-reduced-motion='reduce'] *::before,
+:root[data-reduced-motion='reduce'] *::after {
+  scroll-behavior: auto !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}

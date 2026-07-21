@@ -3,8 +3,8 @@
     <div
       class="shell-background"
       data-testid="shell-background"
-      :inert="containerPickerRequest ? true : undefined"
-      :aria-hidden="containerPickerRequest ? 'true' : undefined"
+      :inert="modalOpen ? true : undefined"
+      :aria-hidden="modalOpen ? 'true' : undefined"
     >
       <TitleBar
         :file-name="fileName"
@@ -53,11 +53,30 @@
       @confirm="confirmContainerMembership"
       @cancel="cancelContainerMembership"
     />
+    <UnsavedChangesDialog
+      v-if="unsavedRequest"
+      :action="unsavedRequest.action"
+      :return-focus="dialogReturnFocus"
+      @choose="onUnsavedChoice"
+    />
+    <RecoveryDialog
+      v-if="recoverySnapshot"
+      :snapshot="recoverySnapshot"
+      @restore="restoreRecovery"
+      @discard="discardRecovery"
+    />
+    <PreferencesDialog
+      v-if="preferencesOpen"
+      :model-value="currentPreferences"
+      :return-focus="dialogReturnFocus"
+      @apply="applyPreferences"
+      @close="closePreferences"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, provide, reactive, ref } from 'vue'
+import { computed, inject, nextTick, onMounted, provide, reactive, ref } from 'vue'
 import CanvasArea from '@/ui/canvas/CanvasArea.vue'
 import CompactToolbar from '@/ui/toolbar/CompactToolbar.vue'
 import ElementLibrary from '@/ui/shapes/ElementLibrary.vue'
@@ -70,6 +89,9 @@ import StatusBar from './StatusBar.vue'
 import LayerManager from '@/ui/layers/LayerManager.vue'
 import FeatureHelp from '@/ui/help/FeatureHelp.vue'
 import ContainerMembershipPicker from '@/ui/components/ContainerMembershipPicker.vue'
+import UnsavedChangesDialog from '@/ui/dialogs/UnsavedChangesDialog.vue'
+import RecoveryDialog from '@/ui/dialogs/RecoveryDialog.vue'
+import PreferencesDialog from '@/ui/dialogs/PreferencesDialog.vue'
 import { shapeDragStartKey } from '@/ui/shapes/shape-drag-key'
 import { createMainMenus } from '@/application/menus/menu-model'
 import { isContainerNode } from '@/application/menus/container-picker-options'
@@ -90,6 +112,8 @@ import { useAppStore } from '@/stores/app-store'
 import { useDocumentStore } from '@/stores/document-store'
 import { useSelectionStore } from '@/stores/selection-store'
 import { useFormatPaintStore } from '@/stores/format-paint-store'
+import { editorServicesKey } from '@/ui/services/editor-services'
+import type { EditorPreferences } from '@/application/settings/settings-controller'
 
 const emit = defineEmits<{
   fileCommand: [command: 'new' | 'open' | 'save' | 'saveAs' | 'recent' | 'export']
@@ -100,6 +124,7 @@ const appStore = useAppStore()
 const documentStore = useDocumentStore()
 const selectionStore = useSelectionStore()
 const formatPaintStore = useFormatPaintStore()
+const services = inject(editorServicesKey, null)
 
 const canvasAreaRef = ref<CanvasController | null>(null)
 const rightPanelRef = ref<{ focusSection(section: 'link' | 'text' | 'line'): Promise<void> } | null>(null)
@@ -107,10 +132,36 @@ const helpReturnFocus = ref<HTMLElement | null>(null)
 const containerPickerRequest = ref<ContainerPickerRequest | null>(null)
 const containerPickerReturnFocus = ref<HTMLElement | null>(null)
 const containerPickerError = ref<string | undefined>()
+const fileBusy = ref(false)
+const recentDocuments = ref(services?.file.recentDocuments ?? [])
+const recoverySnapshot = ref(services?.recovery.pending ?? null)
+const preferencesOpen = ref(false)
+const dialogReturnFocus = ref<HTMLElement | null>(null)
 const viewport = reactive<ViewportState>({ zoom: 1, panX: 0, panY: 0 })
 
+const unsavedRequest = computed(() => services?.unsaved.request.value ?? null)
+const modalOpen = computed(() => Boolean(
+  containerPickerRequest.value || unsavedRequest.value || recoverySnapshot.value || preferencesOpen.value,
+))
+const currentPreferences = computed<EditorPreferences>(() => ({
+  theme: appStore.theme,
+  showRulers: appStore.showRulers,
+  showGrid: appStore.showGrid,
+  showGuides: appStore.showGuides,
+  showPageBreaks: appStore.showPageBreaks,
+  defaultZoom: appStore.defaultZoom,
+  defaultPageUnit: appStore.defaultPageUnit,
+  defaultConnector: appStore.defaultConnector,
+  recentLimit: appStore.recentLimit,
+  pngDpi: appStore.pngDpi,
+}))
+
 const fileName = computed(() => {
-  if (!documentStore.filePath) return documentStore.document.name
+  if (!documentStore.filePath) {
+    return documentStore.document.name.toLowerCase().endsWith('.flowdiagram')
+      ? documentStore.document.name
+      : `${documentStore.document.name}.flowdiagram`
+  }
   return documentStore.filePath.split(/[\\/]/).at(-1) || documentStore.document.name
 })
 const pageIndex = computed(() => Math.max(1, documentStore.document.pages.findIndex((page) => page.id === documentStore.activePageId) + 1))
@@ -136,26 +187,53 @@ const menus = computed(() => createMainMenus({
   canUndo: documentStore.canUndo,
   canRedo: documentStore.canRedo,
   hasSelection: selectionStore.hasSelection,
-  canPaste: documentStore.clipboard !== null,
+  canPaste: documentStore.canPaste,
   ...selectionSummary.value,
   showRulers: appStore.showRulers,
   showGrid: appStore.showGrid,
   showGuides: appStore.showGuides,
   showPageBreaks: appStore.showPageBreaks,
+  recentDocuments: recentDocuments.value,
+  fileBusy: fileBusy.value,
 }))
 
-function pendingFileCommand(command: 'new' | 'open' | 'save' | 'saveAs' | 'recent' | 'export'): void {
+async function pendingFileCommand(
+  command: 'new' | 'open' | 'save' | 'saveAs' | 'recent' | 'export',
+  request?: MenuInvocation,
+): Promise<void> {
   emit('fileCommand', command)
-  documentStore.setNotice('文件操作将在下一步桌面接线中打开对话框。')
+  if (!services) {
+    documentStore.setNotice('桌面服务不可用。')
+    return
+  }
+  dialogReturnFocus.value = request?.trigger?.isConnected ? request.trigger : null
+  fileBusy.value = true
+  try {
+    if (command === 'new') await services.file.newDocument()
+    else if (command === 'open') await services.file.openDocument()
+    else if (command === 'save') await services.file.save()
+    else if (command === 'saveAs') await services.file.saveAs()
+    else if (command === 'recent') {
+      recentDocuments.value = await services.file.loadRecent(appStore.recentLimit)
+      if (recentDocuments.value.length === 0) documentStore.setNotice('没有最近文件。')
+      return
+    } else {
+      documentStore.setNotice('请使用导出面板选择格式。')
+      return
+    }
+    recentDocuments.value = await services.file.loadRecent(appStore.recentLimit)
+  } finally {
+    fileBusy.value = false
+  }
 }
 
 const menuCallbacks: MenuCallbacks = {
-  newDocument: () => pendingFileCommand('new'),
-  open: () => pendingFileCommand('open'),
-  save: () => pendingFileCommand('save'),
-  saveAs: () => pendingFileCommand('saveAs'),
-  recent: () => pendingFileCommand('recent'),
-  export: () => pendingFileCommand('export'),
+  newDocument: (request) => { void pendingFileCommand('new', request) },
+  open: (request) => { void pendingFileCommand('open', request) },
+  save: (request) => { void pendingFileCommand('save', request) },
+  saveAs: (request) => { void pendingFileCommand('saveAs', request) },
+  recent: (request) => { void pendingFileCommand('recent', request) },
+  export: (request) => { void pendingFileCommand('export', request) },
   pageSetup: () => { appStore.showProperties(); documentStore.setNotice('请在右侧“页面设置”标签中调整页面。') },
   zoomIn: () => canvasAreaRef.value?.zoomIn(),
   zoomOut: () => canvasAreaRef.value?.zoomOut(),
@@ -164,12 +242,12 @@ const menuCallbacks: MenuCallbacks = {
   fitContent: () => canvasAreaRef.value?.fitContent(),
   fitSelection: () => canvasAreaRef.value?.fitSelection(),
   insertEdge: () => documentStore.setNotice('请从节点端口拖动以创建连接线。'),
-  insertImage: () => documentStore.setNotice('外部图片文件选择将在下一步桌面接线中提供。'),
+  insertImage: (request) => { void runImageImport(request) },
   alignment: () => documentStore.setNotice('请从“工具 → 对齐”选择具体方向。'),
   autoAlign: () => documentStore.setNotice('请从“工具 → 对齐”选择具体方向。'),
   find: () => appStore.openFindPanel(),
   layers: () => appStore.openLayerManager(),
-  preferences: (request) => openHelp('preferences', request),
+  preferences: openPreferences,
   helpCenter: (request) => openHelp('menus', request),
   shortcuts: (request) => openHelp('shortcuts', request),
   about: (request) => openHelp('about', request),
@@ -221,11 +299,88 @@ function onMoreShapes(): void {
 
 function onWindowCommand(command: 'minimize' | 'maximize' | 'close'): void {
   emit('windowCommand', command)
-  documentStore.setNotice('窗口控制将在下一步桌面接线中启用。')
+  if (!services) {
+    documentStore.setNotice('桌面服务不可用。')
+    return
+  }
+  if (command === 'minimize') void services.window.minimize()
+  else if (command === 'maximize') void services.window.toggleMaximize()
+  else void services.window.requestClose()
 }
 
 function onMenuExecute(id: string, trigger: HTMLButtonElement | null): void {
+  const recentMatch = /^file-recent-(\d+)$/.exec(id)
+  if (recentMatch) {
+    const recent = recentDocuments.value[Number(recentMatch[1])]
+    if (recent) void openRecent(recent.path, trigger)
+    return
+  }
   menuController.execute(id, { trigger })
+}
+
+async function openRecent(path: string, trigger: HTMLElement | null): Promise<void> {
+  if (!services || fileBusy.value) return
+  dialogReturnFocus.value = trigger?.isConnected ? trigger : null
+  fileBusy.value = true
+  try {
+    await services.file.openRecent(path)
+    recentDocuments.value = await services.file.loadRecent(appStore.recentLimit)
+  } finally {
+    fileBusy.value = false
+  }
+}
+
+async function runImageImport(request: MenuInvocation): Promise<void> {
+  if (!services || fileBusy.value) {
+    if (!services) documentStore.setNotice('桌面服务不可用。')
+    return
+  }
+  dialogReturnFocus.value = request.trigger?.isConnected ? request.trigger : null
+  fileBusy.value = true
+  try {
+    await services.imageImport()
+  } finally {
+    fileBusy.value = false
+  }
+}
+
+function openPreferences(request: MenuInvocation): void {
+  if (!services) {
+    documentStore.setNotice('桌面服务不可用。')
+    return
+  }
+  dialogReturnFocus.value = request.trigger?.isConnected ? request.trigger : null
+  preferencesOpen.value = true
+}
+
+function closePreferences(): void {
+  preferencesOpen.value = false
+}
+
+async function applyPreferences(settings: EditorPreferences): Promise<void> {
+  if (!services) return
+  fileBusy.value = true
+  try {
+    await services.settings.apply(settings)
+    recentDocuments.value = await services.file.loadRecent(settings.recentLimit)
+    closePreferences()
+  } finally {
+    fileBusy.value = false
+  }
+}
+
+function onUnsavedChoice(choice: 'save' | 'discard' | 'cancel'): void {
+  services?.unsaved.choose(choice)
+}
+
+function restoreRecovery(): void {
+  if (services?.recovery.restore()) recoverySnapshot.value = null
+}
+
+async function discardRecovery(): Promise<void> {
+  if (!services) return
+  await services.recovery.discard()
+  recoverySnapshot.value = services.recovery.pending
 }
 
 function openHelp(helpId: string, request: MenuInvocation): void {
@@ -273,6 +428,13 @@ function onSetZoom(value: number | 'fit'): void {
 function onViewportChange(state: ViewportState): void {
   Object.assign(viewport, state)
 }
+
+onMounted(async () => {
+  if (!services) return
+  await services.settings.load()
+  recentDocuments.value = await services.file.loadRecent(appStore.recentLimit)
+  recoverySnapshot.value = await services.recovery.checkStartup()
+})
 </script>
 
 <style scoped>

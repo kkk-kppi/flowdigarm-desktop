@@ -2,6 +2,8 @@
 // 应用级视图设置：默认值对齐详细设计 §9.4。
 // 这些开关均为视图操作，不进入撤销历史（持久化到 SQLite 由后续任务接线）。
 import { defineStore } from 'pinia'
+import type { EditorPreferences } from '@/application/settings/settings-controller'
+import type { ConnectorKind, PageUnit } from '@/domain/diagram'
 
 export type ThemeMode = 'system' | 'light' | 'dark'
 
@@ -12,6 +14,11 @@ interface AppViewSettings {
   showPageBreaks: boolean
   snapToGrid: boolean
   theme: ThemeMode
+  defaultZoom: number
+  defaultPageUnit: PageUnit
+  defaultConnector: ConnectorKind
+  recentLimit: number
+  pngDpi: number
   /** 右侧面板折叠（视图状态，不入撤销历史）。 */
   rightPanelCollapsed: boolean
   rightPanelMode: 'properties' | 'find'
@@ -27,12 +34,20 @@ export const useAppStore = defineStore('app', {
     showPageBreaks: false,
     snapToGrid: true,
     theme: 'system',
+    defaultZoom: 1,
+    defaultPageUnit: 'mm',
+    defaultConnector: 'orthogonal',
+    recentLimit: 50,
+    pngDpi: 150,
     rightPanelCollapsed: false,
     rightPanelMode: 'properties',
     layerManagerOpen: false,
     helpId: null,
   }),
   actions: {
+    applyPreferences(settings: EditorPreferences) {
+      Object.assign(this, settings)
+    },
     toggleRulers() {
       this.showRulers = !this.showRulers
     },

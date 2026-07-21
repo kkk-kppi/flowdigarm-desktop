@@ -1,7 +1,7 @@
 <template>
-  <header class="title-bar" data-testid="titlebar">
-    <svg class="app-icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="3" width="6" height="5" rx="1"/><rect x="12" y="12" width="6" height="5" rx="1"/><path d="M8 5.5h3v9h1"/></svg>
-    <span class="title">流程图编辑器 - {{ fileName }}{{ dirty ? '*未保存' : '' }}</span>
+  <header class="title-bar" data-testid="titlebar" data-tauri-drag-region>
+    <svg class="app-icon" viewBox="0 0 20 20" aria-hidden="true" data-tauri-drag-region><rect x="2" y="3" width="6" height="5" rx="1"/><rect x="12" y="12" width="6" height="5" rx="1"/><path d="M8 5.5h3v9h1"/></svg>
+    <span class="title" data-tauri-drag-region>流程图编辑器 - {{ fileName }}{{ dirty ? '*未保存' : '' }}</span>
     <div class="window-actions">
       <button type="button" data-testid="title-minimize" aria-label="最小化窗口" title="最小化窗口。将编辑器收起到任务栏。" @click="$emit('minimize')">−</button>
       <button type="button" data-testid="title-maximize" aria-label="最大化或还原窗口" title="最大化或还原窗口。切换编辑器窗口大小。" @click="$emit('maximize')">□</button>

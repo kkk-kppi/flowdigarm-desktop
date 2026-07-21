@@ -18,6 +18,7 @@ interface DocumentPort {
   document: DiagramDocument
   activePageId: string
   clipboard: unknown | null
+  canPaste?: boolean
   undo(): void
   redo(): void
   cutSelection(): void
@@ -220,7 +221,7 @@ export class MenuCommandController {
     const page = this.activePage()
     const selected = this.selected(page)
     const selectedCount = selected.nodes.length + selected.edgeIds.length
-    if (id === 'edit-paste' && !this.dependencies.document.clipboard) return '剪贴板为空。'
+    if (id === 'edit-paste' && !(this.dependencies.document.canPaste ?? Boolean(this.dependencies.document.clipboard))) return '剪贴板为空。'
     if (['edit-cut', 'edit-copy', 'edit-duplicate', 'edit-delete'].includes(id) && selectedCount === 0) return '请先选择图元。'
     if ((id.startsWith('arrange-align-') || id === 'format-alignment' || id === 'tool-auto-align') && selected.nodes.length < 2) return '至少选择两个节点。'
     if (id.startsWith('arrange-distribute-') && selected.nodes.length < 3) return '至少选择三个节点。'

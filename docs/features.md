@@ -4,13 +4,13 @@
 
 ## 1. 文档与页面（新建/打开/保存/多页标签/页面设置）
 
-- 入口：页面标签栏 `src/ui/pages/PageTabs.vue`（单击切换、双击行内重命名、× 内联确认删除、末尾 + 新建、右侧缩放控件）；右侧"页面设置"标签页 `src/ui/pages/PageSetupTab.vue`；分页符叠层 `src/ui/canvas/PageBreakOverlay.vue`。文件打开/保存的应用用例与平台能力已就绪，菜单入口和恢复对话框由 Task 8b 接线。
+- 入口：文件菜单提供新建、打开、保存、另存为与最近文件；页面标签栏 `src/ui/pages/PageTabs.vue` 管理多页；启动发现恢复快照时显示恢复对话框。所有文件动作经 `FileWorkflowController` 协调 store/repository，Vue 不直接读写文件或调用 Tauri。
 - 前置条件：存在已打开文档（至少一页）；背景页引用目标必须是背景类型页面且不成循环。
-- 成功结果：多页新建/切换/重命名/删除及页面设置保持既有行为；`.flowdiagram` 打开经 Rust 做 20 MiB、UTF-8、JSON 与 schemaVersion 基础校验，再由 application 做完整领域校验；保存使用目标同目录临时文件、文件 fsync、原子替换（Windows 可覆盖已有文件）及 Unix 父目录 fsync。显式保存成功记录保存 revision，undo 回保存点时 `dirty=false`，redo 或分支编辑时恢复 `dirty=true`。脏文档可由 `AutosaveController` 在最后一次变化 2 秒后写恢复快照，显式保存调用方负责删除快照。
+- 成功结果：新建/打开/关闭遇到脏文档时可保存、不保存或取消；文件选择取消保持当前文档。`.flowdiagram` 打开经 Rust 基础校验和 application 完整领域校验；保存使用同目录临时文件、fsync 与原子替换。显式保存只清理捕获 revision 对应的恢复 token；恢复文档以 dirty 状态载入并保留快照，直到显式保存成功。最近文件按置顶、最近顺序显示并受首选项数量限制。
 - 失败反馈：删除最后一页「至少保留一个页面。」；删除被引用为背景页的页面「该页面被引用为背景页，无法删除。」；重命名空名或纯空白「页面名称不能为空。」；背景页引用循环或指向非背景页「背景页设置无效。」；页面无图元时"自动调整大小"禁用（title 提示"页面无图元"）。
 - 撤销边界：新建/删除/重命名页面各一条记录；页面设置一次"应用"一条记录（无变化不产生）；"自动调整大小"一条记录；切换页与分页符等视图开关不产生命令、不进入撤销历史。
 - 数据字段：图文件只保存 `DiagramDocument`；SQLite `flowchart-editor.db` 只保存 7 张本机元数据表：迁移版本、设置、最近文件、恢复快照、形状统计、窗口状态和用户模板。最近文件含 path/documentId/name/lastOpenedAt/pinned，恢复快照含 documentId/name/json/sourcePath/updatedAt，时间为 Unix 毫秒 UTC。应用契约见 `src/application/persistence/persistence-ports.ts`，SQLite 不保存用户图文件主体。
-- 失败反馈：非法文件返回「文件格式无效，未打开文件。」且不替换当前文档；保存失败返回「无法保存，原文件未被覆盖。」。原子图文件保存成功后，即使最近文件 SQLite 更新失败也保持保存成功；自动恢复失败报告「自动恢复快照保存失败，图文件不受影响。」。
+- 失败反馈：非法文件显示具体中文校验错误且不替换当前文档；失效最近文件提示「最近文件不可用，已从列表移除。」；保存失败提示「无法保存，原文件未被覆盖。」；损坏恢复数据提示「恢复数据已损坏，已忽略。」。SQLite 元数据失败不改变已经成功的图文件保存。
 - 自动化测试位置：文件用例与自动恢复在 `tests/unit/editor/persistence/*`，保存点在 `tests/unit/stores/document-store.test.ts`，形状统计降级在 `tests/unit/editor/shapes/shape-usage-repository.test.ts`；Rust 原子文件、SQLite、迁移和 command 校验测试与实现同模块位于 `src-tauri/src/{persistence,commands}`。
 
 ## 2. 画布与视图（工作区/标尺/缩放/网格/状态栏）
@@ -25,10 +25,10 @@
 
 ## 3. 图元创建（库拖入/双击创建/文本与连接工具/图片导入）
 
-- 入口：左栏图元库 `src/ui/shapes/ElementLibrary.vue`（220px，搜索/基本形状与流程图手风琴/3 列缩略图）；拖入经 X6 Dnd（`src/infrastructure/x6/graph-adapter.ts` startShapeDrag，拖拽预览与落点 pt）；双击/回车在视口中心创建（`src/ui/canvas/CanvasArea.vue` createShapeAtViewportCenter，经 ViewportTransform 换算）；创建逻辑统一走 document-store `createNodeFromShape`；连接创建经连线手势（端口拖出，落端口或节点主体自动取最近端口）。文本工具/图片导入 Task 6b 及后续补全。
+- 入口：左栏图元库支持拖入、双击和回车创建；「插入→外部图片」通过平台图片筛选器选择 PNG/JPEG/WebP，再由 application 图片用例创建节点。
 - 前置条件：存在已打开文档页；形状类型已注册（14 个内置形状，`src/application/shapes/common-shapes.ts`）。
-- 成功结果：新节点按 ShapeDefinition 默认尺寸/样式/角度 0 创建，zIndex 取页面现有最大递增，创建后自动选中；新边使用页面默认连线类型与默认箭头（none/single/double → 无/末端/双端）；落节点主体时按落点 pt 计算最近端口（等距按 top→right→bottom→left）；图元库顶部「常用」手风琴默认展开，按本机使用次数降序展示 Top 20（次数相同按内置顺序、新用户按内置顺序补足、搜索时隐藏），创建成功即记录一次使用（`recordShapeUsage` 经 document-store 注入的 repository，Task 8 换 SQLite 实现）。
-- 失败反馈：未知形状类型抛「未知形状类型：{type}」；点击「+ 更多形状...」提示「更多形状将在后续版本提供。」。
+- 成功结果：普通新节点沿用 ShapeDefinition；图片按原始比例缩放，默认最大边 240pt、最小边 24pt，置于页面/视口中心，以一个 `CreateCellsCommand` 创建并选中。图片作为 data URL 保存在图文档中，渲染使用 X6 image markup，不保存 devicePixelRatio。
+- 失败反馈：未知形状类型抛「未知形状类型：{type}」；仅接受魔数与扩展名一致的 PNG/JPEG/WebP，SVG 被拒绝；超过 5 MiB 提示「图片过大，最大支持 5 MB。」；读取失败不修改文档。
 - 撤销边界：一次拖入/双击创建/连接各一条「创建图元」记录；重连一条「重新连接」；拐点编辑一条「编辑拐点」。
 - 数据字段：`ShapeDefinition`（type/label/category/body/defaultSize/minSize/ports/textAreaInset/defaultStyle/isContainer/keepAspectOnShiftResize，`src/application/shapes/shape-registry.ts`）；`DiagramNode`/`DiagramEdge`（`src/domain/diagram.ts`）；端口 id 固定 top/right/bottom/left；常用形状统计 `ShapeUsageRepository/computeTopShapes`（`src/application/shapes/shape-usage-repository.ts`）。
 - 自动化测试位置：`tests/unit/editor/shapes/*`（含 shape-usage-repository）、`tests/unit/editor/commands/create-cells.test.ts`、`tests/unit/editor/commands/reconnect-vertices.test.ts`、`tests/component/ElementLibrary.test.ts`、`tests/unit/editor/cell-mapper.test.ts`、`tests/unit/stores/document-store.test.ts`。
@@ -43,12 +43,12 @@
 - 数据字段：`CellMove`/`CellResize`/`CellRotate` before/after（`src/application/commands/{move-cells,resize-cells,rotate-cells}.ts`）；删除快照（`src/application/commands/delete-cells.ts`）；`selectedIds`（`src/stores/selection-store.ts`）。
 - 自动化测试位置：`tests/unit/editor/commands/*`（move-cells/resize-rotate/delete-cells/reconnect-vertices）、`tests/unit/stores/selection-store.test.ts`、`tests/unit/stores/document-store.test.ts`。
 
-## 5. 剪贴板（应用内复制/剪切/粘贴）
+## 5. 剪贴板（系统与应用内复制/剪切/粘贴）
 
 - 入口：Ctrl+C/X/V（macOS Cmd；`src/ui/canvas/CanvasArea.vue` 键盘接线）→ document-store `copySelection`/`cutSelection`/`pasteClipboard`；纯函数层 `src/application/clipboard/clipboard-service.ts`。
-- 前置条件：复制/剪切需存在选中图元；粘贴需应用内剪贴板非空。
-- 成功结果：复制保留源与目标均在复制集内的边（详细设计 §10.3）；剪切 = 复制 + 一条「删除图元」命令；粘贴生成全部新 UUID、边端点按旧→新 ID 映射重写、整体偏移 12pt×粘贴序号（同一 payload 连续粘贴逐次偏移）、落在页面最上层。
-- 失败反馈：剪贴板为空时粘贴仅提示「剪贴板为空。」（document-store lastNotice；toast 机制后续）。
+- 前置条件：复制/剪切需存在选中图元；粘贴优先应用内 payload，没有时尝试系统剪贴板。
+- 成功结果：复制写入带 `application/x-flowdiagram-cells+json` marker 的系统文本并保留应用内副本；系统读入会校验数量、UUID、有限几何和内部边。剪切 = 复制 + 一条删除命令；一次粘贴仍只产生一条记录。
+- 失败反馈：权限、API 或恶意 JSON 失败提示「系统剪贴板不可用，已使用应用内剪贴板。」且不阻断应用内复制粘贴。
 - 撤销边界：一次粘贴一条「粘贴图元」记录（含多个图元）；剪切为一条删除记录；复制不产生命令。
 - 数据字段：`ClipboardPayload { nodes, edges }`（深拷贝，仅内部边）；document-store `clipboard`/`pasteCount`/`lastNotice`。
 - 自动化测试位置：`tests/unit/editor/clipboard/clipboard-service.test.ts`、`tests/unit/stores/document-store.test.ts`。
@@ -108,7 +108,7 @@
 - 入口：顶部 7 项菜单（文件/编辑/视图/插入/格式/工具/帮助）；画布右键；「工具→查找替换/图层管理」；菜单及复杂功能块的 `?` 帮助入口。
 - 前置条件：查找 query 非空；当前页范围要求存在活动页；替换当前项要求已经定位到匹配；禁用菜单项显示中文原因。
 - 成功结果：查找仅遍历节点 `text.value` 与边 `labels[].text.value`，按页→节点→边/标签→文本位置稳定排序；支持当前页/全部页、大小写和 Unicode 全词；下一项跨页循环并选中目标。右键按 blank/node/edge/multi/container 生成；主菜单与右键只传 command id 给 application controller。标题栏显示文件名与脏标记，状态栏显示选择、锚点、页码、缩放、网格/对齐及保存状态。帮助为非模态侧层，显示目的/操作/范围/撤销/限制/文档锚点。
-- 失败反馈：未找到显示「未找到匹配文本。」；替换结果过长提示「替换后的文本长度超出限制。」；不可执行命令显示具体中文通知；尚待 8b2 接线的文件/窗口动作会发 typed event 并明确提示，不静默。
+- 失败反馈：未找到显示「未找到匹配文本。」；替换结果过长提示「替换后的文本长度超出限制。」；文件、窗口、图片和首选项动作已接入真实 application/platform 服务，失败均显示中文通知。
 - 撤销边界：替换当前项一条「编辑文本」；全部替换无论命中数量只产生一条「全部替换」，一次撤销恢复所有原文；菜单/帮助/搜索定位/图层选择与视图开关不进入历史。
 - 数据字段：`FindTextRequest/FindMatch`、`FindController`、`MenuDefinition/MenuItem`、`ContextKind`；app-store 只保存 `rightPanelMode/layerManagerOpen/helpId` 等视图状态。
 - 自动化测试位置：`tests/unit/editor/search/*`、`tests/unit/editor/menus/*`、`tests/unit/editor/help-registry.test.ts`、`tests/component/{FindReplaceTab,MenuBar,CanvasContextMenu,DesktopShellParts,LayerManager,FeatureHelp,ComplexFeatureHelpEntries}.test.ts`。

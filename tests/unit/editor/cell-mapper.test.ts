@@ -59,6 +59,22 @@ describe('pageToCells 节点映射', () => {
     expect(cellsOf(page).nodes[0].label).toBeUndefined()
   })
 
+  it('maps image nodes to X6 image markup with a safe data URL', () => {
+    const page = createEmptyPage({
+      nodes: [createTestNode({
+        id: 'image-1',
+        shape: 'image',
+        imageHref: 'data:image/png;base64,AA==',
+      })],
+    })
+    const image = cellsOf(page).nodes[0]
+    expect(image.bodyMarkup).toEqual({ markup: 'image' })
+    expect(image.style).toMatchObject({
+      'image/xlinkHref': 'data:image/png;base64,AA==',
+      'image/preserveAspectRatio': 'xMidYMid meet',
+    })
+  })
+
   it('节点样式映射为 body attrs：填充/描边/线宽/不透明度', () => {
     const page = createEmptyPage({
       nodes: [

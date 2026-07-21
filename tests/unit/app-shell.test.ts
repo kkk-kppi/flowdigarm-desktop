@@ -2,13 +2,15 @@
 // 应用外壳组装：正式标题栏、七菜单、工具栏、页面标签、主区、状态栏与帮助/图层面板。
 // CanvasArea 依赖 X6（jsdom 无法实例化），以 stub 替换。
 import { flushPromises, mount } from '@vue/test-utils'
-import { defineComponent } from 'vue'
+import { defineComponent, ref } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import AppShell from '@/ui/shell/AppShell.vue'
 import { useDocumentStore } from '@/stores/document-store'
 import { useSelectionStore } from '@/stores/selection-store'
 import { useFormatPaintStore } from '@/stores/format-paint-store'
 import { createTestDocument } from '../helpers/test-document'
+import { editorServicesKey, type EditorServices } from '@/ui/services/editor-services'
+import { DEFAULT_EDITOR_PREFERENCES } from '@/application/settings/settings-controller'
 
 const canvasCalls = {
   editNodeText: vi.fn(),
@@ -60,6 +62,59 @@ function mountShell(attachToBody = false) {
     },
   })
   return { wrapper, store, selection, formatPaint }
+}
+
+function fakeServices(overrides: Partial<EditorServices> = {}): EditorServices {
+  const services: EditorServices = {
+    file: {
+      busy: false,
+      recentDocuments: [],
+      newDocument: vi.fn(async () => true),
+      openDocument: vi.fn(async () => true),
+      openRecent: vi.fn(async () => true),
+      save: vi.fn(async () => true),
+      saveAs: vi.fn(async () => true),
+      requestClose: vi.fn(async () => true),
+      loadRecent: vi.fn(async () => [{
+        path: 'C:/docs/recent.flowdiagram', documentId: 'doc-r', name: '最近流程',
+        lastOpenedAt: 10, pinned: true,
+      }]),
+    },
+    recovery: {
+      pending: null,
+      checkStartup: vi.fn(async () => null),
+      restore: vi.fn(() => true),
+      discard: vi.fn(async () => {}),
+    },
+    settings: {
+      load: vi.fn(async () => ({ ...DEFAULT_EDITOR_PREFERENCES })),
+      apply: vi.fn(async () => {}),
+    },
+    imageImport: vi.fn(async () => true),
+    window: {
+      minimize: vi.fn(async () => {}),
+      toggleMaximize: vi.fn(async () => {}),
+      requestClose: vi.fn(async () => {}),
+      onCloseRequested: vi.fn(async () => () => {}),
+    },
+    unsaved: {
+      request: ref(null),
+      choose: vi.fn(),
+    },
+    ...overrides,
+  }
+  return services
+}
+
+function mountShellWithServices(services: EditorServices) {
+  setActivePinia(createPinia())
+  useDocumentStore().newDocument()
+  return mount(AppShell, {
+    global: {
+      provide: { [editorServicesKey as symbol]: services },
+      stubs: { CanvasArea: CanvasAreaStub },
+    },
+  })
 }
 
 describe('AppShell 组装', () => {
@@ -120,6 +175,58 @@ describe('AppShell 组装', () => {
     expect(wrapper.emitted('fileCommand')?.[0]).toEqual(['open'])
     await wrapper.find('[data-testid="title-minimize"]').trigger('click')
     expect(wrapper.emitted('windowCommand')?.[0]).toEqual(['minimize'])
+  })
+
+  it('routes file, recent, image, preferences, and window actions through injected services', async () => {
+    const services = fakeServices()
+    const wrapper = mountShellWithServices(services)
+    await flushPromises()
+
+    await wrapper.find('[data-menu-id="file"]').trigger('click')
+    await wrapper.find('[data-command-id="file-open"]').trigger('click')
+    expect(services.file.openDocument).toHaveBeenCalledOnce()
+
+    await wrapper.find('[data-menu-id="file"]').trigger('click')
+    await wrapper.find('[data-command-id="file-recent"]').trigger('mouseenter')
+    await wrapper.find('[data-command-id="file-recent-0"]').trigger('click')
+    expect(services.file.openRecent).toHaveBeenCalledWith('C:/docs/recent.flowdiagram')
+
+    await wrapper.find('[data-menu-id="insert"]').trigger('click')
+    await wrapper.find('[data-command-id="insert-image"]').trigger('click')
+    expect(services.imageImport).toHaveBeenCalledOnce()
+
+    await wrapper.find('[data-menu-id="tools"]').trigger('click')
+    await wrapper.find('[data-command-id="tool-preferences"]').trigger('click')
+    expect(wrapper.find('[aria-labelledby="preferences-title"]').exists()).toBe(true)
+    await wrapper.find('[data-testid="preferences-apply"]').trigger('click')
+    expect(services.settings.apply).toHaveBeenCalledOnce()
+
+    await wrapper.find('[data-testid="title-minimize"]').trigger('click')
+    await wrapper.find('[data-testid="title-maximize"]').trigger('click')
+    expect(services.window.minimize).toHaveBeenCalledOnce()
+    expect(services.window.toggleMaximize).toHaveBeenCalledOnce()
+    expect(useDocumentStore().lastNotice ?? '').not.toContain('下一步桌面接线')
+  })
+
+  it('shows startup recovery once and routes restore through the recovery controller', async () => {
+    const snapshot = {
+      documentId: 'doc-r', versionToken: '1:2', name: '恢复流程', json: '{}',
+      sourcePath: 'C:/docs/recovery.flowdiagram', updatedAt: 10,
+    }
+    const services = fakeServices({
+      recovery: {
+        pending: snapshot,
+        checkStartup: vi.fn(async () => snapshot),
+        restore: vi.fn(() => true),
+        discard: vi.fn(async () => {}),
+      },
+    })
+    const wrapper = mountShellWithServices(services)
+    await flushPromises()
+    expect(wrapper.find('[aria-labelledby="recovery-title"]').exists()).toBe(true)
+    await wrapper.find('[data-testid="recovery-restore"]').trigger('click')
+    expect(services.recovery.restore).toHaveBeenCalledOnce()
+    expect(wrapper.find('[aria-labelledby="recovery-title"]').exists()).toBe(false)
   })
 
   it('accepts viewport snapshots from CanvasArea without reassigning reactive state', async () => {

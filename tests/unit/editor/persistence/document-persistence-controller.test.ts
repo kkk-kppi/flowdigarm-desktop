@@ -138,6 +138,35 @@ describe('DocumentPersistenceController', () => {
     controller.dispose()
   })
 
+  it('saveAs ignores the current path while preserving save coordination', async () => {
+    const removed: RemovedRecovery[] = []
+    const inputs: Array<{ path?: string; suggestedName: string; json: string }> = []
+    const store = useDocumentStore()
+    store.loadDocument(createEmptyDocument('另存文档'), 'C:/docs/original.flowdiagram')
+    store.executeCommand(new RenamePageCommand({
+      pageId: store.activePageId,
+      before: store.activePage!.name,
+      after: '另存版本',
+    }))
+    const controller = new DocumentPersistenceController(
+      persistenceStore(),
+      fileRepository({
+        save: async (input) => {
+          inputs.push(input)
+          return 'C:/docs/copy.flowdiagram'
+        },
+      }),
+      recoveryRepository([], removed),
+    )
+
+    await expect(controller.saveAs()).resolves.toEqual({ ok: true, path: 'C:/docs/copy.flowdiagram' })
+    expect(inputs[0].path).toBeUndefined()
+    expect(store.filePath).toBe('C:/docs/copy.flowdiagram')
+    expect(store.dirty).toBe(false)
+    expect(removed).toHaveLength(1)
+    controller.dispose()
+  })
+
   it('保存进行中继续编辑时保存捕获的快照，但当前 revision 保持 dirty 并保留最新恢复', async () => {
     const saveResult = deferred<string | null>()
     const writes: RecoverySnapshotWrite[] = []

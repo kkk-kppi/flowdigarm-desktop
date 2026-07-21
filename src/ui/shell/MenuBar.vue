@@ -31,7 +31,7 @@
             :data-command-id="item.id"
             :aria-disabled="Boolean(item.disabledReason)"
             :aria-haspopup="item.children ? 'menu' : undefined"
-            :title="item.disabledReason"
+            :title="item.title || item.disabledReason"
             :class="{ active: activeItem === itemIndex, disabled: item.disabledReason }"
             @click="runItem(item)"
             @mouseenter="activeItem = itemIndex; submenuIndex = item.children ? itemIndex : -1"
@@ -49,7 +49,7 @@
               role="menuitem"
               :data-command-id="child.id"
               :aria-disabled="Boolean(child.disabledReason)"
-              :title="child.disabledReason"
+              :title="child.title || child.disabledReason"
               :class="{ active: activeChild === childIndex, disabled: child.disabledReason }"
               @click="runItem(child)"
             >{{ child.label }}</button>
