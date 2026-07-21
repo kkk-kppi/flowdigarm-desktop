@@ -77,14 +77,32 @@ function parsePayload(text: string): ClipboardPayload {
     throw new Error('invalid clipboard counts')
   }
   const nodeIds = new Set<string>()
+  const nodesById = new Map<string, ClipboardPayload['nodes'][number]>()
   for (const node of nodes) {
     if (!isDiagramNode(node) || nodeIds.has(node.id)) {
       throw new Error('invalid clipboard node')
     }
     nodeIds.add(node.id)
+    nodesById.set(node.id, node)
   }
   for (const node of nodes) {
-    if (node.parentId !== undefined && !nodeIds.has(node.parentId)) throw new Error('invalid clipboard parent')
+    if (node.parentId === undefined) continue
+    const parent = nodesById.get(node.parentId)
+    if (!parent || parent.isContainer !== true) throw new Error('invalid clipboard parent')
+  }
+  const checkedAncestry = new Set<string>()
+  for (const node of nodes) {
+    if (checkedAncestry.has(node.id)) continue
+    const path: string[] = []
+    const pathIds = new Set<string>()
+    let current: ClipboardPayload['nodes'][number] | undefined = node
+    while (current && !checkedAncestry.has(current.id)) {
+      if (pathIds.has(current.id)) throw new Error('invalid clipboard parent cycle')
+      path.push(current.id)
+      pathIds.add(current.id)
+      current = current.parentId === undefined ? undefined : nodesById.get(current.parentId)
+    }
+    for (const id of path) checkedAncestry.add(id)
   }
   const edgeIds = new Set<string>()
   let nestedCount = 0

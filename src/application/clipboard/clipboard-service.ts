@@ -44,12 +44,17 @@ export function createPasteCommand(
   pasteIndex: number,
 ): CreateCellsCommand {
   const offset = PASTE_OFFSET_PT * pasteIndex
-  const idMap = new Map<string, string>()
+  const idMap = new Map(payload.nodes.map((node) => [node.id, crypto.randomUUID()]))
   const nodes = payload.nodes.map((node) => {
-    const id = crypto.randomUUID()
-    idMap.set(node.id, id)
     const clone: DiagramNode = structuredClone(node)
-    return { ...clone, id, x: node.x + offset, y: node.y + offset, zIndex: undefined }
+    if (clone.parentId !== undefined) clone.parentId = idMap.get(clone.parentId)
+    return {
+      ...clone,
+      id: idMap.get(node.id)!,
+      x: node.x + offset,
+      y: node.y + offset,
+      zIndex: undefined,
+    }
   })
   const edges = payload.edges.map((edge) => {
     const clone: DiagramEdge = structuredClone(edge)

@@ -73,6 +73,30 @@ describe('copyCells', () => {
     expect(copyCells(page, ['node-1']).nodes[0].parentId).toBeUndefined()
     expect(page.nodes[0].parentId).toBe('node-3')
   })
+
+  it('retains copied hierarchy without retaining references to original nodes', () => {
+    const page = 测试页()
+    page.nodes[0].isContainer = true
+    page.nodes[0].parentId = 'node-3'
+    page.nodes[1].parentId = 'node-1'
+    page.nodes[2].isContainer = true
+    const originalIds = new Set(page.nodes.map(({ id }) => id))
+    const payload = copyCells(page, ['node-1', 'node-2', 'node-3'])
+
+    const next = createPasteCommand(payload, 'page-1', 1).apply({
+      schemaVersion: 1,
+      id: 'doc-1',
+      name: '测试文档',
+      pages: [page],
+    })
+    const pasted = next.pages[0].nodes.slice(3)
+    const pastedByOriginalId = new Map(payload.nodes.map((node, index) => [node.id, pasted[index]]))
+
+    expect(pastedByOriginalId.get('node-1')?.parentId).toBe(pastedByOriginalId.get('node-3')?.id)
+    expect(pastedByOriginalId.get('node-2')?.parentId).toBe(pastedByOriginalId.get('node-1')?.id)
+    expect(pastedByOriginalId.get('node-3')?.parentId).toBeUndefined()
+    expect(pasted.every((node) => node.parentId === undefined || !originalIds.has(node.parentId))).toBe(true)
+  })
 })
 
 describe('createPasteCommand', () => {

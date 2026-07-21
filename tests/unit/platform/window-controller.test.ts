@@ -1,4 +1,5 @@
 import {
+  registerCloseRequestListener,
   TauriWindowController,
   type NativeWindowPort,
 } from '@/platform/tauri-window-controller'
@@ -73,5 +74,22 @@ describe('TauriWindowController', () => {
     approve(true)
     await closing
     expect(native.calls).toEqual(['destroy'])
+  })
+
+  it('unlistens immediately when registration resolves after app disposal', async () => {
+    let resolveRegistration!: (unlisten: () => void) => void
+    const unlisten = vi.fn()
+    const controller = {
+      onCloseRequested: vi.fn(() => new Promise<() => void>((resolve) => { resolveRegistration = resolve })),
+    }
+
+    const dispose = registerCloseRequestListener(controller)
+    dispose()
+    resolveRegistration(unlisten)
+    await Promise.resolve()
+
+    expect(unlisten).toHaveBeenCalledOnce()
+    dispose()
+    expect(unlisten).toHaveBeenCalledOnce()
   })
 })

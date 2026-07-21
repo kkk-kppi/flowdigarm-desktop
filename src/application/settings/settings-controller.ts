@@ -59,6 +59,8 @@ const settingKeys: Array<[keyof EditorPreferences, string]> = [
 export class SettingsController {
   private current = { ...DEFAULT_EDITOR_PREFERENCES }
   private mediaQueries: MediaQueryPort[] = []
+  private disposed = false
+  private generation = 0
   private readonly onMediaChange = () => this.applyMedia()
 
   constructor(
@@ -68,6 +70,7 @@ export class SettingsController {
   ) {}
 
   async load(): Promise<EditorPreferences> {
+    const generation = ++this.generation
     let stored: Record<string, unknown> = {}
     try {
       stored = await this.repository.all()
@@ -75,15 +78,16 @@ export class SettingsController {
       // Local settings are optional; defaults keep the editor usable.
     }
     const settings = validateSettings(stored)
-    this.applyRuntime(settings)
+    if (!this.disposed && generation === this.generation) this.applyRuntime(settings)
     return settings
   }
 
   async apply(settings: EditorPreferences): Promise<void> {
+    ++this.generation
     const validated = validateSettings(Object.fromEntries(
       settingKeys.map(([property, key]) => [key, settings[property]]),
     ))
-    this.applyRuntime(validated)
+    if (!this.disposed) this.applyRuntime(validated)
     const writes = await Promise.allSettled(
       settingKeys.map(([property, key]) => this.repository.set(key, validated[property])),
     )
@@ -93,6 +97,9 @@ export class SettingsController {
   }
 
   dispose(): void {
+    if (this.disposed) return
+    this.disposed = true
+    ++this.generation
     for (const query of this.mediaQueries) query.removeEventListener?.('change', this.onMediaChange)
     this.mediaQueries = []
   }

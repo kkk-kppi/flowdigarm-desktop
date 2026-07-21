@@ -154,4 +154,40 @@ describe('SettingsController', () => {
     controller.dispose()
     expect(media.listenerCount()).toBe(0)
   })
+
+  it('does not register media listeners when a deferred load resolves after disposal', async () => {
+    let resolveAll!: (values: Record<string, unknown>) => void
+    const media = environment()
+    const controller = new SettingsController(store(), {
+      all: () => new Promise((resolve) => { resolveAll = resolve }),
+      set: async () => {},
+    }, media)
+
+    const loading = controller.load()
+    controller.dispose()
+    resolveAll({ 'theme.mode': 'dark' })
+    await loading
+
+    expect(media.listenerCount()).toBe(0)
+  })
+
+  it('ignores an older deferred load that resolves after a newer load', async () => {
+    const resolvers: Array<(values: Record<string, unknown>) => void> = []
+    const target = store()
+    const media = environment()
+    const controller = new SettingsController(target, {
+      all: () => new Promise((resolve) => { resolvers.push(resolve) }),
+      set: async () => {},
+    }, media)
+
+    const older = controller.load()
+    const newer = controller.load()
+    resolvers[1]({ 'theme.mode': 'dark' })
+    await newer
+    resolvers[0]({ 'theme.mode': 'light' })
+    await older
+
+    expect(target.settings.theme).toBe('dark')
+    expect(media.listenerCount()).toBe(3)
+  })
 })

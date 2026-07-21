@@ -59,7 +59,7 @@
     <UnsavedChangesDialog
       v-if="editorReady && unsavedRequest"
       :action="unsavedRequest.action"
-      :return-focus="dialogReturnFocus"
+      :return-focus="unsavedReturnFocus"
       @choose="onUnsavedChoice"
     />
     <RecoveryDialog
@@ -71,7 +71,7 @@
     <PreferencesDialog
       v-if="editorReady && preferencesOpen"
       :model-value="currentPreferences"
-      :return-focus="dialogReturnFocus"
+      :return-focus="preferencesReturnFocus"
       @apply="applyPreferences"
       @close="closePreferences"
     />
@@ -141,7 +141,8 @@ const recentDocuments = ref(services?.file.recentDocuments ?? [])
 const recoverySnapshot = ref<RecoverySnapshot | null>(null)
 const startupComplete = ref(!services)
 const preferencesOpen = ref(false)
-const dialogReturnFocus = ref<HTMLElement | null>(null)
+const preferencesReturnFocus = ref<HTMLElement | null>(null)
+const unsavedReturnFocus = ref<HTMLElement | null>(null)
 const viewport = reactive<ViewportState>({ zoom: 1, panX: 0, panY: 0 })
 
 const unsavedRequest = computed(() => services?.unsaved.request.value ?? null)
@@ -205,14 +206,12 @@ const menus = computed(() => createMainMenus({
 
 async function pendingFileCommand(
   command: 'new' | 'open' | 'save' | 'saveAs' | 'recent' | 'export',
-  request?: MenuInvocation,
 ): Promise<void> {
   emit('fileCommand', command)
   if (!services) {
     documentStore.setNotice('桌面服务不可用。')
     return
   }
-  dialogReturnFocus.value = request?.trigger?.isConnected ? request.trigger : null
   fileBusy.value = true
   try {
     if (command === 'new') await services.file.newDocument()
@@ -234,12 +233,12 @@ async function pendingFileCommand(
 }
 
 const menuCallbacks: MenuCallbacks = {
-  newDocument: (request) => { void pendingFileCommand('new', request) },
-  open: (request) => { void pendingFileCommand('open', request) },
-  save: (request) => { void pendingFileCommand('save', request) },
-  saveAs: (request) => { void pendingFileCommand('saveAs', request) },
-  recent: (request) => { void pendingFileCommand('recent', request) },
-  export: (request) => { void pendingFileCommand('export', request) },
+  newDocument: () => { void pendingFileCommand('new') },
+  open: () => { void pendingFileCommand('open') },
+  save: () => { void pendingFileCommand('save') },
+  saveAs: () => { void pendingFileCommand('saveAs') },
+  recent: () => { void pendingFileCommand('recent') },
+  export: () => { void pendingFileCommand('export') },
   pageSetup: () => { appStore.showProperties(); documentStore.setNotice('请在右侧“页面设置”标签中调整页面。') },
   zoomIn: () => canvasAreaRef.value?.zoomIn(),
   zoomOut: () => canvasAreaRef.value?.zoomOut(),
@@ -248,7 +247,7 @@ const menuCallbacks: MenuCallbacks = {
   fitContent: () => canvasAreaRef.value?.fitContent(),
   fitSelection: () => canvasAreaRef.value?.fitSelection(),
   insertEdge: () => documentStore.setNotice('请从节点端口拖动以创建连接线。'),
-  insertImage: (request) => { void runImageImport(request) },
+  insertImage: () => { void runImageImport() },
   alignment: () => documentStore.setNotice('请从“工具 → 对齐”选择具体方向。'),
   autoAlign: () => documentStore.setNotice('请从“工具 → 对齐”选择具体方向。'),
   find: () => appStore.openFindPanel(),
@@ -319,15 +318,14 @@ function onMenuExecute(id: string, trigger: HTMLButtonElement | null): void {
   const recentMatch = /^file-recent-(\d+)$/.exec(id)
   if (recentMatch) {
     const recent = recentDocuments.value[Number(recentMatch[1])]
-    if (recent) void openRecent(recent.path, trigger)
+    if (recent) void openRecent(recent.path)
     return
   }
   menuController.execute(id, { trigger })
 }
 
-async function openRecent(path: string, trigger: HTMLElement | null): Promise<void> {
+async function openRecent(path: string): Promise<void> {
   if (!services || fileBusy.value) return
-  dialogReturnFocus.value = trigger?.isConnected ? trigger : null
   fileBusy.value = true
   try {
     await services.file.openRecent(path)
@@ -337,12 +335,11 @@ async function openRecent(path: string, trigger: HTMLElement | null): Promise<vo
   }
 }
 
-async function runImageImport(request: MenuInvocation): Promise<void> {
+async function runImageImport(): Promise<void> {
   if (!services || fileBusy.value) {
     if (!services) documentStore.setNotice('桌面服务不可用。')
     return
   }
-  dialogReturnFocus.value = request.trigger?.isConnected ? request.trigger : null
   fileBusy.value = true
   try {
     await services.imageImport()
@@ -357,13 +354,13 @@ function openPreferences(request: MenuInvocation): void {
     documentStore.setNotice('桌面服务不可用。')
     return
   }
-  dialogReturnFocus.value = request.trigger?.isConnected ? request.trigger : null
+  preferencesReturnFocus.value = request.trigger?.isConnected ? request.trigger : null
   preferencesOpen.value = true
 }
 
 function closePreferences(): void {
   preferencesOpen.value = false
-  void nextTick(() => { dialogReturnFocus.value = null })
+  void nextTick(() => { preferencesReturnFocus.value = null })
 }
 
 async function applyPreferences(settings: EditorPreferences): Promise<void> {
@@ -394,10 +391,10 @@ async function discardRecovery(): Promise<void> {
 }
 
 watch(unsavedRequest, (request, previous) => {
-  if (request && !previous && !dialogReturnFocus.value?.isConnected) {
-    dialogReturnFocus.value = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  if (request && !previous) {
+    unsavedReturnFocus.value = document.activeElement instanceof HTMLElement ? document.activeElement : null
   } else if (!request && previous) {
-    void nextTick(() => { dialogReturnFocus.value = null })
+    void nextTick(() => { unsavedReturnFocus.value = null })
   }
 })
 
@@ -449,13 +446,23 @@ function onViewportChange(state: ViewportState): void {
 
 onMounted(async () => {
   if (!services) return
+  const [settingsResult, recentResult] = await Promise.allSettled([
+    services.settings.load(),
+    services.file.loadRecent(appStore.recentLimit),
+  ])
+  if (settingsResult.status === 'fulfilled') {
+    documentStore.configureDefaults(settingsResult.value)
+  }
+  if (recentResult.status === 'fulfilled') {
+    recentDocuments.value = recentResult.value
+  }
+  if (settingsResult.status === 'rejected' || recentResult.status === 'rejected') {
+    documentStore.setNotice('启动设置或最近文件加载失败，已使用安全默认设置。')
+  }
   try {
-    const settings = await services.settings.load()
-    documentStore.configureDefaults(settings)
-    recentDocuments.value = await services.file.loadRecent(appStore.recentLimit)
     recoverySnapshot.value = await services.recovery.checkStartup()
   } catch {
-    documentStore.setNotice('启动检查失败，已使用安全默认设置。')
+    documentStore.setNotice('恢复数据检查失败，已打开编辑器。')
   } finally {
     startupComplete.value = true
   }

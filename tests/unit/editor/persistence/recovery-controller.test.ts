@@ -64,15 +64,17 @@ describe('RecoveryController', () => {
     expect(controller.pending).toBeNull()
   })
 
-  it('does not show recovery when none exists or the repository is unavailable', async () => {
+  it('does not show recovery when none exists and reports an unavailable repository', async () => {
     const empty = new RecoveryController({ restoreDocument: vi.fn() }, repository(null), vi.fn())
     await expect(empty.checkStartup()).resolves.toBeNull()
 
+    const showError = vi.fn()
     const unavailable = new RecoveryController({ restoreDocument: vi.fn() }, {
       latest: async () => { throw new Error('db') },
       write: async () => {},
       remove: async () => {},
-    }, vi.fn())
+    }, showError)
     await expect(unavailable.checkStartup()).resolves.toBeNull()
+    expect(showError).toHaveBeenCalledWith('恢复数据检查失败，已打开编辑器。')
   })
 })

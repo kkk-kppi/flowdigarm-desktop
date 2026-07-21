@@ -46,6 +46,25 @@ export class TauriWindowController implements WindowController {
   }
 }
 
+export function registerCloseRequestListener(
+  controller: Pick<WindowController, 'onCloseRequested'>,
+): () => void {
+  let disposed = false
+  let unlisten: (() => void) | undefined
+  void controller.onCloseRequested().then((remove) => {
+    if (disposed) remove()
+    else unlisten = remove
+  }).catch(() => {
+    // A missing native listener must not produce an unhandled startup rejection.
+  })
+  return () => {
+    if (disposed) return
+    disposed = true
+    unlisten?.()
+    unlisten = undefined
+  }
+}
+
 export function createTauriWindowController(canClose: () => Promise<boolean>): WindowController {
   return new TauriWindowController(getCurrentWindow(), canClose)
 }

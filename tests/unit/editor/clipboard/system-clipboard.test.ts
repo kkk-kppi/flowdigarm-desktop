@@ -106,6 +106,31 @@ describe('SystemClipboard', () => {
     expect(notice).toHaveBeenCalledWith('系统剪贴板内容无效，已使用应用内剪贴板。')
   })
 
+  it.each([
+    ['self-parent', (value: any) => {
+      value.nodes[0].isContainer = true
+      value.nodes[0].parentId = value.nodes[0].id
+    }],
+    ['parent cycle', (value: any) => {
+      value.nodes[0].isContainer = true
+      value.nodes[1].isContainer = true
+      value.nodes[0].parentId = value.nodes[1].id
+      value.nodes[1].parentId = value.nodes[0].id
+    }],
+    ['non-container parent', (value: any) => {
+      value.nodes[1].parentId = value.nodes[0].id
+    }],
+  ])('rejects hostile %s hierarchy', async (_label, mutate) => {
+    const candidate = structuredClone(payloadWithEdge()) as any
+    mutate(candidate)
+    const notice = vi.fn()
+    const text = JSON.stringify({ mime: FLOWDIAGRAM_CLIPBOARD_MIME, version: 1, payload: candidate })
+    const clipboard = new SystemClipboard({ writeText: async () => {}, readText: async () => text }, notice)
+
+    await expect(clipboard.read()).resolves.toBeNull()
+    expect(notice).toHaveBeenCalledWith('系统剪贴板内容无效，已使用应用内剪贴板。')
+  })
+
   it('rejects payload counts beyond the domain page limit', async () => {
     const candidate = payload()
     candidate.nodes = Array.from({ length: 5001 }, () => structuredClone(candidate.nodes[0]))

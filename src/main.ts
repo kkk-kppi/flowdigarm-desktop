@@ -19,7 +19,7 @@ import { useDocumentStore } from '@/stores/document-store'
 import { useSelectionStore } from '@/stores/selection-store'
 import { useAppStore } from '@/stores/app-store'
 import { SystemClipboard } from '@/infrastructure/clipboard/system-clipboard'
-import { createTauriWindowController } from '@/platform/tauri-window-controller'
+import { createTauriWindowController, registerCloseRequestListener } from '@/platform/tauri-window-controller'
 import {
   createUnsavedDialogService,
   editorServicesKey,
@@ -96,17 +96,14 @@ const services: EditorServices = {
   unsaved,
 }
 app.provide(editorServicesKey, services)
-let removeCloseListener: (() => void) | undefined
-void windowController.onCloseRequested().then((remove) => {
-  removeCloseListener = remove
-})
+const disposeCloseListener = registerCloseRequestListener(windowController)
 let disposed = false
 const disposePersistence = () => {
   if (disposed) return
   disposed = true
   persistenceController.dispose()
   settingsController.dispose()
-  removeCloseListener?.()
+  disposeCloseListener()
   window.removeEventListener('beforeunload', disposePersistence)
 }
 window.addEventListener('beforeunload', disposePersistence)

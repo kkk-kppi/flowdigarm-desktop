@@ -24,6 +24,7 @@ export class RecoveryController {
     try {
       snapshot = await this.repository.latest()
     } catch {
+      this.showError('恢复数据检查失败，已打开编辑器。')
       return null
     }
     if (!snapshot) return null

@@ -75,3 +75,19 @@ Implemented file UX, recent files, guarded close, startup recovery, ten persiste
 - Full TypeScript: `pnpm test` -> `92 passed` files, `797 passed` tests.
 - Full Rust: `cargo test --manifest-path src-tauri/Cargo.toml` -> `33` library + `4` image integration tests passed.
 - Build/typecheck: `pnpm build` succeeded; the existing ~873 kB chunk-size warning remains non-blocking.
+
+## Remaining Findings Remediation (2026-07-21)
+
+- Copied hierarchy now keeps only in-payload parents, and paste remaps every retained `parentId` through a complete old-to-new UUID map without original references.
+- System clipboard validation rejects self-parenting, cycles, missing/non-container parents, and checks ancestry iteratively for every node.
+- Settings and recents load independently before recovery is always attempted; recovery storage failures report a notice and release the editor gate.
+- Unsaved dialogs own a dedicated lifecycle-scoped focus target; file, recent, image, and preferences operations cannot pollute it.
+- Deferred settings and native close-listener registration are generation/disposal guarded, including immediate unlisten after late registration.
+
+## Remaining Findings Verification
+
+- RED: focused regressions initially failed `10` tests across clipboard/startup/focus/settings/window; the recovery repository notice regression also failed before its fix.
+- Focused clipboard/startup/recovery/settings/window/focus matrix: `6 passed` files, `70 passed` tests.
+- Full TypeScript: `pnpm test` -> `92 passed` files, `807 passed` tests.
+- Build/typecheck: `pnpm build` succeeded; the existing ~874 kB chunk-size warning remains non-blocking.
+- Rust was unchanged, so the optional Cargo suite was not rerun.

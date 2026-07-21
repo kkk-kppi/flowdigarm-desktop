@@ -274,6 +274,51 @@ describe('AppShell 组装', () => {
     expect(useDocumentStore().pageManager.controllerFor(useDocumentStore().activePageId).state.zoom).toBe(1.75)
   })
 
+  it('loads settings and recents best-effort before recovery even when startup dependencies fail', async () => {
+    let rejectSettings!: (error: Error) => void
+    const checkStartup = vi.fn(async () => null)
+    const loadRecent = vi.fn(async () => { throw new Error('recent db') })
+    const services = fakeServices({
+      settings: {
+        load: vi.fn(() => new Promise<EditorPreferences>((_resolve, reject) => { rejectSettings = reject })),
+        apply: vi.fn(async () => {}),
+      },
+      file: { ...fakeServices().file, loadRecent },
+      recovery: {
+        pending: null,
+        checkStartup,
+        restore: vi.fn(() => true),
+        discard: vi.fn(async () => {}),
+      },
+    })
+    const wrapper = mountShellWithServices(services)
+    await flushPromises()
+
+    expect(loadRecent).toHaveBeenCalledOnce()
+    expect(checkStartup).not.toHaveBeenCalled()
+    rejectSettings(new Error('settings db'))
+    await flushPromises()
+
+    expect(checkStartup).toHaveBeenCalledOnce()
+    expect(wrapper.find('[data-testid="canvas-area-stub"]').exists()).toBe(true)
+  })
+
+  it('shows a notice and opens the editor when recovery lookup fails', async () => {
+    const services = fakeServices({
+      recovery: {
+        pending: null,
+        checkStartup: vi.fn(async () => { throw new Error('recovery db') }),
+        restore: vi.fn(() => true),
+        discard: vi.fn(async () => {}),
+      },
+    })
+    const wrapper = mountShellWithServices(services)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="canvas-area-stub"]').exists()).toBe(true)
+    expect(useDocumentStore().lastNotice).toContain('恢复')
+  })
+
   it('captures a fresh focus target for an unsaved dialog after another shared dialog closes', async () => {
     const services = fakeServices()
     const wrapper = mountShellWithServices(services, true)
@@ -281,6 +326,28 @@ describe('AppShell 组装', () => {
     await wrapper.find('[data-menu-id="tools"]').trigger('click')
     await wrapper.find('[data-command-id="tool-preferences"]').trigger('click')
     await wrapper.find('[aria-labelledby="preferences-title"]').trigger('keydown', { key: 'Escape' })
+    await flushPromises()
+
+    const nativeCloseOrigin = document.createElement('button')
+    document.body.append(nativeCloseOrigin)
+    nativeCloseOrigin.focus()
+    services.unsaved.request.value = { action: 'close' }
+    await flushPromises()
+    await wrapper.find('[data-testid="unsaved-cancel"]').trigger('click')
+    services.unsaved.request.value = null
+    await flushPromises()
+
+    expect(document.activeElement).toBe(nativeCloseOrigin)
+    nativeCloseOrigin.remove()
+    wrapper.unmount()
+  })
+
+  it('does not reuse a stale file menu target when native close opens the unsaved dialog', async () => {
+    const services = fakeServices()
+    const wrapper = mountShellWithServices(services, true)
+    await flushPromises()
+    await wrapper.find('[data-menu-id="file"]').trigger('click')
+    await wrapper.find('[data-command-id="file-open"]').trigger('click')
     await flushPromises()
 
     const nativeCloseOrigin = document.createElement('button')
