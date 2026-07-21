@@ -20,6 +20,7 @@ import { useSelectionStore } from '@/stores/selection-store'
 import { useAppStore } from '@/stores/app-store'
 import { SystemClipboard } from '@/infrastructure/clipboard/system-clipboard'
 import { createUnsavedDialogService, editorServicesKey, type EditorServices } from '@/ui/services/editor-services'
+import type { ApplicationResourceTracker, ApplicationResources } from '@/e2e/resource-tracker'
 import './styles/tokens.css'
 
 interface ApplicationRuntime {
@@ -72,6 +73,9 @@ async function createApplicationRuntime(): Promise<ApplicationRuntime> {
 }
 
 async function bootstrap(): Promise<void> {
+const resourceTracker: ApplicationResourceTracker | undefined = import.meta.env.VITE_E2E === '1'
+  ? (await import('@/e2e/resource-tracker')).installApplicationResourceTracker(window)
+  : undefined
 const runtime = await createApplicationRuntime()
 
 const app = createApp(App)
@@ -129,6 +133,8 @@ const settingsController = new SettingsController(
   },
   runtime.settings,
 )
+resourceTracker?.trackController(persistenceController)
+resourceTracker?.trackController(settingsController)
 const windowController = runtime.createWindowController(() => fileWorkflowController.requestClose())
 const exportController = new ExportController({
   snapshot: () => ({ document: documentStore.document, activePageId: documentStore.activePageId }),
@@ -162,22 +168,38 @@ const disposeCloseListener = () => {
   closeUnlisten = undefined
 }
 let disposeE2EHook = () => {}
-if (import.meta.env.VITE_E2E === '1' && runtime.e2e) {
-  disposeE2EHook = (await import('@/e2e/e2e-hook')).installE2EHook(window, { documentStore, selectionStore, runtime: runtime.e2e })
-}
-let disposed = false
-const disposeApplication = () => {
-  if (disposed) return
-  disposed = true
+let lifecycleDisposed = false
+let applicationUnmounted = false
+const disposeLifecycle = () => {
+  if (lifecycleDisposed) return
+  lifecycleDisposed = true
   persistenceController.dispose()
   settingsController.dispose()
   disposeCloseListener()
   disposeE2EHook()
-  runtime.e2e?.control.dispose()
   window.removeEventListener('beforeunload', disposeApplication)
 }
+const disposeApplication = (): ApplicationResources => {
+  if (!applicationUnmounted) {
+    applicationUnmounted = true
+    app.unmount()
+  }
+  disposeLifecycle()
+  const resources = resourceTracker?.resources() ?? { listeners: 0, timers: 0, controllers: 0 }
+  resourceTracker?.restore()
+  return resources
+}
+if (import.meta.env.VITE_E2E === '1' && runtime.e2e) {
+  disposeE2EHook = (await import('@/e2e/e2e-hook')).installE2EHook(window, {
+    documentStore,
+    selectionStore,
+    runtime: runtime.e2e,
+    disposeApplication,
+    resourceDiagnostics: () => resourceTracker?.diagnostics() ?? { listeners: [], timers: [] },
+  })
+}
 window.addEventListener('beforeunload', disposeApplication)
-app.onUnmount(disposeApplication)
+app.onUnmount(disposeLifecycle)
 app.mount('#app')
 }
 

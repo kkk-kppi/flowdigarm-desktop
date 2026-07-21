@@ -11,7 +11,6 @@
 // viewport-transform / ruler-scale / cell-mapper / nearest-port 等纯模块。
 import { Graph, type Cell, type Edge, type Node } from '@antv/x6'
 import { Dnd } from '@antv/x6-plugin-dnd'
-import { Keyboard } from '@antv/x6-plugin-keyboard'
 import { Scroller } from '@antv/x6-plugin-scroller'
 import { Selection } from '@antv/x6-plugin-selection'
 import { Snapline } from '@antv/x6-plugin-snapline'
@@ -229,7 +228,6 @@ export class GraphAdapter {
       }),
     )
     this.graph.use(new Snapline({ enabled: true }))
-    this.graph.use(new Keyboard({ enabled: true }))
     // 变换手势：最小尺寸按形状 minSize（部件创建时解析）；Shift 等比缩放仅对
     // keepAspectOnShiftResize 形状生效；手势结束经 node:resized/node:rotated 各回调一次
     this.graph.use(
@@ -711,7 +709,17 @@ export class GraphAdapter {
   private bindEdgeTools(): void {
     this.graph.on('edge:selected', ({ edge }) => {
       edge.addTools([
-        { name: 'vertices' },
+        {
+          name: 'vertices',
+          args: {
+            onChanged: ({ edge: changedEdge }: { edge: Edge }) => {
+              this.events.onVerticesChanged?.({
+                edgeId: changedEdge.id,
+                vertices: changedEdge.getVertices().map((vertex) => ({ x: vertex.x, y: vertex.y })),
+              })
+            },
+          },
+        },
         { name: 'segments' },
         { name: 'source-arrowhead' },
         { name: 'target-arrowhead' },

@@ -4,6 +4,7 @@ import type { BrowserE2EPlatform } from '@/platform/browser-e2e-platform'
 import type { useDocumentStore } from '@/stores/document-store'
 import type { useSelectionStore } from '@/stores/selection-store'
 import { serializeDiagramDocument } from '@/domain/document-schema'
+import type { ApplicationResources } from './resource-tracker'
 
 interface HookTarget {
   __FLOW_E2E__?: FlowE2EHook
@@ -13,9 +14,10 @@ export function installE2EHook(target: HookTarget, dependencies: {
   documentStore: ReturnType<typeof useDocumentStore>
   selectionStore: ReturnType<typeof useSelectionStore>
   runtime: BrowserE2EPlatform
+  disposeApplication: () => ApplicationResources
+  resourceDiagnostics: () => { listeners: Array<{ type: string; stack: string }>; timers: string[] }
 }): () => void {
-  const { documentStore, selectionStore, runtime } = dependencies
-  const unmountResource = runtime.control.mountHook()
+  const { documentStore, selectionStore, runtime, disposeApplication, resourceDiagnostics } = dependencies
   const hook: FlowE2EHook = {
     injectBenchmark() {
       documentStore.loadDocument(createBenchmarkDocument())
@@ -40,6 +42,7 @@ export function installE2EHook(target: HookTarget, dependencies: {
       revision: documentStore.currentRevision,
       canUndo: documentStore.canUndo,
       canRedo: documentStore.canRedo,
+      undoLabel: documentStore.undoLabel,
       dirty: documentStore.dirty,
       filePath: documentStore.filePath,
     }),
@@ -52,7 +55,9 @@ export function installE2EHook(target: HookTarget, dependencies: {
     fail: (operation, enabled) => runtime.control.fail(operation, enabled),
     seedFile: (path, json) => runtime.control.seedFile(path, json),
     artifacts: () => runtime.control.artifacts(),
-    resources: () => runtime.control.resources(),
+    artifactBytes: (path) => runtime.control.artifactBytes(path),
+    disposeApplication,
+    resourceDiagnostics,
     reset() {
       runtime.control.reset()
       documentStore.newDocument()
@@ -65,6 +70,5 @@ export function installE2EHook(target: HookTarget, dependencies: {
     if (disposed) return
     disposed = true
     if (target.__FLOW_E2E__ === hook) delete target.__FLOW_E2E__
-    unmountResource()
   }
 }

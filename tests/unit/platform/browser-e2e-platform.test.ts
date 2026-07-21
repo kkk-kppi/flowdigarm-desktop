@@ -58,6 +58,8 @@ describe('BrowserE2EPlatform', () => {
       pages: [{ name: '页面', widthPt: 72, heightPt: 36, svg: '<svg>new</svg>', links: [] }],
     })).rejects.toThrow('导出失败')
     expect(runtime.control.artifacts()).toEqual(before)
+    expect(runtime.control.artifactBytes('/e2e/existing.flowdiagram')).toBe('{"old":true}')
+    expect(runtime.control.artifactBytes('/e2e/existing.svg')).toBe('<svg>old</svg>')
   })
 
   it('records exact PNG dimensions and PDF URI evidence for assertions', async () => {
@@ -89,13 +91,4 @@ describe('BrowserE2EPlatform', () => {
     expect((await reloaded.files.open())?.json).toBe('{"schemaVersion":999}')
   })
 
-  it('reports and disposes test-managed resources', () => {
-    const runtime = createBrowserE2EPlatform(memoryStorage())
-    const disposeHook = runtime.control.mountHook()
-    expect(runtime.control.resources()).toEqual({ hooks: 1, listeners: 1, timers: 0, controllers: 1 })
-    disposeHook()
-    expect(runtime.control.resources()).toEqual({ hooks: 0, listeners: 0, timers: 0, controllers: 1 })
-    runtime.control.dispose()
-    expect(runtime.control.resources()).toEqual({ hooks: 0, listeners: 0, timers: 0, controllers: 0 })
-  })
 })

@@ -165,7 +165,7 @@ describe('构造用例校验', () => {
     const doc = makeValidDocument()
     doc.schemaVersion = 999
     const result = parseDiagramDocument(serializeDiagramDocument(doc))
-    expect(result).toEqual({ ok: false, error: '不支持的文件版本。' })
+    expect(result).toEqual({ ok: false, error: '文件架构无效：不支持的文件版本，请使用兼容版本重新导出。' })
   })
 
   it('边引用不存在的节点拒绝', () => {
@@ -197,7 +197,16 @@ describe('构造用例校验', () => {
     const result = parseDiagramDocument(serializeDiagramDocument(doc))
     expect(result.ok).toBe(false)
     if (result.ok) return
-    expect(result.error).toBe('文件校验失败：超链接协议不允许。')
+    expect(result.error).toBe('文件链接无效：仅支持 http、https 或 mailto 链接，请修正后重试。')
+  })
+
+  it('节点位置越界给出可操作的几何分类', () => {
+    const doc = makeValidDocument()
+    doc.pages[0].nodes[0].x = 1e12
+    const result = parseDiagramDocument(serializeDiagramDocument(doc))
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.error).toBe('文件几何无效：节点位置超出允许范围，请修正后重试。')
   })
 
   it('文本超长拒绝', () => {

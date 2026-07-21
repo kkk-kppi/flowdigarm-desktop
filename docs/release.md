@@ -18,10 +18,10 @@ Run from the repository root:
 ```text
 pnpm install --frozen-lockfile
 pnpm test
-cargo test --manifest-path src-tauri/Cargo.toml
+cargo test --locked --manifest-path src-tauri/Cargo.toml
 pnpm playwright test
 pnpm build
-pnpm tauri build --no-bundle
+pnpm tauri build --no-bundle -- -- --locked
 ```
 
 The no-bundle command produces `src-tauri/target/release/flowchart-editor.exe` on Windows and `src-tauri/target/release/flowchart-editor` on macOS. Playwright evidence is under `playwright-report/` and `test-results/`, including `test-results/performance.json`.

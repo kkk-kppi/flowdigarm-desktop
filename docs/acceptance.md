@@ -4,7 +4,7 @@ This table is the initial L1-L6 evidence index. “未覆盖” is not a pass. m
 
 | Level | Current status | Gate and evidence |
 |---|---|---|
-| L1 可运行与平台 | 部分通过；macOS 未覆盖 | `pnpm playwright test`; console/page/unhandled-rejection fixture; `e2e/menus-accessibility.spec.ts`; Windows `pnpm tauri build --no-bundle`; CI runners are configuration, not local pass evidence. |
+| L1 可运行与平台 | 部分通过；macOS 未覆盖 | `pnpm playwright test`; console/page/unhandled-rejection fixture; `e2e/menus-accessibility.spec.ts`; Windows `pnpm tauri build --no-bundle -- -- --locked`; CI runners are configuration, not local pass evidence. |
 | L2 文件、单位与页面 | 通过（Windows browser E2E） | `e2e/editor-core.spec.ts`, `e2e/persistence-errors.spec.ts`; invalid schema/geometry/URL preserve the current document; unit switch preserves pt geometry. |
 | L3 编辑与排版 | 通过（Windows browser E2E） | `e2e/editor-core.spec.ts`, `e2e/canvas-interactions.spec.ts`; text session, mixed batch format, format paint, selection, resize/rotation handles. |
 | L4 连接、排列与结构 | 部分通过 | `e2e/editor-core.spec.ts`, `e2e/canvas-interactions.spec.ts`; auto-connect ports, connector visuals, edge tools, grouping. Detailed manual visual inspection remains release acceptance work. |
@@ -16,7 +16,7 @@ This table is the initial L1-L6 evidence index. “未覆盖” is not a pass. m
 | Platform | Local evidence | CI gate |
 |---|---|---|
 | Windows 10/11 x64 | Task 9b report records tests, release executable path, and size. | `windows-latest` |
-| macOS Intel | 未覆盖 | `macos-13`, target `x86_64-apple-darwin` |
-| macOS Apple Silicon | 未覆盖 | `macos-14`, target `aarch64-apple-darwin` |
+| macOS Intel | 未覆盖 | `macos-15-intel`, target `x86_64-apple-darwin` |
+| macOS Apple Silicon | 未覆盖 | `macos-15`, target `aarch64-apple-darwin` |
 
 Detailed command output and counts are recorded in `.superpowers/sdd/reports/task-9b-report.md` and CI artifacts. No Linux claim or job is included.

@@ -12,11 +12,18 @@ type ErrorGate = { messages: string[] }
 export const test = base.extend<{ errorGate: ErrorGate }>({
   errorGate: [async ({ page }, use) => {
     const messages: string[] = []
+    let aborting = false
+    const abort = (message: string) => {
+      messages.push(message)
+      if (aborting) return
+      aborting = true
+      void page.close({ runBeforeUnload: false })
+    }
     const onConsole = (message: ConsoleMessage) => {
-      if (message.type() === 'error') messages.push(`console.error: ${message.text()}`)
+      if (message.type() === 'error') abort(`console.error: ${message.text()}`)
     }
     page.on('console', onConsole)
-    page.on('pageerror', (error) => messages.push(`pageerror: ${error.message}`))
+    page.on('pageerror', (error) => abort(`pageerror: ${error.message}`))
     await page.addInitScript(() => {
       window.addEventListener('unhandledrejection', (event) => {
         console.error('__UNHANDLED_REJECTION__', event.reason)

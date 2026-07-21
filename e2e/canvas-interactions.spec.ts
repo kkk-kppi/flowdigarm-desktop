@@ -48,13 +48,18 @@ test('commits one drag history when pointerup occurs outside the node', async ({
   await page.mouse.up()
   expect((await snapshot(page)).document.pages[0].nodes.find(({ id }) => id === ids.third)).toMatchObject({ x: nodeBefore.x, y: nodeBefore.y })
 
-  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2)
+  const start = { x: box!.x + box!.width / 2, y: box!.y + box!.height / 2 }
+  const outside = { x: box!.x + box!.width + 140, y: box!.y + box!.height + 90 }
+  await page.mouse.move(start.x, start.y)
   await page.mouse.down()
-  await page.mouse.move(box!.x + box!.width / 2 + 70, box!.y + box!.height / 2 + 45, { steps: 5 })
-  await page.mouse.up()
+  await page.mouse.move(outside.x, outside.y, { steps: 5 })
+  await page.evaluate(({ x, y }) => {
+    window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0, buttons: 0, clientX: x, clientY: y }))
+  }, outside)
   await expect.poll(async () => (await snapshot(page)).document.pages[0].nodes.find(({ id }) => id === ids.third)?.x).not.toBe(nodeBefore.x)
   const moved = await snapshot(page)
   expect(moved.revision).toBe(before.revision + 1)
+  expect(moved.undoLabel).toBe('移动图元')
   await page.getByTestId('tb-undo').click()
   expect((await snapshot(page)).document.pages[0].nodes.find(({ id }) => id === ids.third)).toMatchObject({ x: nodeBefore.x, y: nodeBefore.y })
 })
@@ -96,6 +101,18 @@ test('renders ports, edge endpoints/vertices, connector visuals, and group/conta
   }).toPass({ timeout: 10_000 })
   await expect(page.locator('.x6-cell-tools')).not.toHaveCount(0)
   await expect(page.locator('.x6-edge-tool-vertex')).not.toHaveCount(0)
+  const verticesBefore = (await snapshot(page)).document.pages[0].edges.find(({ id }) => id === ids.orthogonal)!.vertices
+  const vertexRevision = (await snapshot(page)).revision
+  const vertexHandle = await page.locator('.x6-edge-tool-vertex').first().boundingBox()
+  expect(vertexHandle).not.toBeNull()
+  await page.mouse.move(vertexHandle!.x + vertexHandle!.width / 2, vertexHandle!.y + vertexHandle!.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(vertexHandle!.x + vertexHandle!.width / 2 + 35, vertexHandle!.y + vertexHandle!.height / 2 + 24, { steps: 5 })
+  await page.mouse.up()
+  await expect.poll(async () => (await snapshot(page)).document.pages[0].edges.find(({ id }) => id === ids.orthogonal)!.vertices).not.toEqual(verticesBefore)
+  const vertexState = await snapshot(page)
+  expect(vertexState.revision).toBe(vertexRevision + 1)
+  expect(vertexState.undoLabel).toBe('编辑拐点')
   const orthPath = await x6Cell(page, ids.orthogonal).locator('path').first().getAttribute('d')
   const curvePath = await x6Cell(page, ids.curved).locator('path').first().getAttribute('d')
   expect(orthPath).not.toBe(curvePath)

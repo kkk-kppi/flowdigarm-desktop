@@ -13,7 +13,9 @@ describe('E2E assertion hook', () => {
     const runtime = createBrowserE2EPlatform(localStorage)
     const target = {} as Window
 
-    const dispose = installE2EHook(target, { documentStore, selectionStore, runtime })
+    const disposeApplication = vi.fn(() => ({ listeners: 0, timers: 0, controllers: 0 }))
+    const resourceDiagnostics = vi.fn(() => ({ listeners: [], timers: [] }))
+    const dispose = installE2EHook(target, { documentStore, selectionStore, runtime, disposeApplication, resourceDiagnostics })
     expect(target.__FLOW_E2E__).toBeDefined()
     target.__FLOW_E2E__!.injectBenchmark()
     const snapshot = target.__FLOW_E2E__!.snapshot()
@@ -27,10 +29,12 @@ describe('E2E assertion hook', () => {
 
     target.__FLOW_E2E__!.fail('save', true)
     expect(runtime.control.failures()).toContain('save')
-    expect(target.__FLOW_E2E__!.resources()).toEqual({ hooks: 1, listeners: 1, timers: 0, controllers: 1 })
+    expect(target.__FLOW_E2E__!.artifactBytes('/missing')).toBeNull()
+    expect(target.__FLOW_E2E__!.disposeApplication()).toEqual({ listeners: 0, timers: 0, controllers: 0 })
+    expect(disposeApplication).toHaveBeenCalledOnce()
+    expect(target.__FLOW_E2E__!.resourceDiagnostics()).toEqual({ listeners: [], timers: [] })
 
     dispose()
     expect(target.__FLOW_E2E__).toBeUndefined()
-    expect(runtime.control.resources()).toEqual({ hooks: 0, listeners: 0, timers: 0, controllers: 1 })
   })
 })

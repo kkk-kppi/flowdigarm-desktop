@@ -46,9 +46,7 @@ export interface BrowserE2EPlatform {
     failures(): BrowserE2EFailure[]
     seedFile(path: string, json: string): void
     artifacts(): BrowserE2EArtifact[]
-    resources(): { hooks: number; listeners: number; timers: number; controllers: number }
-    mountHook(): () => void
-    dispose(): void
+    artifactBytes(path: string): string | null
     reset(): void
   }
 }
@@ -74,8 +72,6 @@ export function createBrowserE2EPlatform(storage: Storage = localStorage): Brows
   let state = readState(storage)
   let artifacts: BrowserE2EArtifact[] = []
   const failures = new Set<BrowserE2EFailure>(state.failures ?? [])
-  let hookCount = 0
-  let controllerCount = 1
   const persist = () => storage.setItem(STORAGE_KEY, JSON.stringify(state))
   const rejectIfFailed = (operation: BrowserE2EFailure, message: string) => {
     if (failures.has(operation) || failures.has('database') && operation !== 'save') throw new Error(message)
@@ -221,25 +217,13 @@ export function createBrowserE2EPlatform(storage: Storage = localStorage): Brows
         persist()
       },
       artifacts: () => structuredClone(artifacts),
-      resources: () => ({ hooks: hookCount, listeners: hookCount, timers: 0, controllers: controllerCount }),
-      mountHook() {
-        hookCount += 1
-        let mounted = true
-        return () => {
-          if (!mounted) return
-          mounted = false
-          hookCount -= 1
-        }
-      },
-      dispose() {
-        hookCount = 0
-        controllerCount = 0
+      artifactBytes(path) {
+        return state.files[path] ?? artifacts.find((artifact) => artifact.path === path)?.content ?? null
       },
       reset() {
         state = emptyState()
         artifacts = []
         failures.clear()
-        controllerCount = 1
         persist()
       },
     },

@@ -1,5 +1,18 @@
 import { expect, openCleanEditor, test } from './fixtures'
 
+async function expectIconControlsAccessible(page: Parameters<typeof openCleanEditor>[0]): Promise<void> {
+  const violations = await page.locator('button:visible').evaluateAll((buttons) => buttons.flatMap((button) => {
+    const text = (button.textContent ?? '').replace(/\s/g, '')
+    const iconOnly = Boolean(button.querySelector('svg, img, [aria-hidden="true"]'))
+      || text.length <= 3 && (!/[\u3400-\u9fff]/u.test(text) || /^[?×−□«»+]+$/u.test(text))
+    if (!iconOnly) return []
+    const ariaLabel = button.getAttribute('aria-label') ?? ''
+    const title = button.getAttribute('title') ?? ''
+    return /[\u3400-\u9fff]/u.test(ariaLabel) && title.trim() ? [] : [{ text, ariaLabel, title }]
+  }))
+  expect(violations, 'icon-only controls require a Chinese aria-label and title tooltip').toEqual([])
+}
+
 test('supports seven-menu keyboard navigation, submenus, Escape, and focus return', async ({ page }) => {
   await openCleanEditor(page)
   const roots = page.getByTestId('menubar').getByRole('menuitem')
@@ -34,13 +47,7 @@ test('supports seven-menu keyboard navigation, submenus, Escape, and focus retur
 
 test('exposes icon labels/tooltips, contextual help, and trapped dialog focus', async ({ page }) => {
   await openCleanEditor(page)
-  const icons = page.locator('button').filter({ hasText: /^(\?|×|−|□|«|»)$/ })
-  const iconCount = await icons.count()
-  expect(iconCount).toBeGreaterThan(0)
-  for (let index = 0; index < iconCount; index += 1) {
-    await expect(icons.nth(index)).toHaveAttribute('aria-label', /\S+/)
-    await expect(icons.nth(index)).toHaveAttribute('title', /\S+/)
-  }
+  await expectIconControlsAccessible(page)
 
   const helpTrigger = page.getByRole('button', { name: '形状库帮助' })
   await helpTrigger.click()
@@ -49,10 +56,17 @@ test('exposes icon labels/tooltips, contextual help, and trapped dialog focus', 
   await expect(page.getByRole('complementary', { name: '图元库帮助' })).toBeHidden()
   await expect(helpTrigger).toBeFocused()
 
+  await page.getByRole('menuitem', { name: '工具' }).click()
+  await page.getByRole('menuitem', { name: '首选项' }).click()
+  await expect(page.getByRole('dialog', { name: '首选项' })).toBeVisible()
+  await expectIconControlsAccessible(page)
+  await page.keyboard.press('Escape')
+
   await page.getByRole('menuitem', { name: '文件' }).click()
   await page.getByRole('menuitem', { name: '导出' }).click()
   const dialog = page.getByRole('dialog', { name: '导出' })
   await expect(dialog).toBeVisible()
+  await expectIconControlsAccessible(page)
   const first = dialog.getByTestId('export-help')
   const last = dialog.getByTestId('export-submit')
   await last.focus()
@@ -60,8 +74,10 @@ test('exposes icon labels/tooltips, contextual help, and trapped dialog focus', 
   await expect(first).toBeFocused()
   await page.keyboard.press('Shift+Tab')
   await expect(last).toBeFocused()
+  await first.click()
+  await expect(page.getByRole('complementary', { name: '导出帮助' })).toBeVisible()
+  await expectIconControlsAccessible(page)
   await page.keyboard.press('Escape')
-  await expect(dialog).toBeHidden()
 })
 
 test('keeps narrow layouts usable and exposes non-color state', async ({ page }) => {
@@ -78,11 +94,56 @@ test('keeps narrow layouts usable and exposes non-color state', async ({ page })
   await expect(page.getByTestId('status-grid')).toContainText(/开|关/)
 })
 
+test('disposes real application timers, listeners, and controllers after interactive overlays', async ({ page }) => {
+  await openCleanEditor(page)
+  await page.getByRole('menuitem', { name: '文件' }).click()
+  await page.keyboard.press('Escape')
+  await page.getByRole('menuitem', { name: '工具' }).click()
+  await page.getByRole('menuitem', { name: '首选项' }).click()
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: '形状库帮助' }).click()
+  await page.keyboard.press('Escape')
+  await page.getByRole('menuitem', { name: '文件' }).click()
+  await page.getByRole('menuitem', { name: '导出' }).click()
+  await page.getByTestId('export-help').click()
+  await page.keyboard.press('Escape')
+
+  const { resources, diagnostics } = await page.evaluate(() => {
+    const hook = window.__FLOW_E2E__!
+    const resources = hook.disposeApplication()
+    return { resources, diagnostics: hook.resourceDiagnostics() }
+  })
+  expect(resources, JSON.stringify(diagnostics, null, 2)).toEqual({ listeners: 0, timers: 0, controllers: 0 })
+  await expect(page.locator('#app')).toBeEmpty()
+})
+
 test('applies dark, forced-color, and reduced-motion preferences', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce', forcedColors: 'active' })
   await openCleanEditor(page)
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.theme)).toBe('dark')
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.reducedMotion)).toBe('reduce')
   expect(await page.evaluate(() => matchMedia('(forced-colors: active)').matches)).toBe(true)
-  expect(await page.getByTestId('editor-shell').evaluate((element) => getComputedStyle(element).transitionDuration)).not.toBe('')
+  const maximumMotionSeconds = await page.getByTestId('editor-shell').evaluate((shell) => {
+    const seconds = (value: string) => value.split(',').map((part) => {
+      const duration = part.trim()
+      return duration.endsWith('ms') ? Number.parseFloat(duration) / 1000 : Number.parseFloat(duration) || 0
+    })
+    return Math.max(0, ...[shell, ...shell.querySelectorAll('*')].flatMap((element) => {
+      const style = getComputedStyle(element)
+      return [...seconds(style.transitionDuration), ...seconds(style.animationDuration)]
+    }))
+  })
+  expect(maximumMotionSeconds).toBeLessThanOrEqual(0.001)
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--color-border').trim())).toBe('CanvasText')
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim())).toBe('Highlight')
+  const focusTarget = page.getByTestId('status-grid')
+  await focusTarget.focus()
+  const focusStyle = await focusTarget.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return { outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth, outlineColor: style.outlineColor, borderColor: style.borderColor }
+  })
+  expect(focusStyle.outlineStyle).not.toBe('none')
+  expect(Number.parseFloat(focusStyle.outlineWidth)).toBeGreaterThanOrEqual(2)
+  expect(focusStyle.outlineColor).not.toBe('rgba(0, 0, 0, 0)')
+  expect(focusStyle.borderColor).not.toBe('rgba(0, 0, 0, 0)')
 })

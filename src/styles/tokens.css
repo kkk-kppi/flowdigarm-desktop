@@ -40,3 +40,32 @@
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (forced-colors: active) {
+  :root[data-theme] {
+    --color-bg: Canvas;
+    --color-panel: Canvas;
+    --color-border: CanvasText;
+    --color-primary: Highlight;
+    --color-text: CanvasText;
+    --color-text-secondary: CanvasText;
+  }
+
+  *:focus-visible {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px !important;
+  }
+
+  button, input, select, textarea, fieldset {
+    border-color: CanvasText !important;
+  }
+}

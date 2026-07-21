@@ -1,5 +1,6 @@
 import type { DiagramDocument } from '@/domain/diagram'
 import type { BrowserE2EArtifact, BrowserE2EFailure } from '@/platform/browser-e2e-platform'
+import type { ApplicationResources } from './resource-tracker'
 
 export interface FlowE2EHook {
   injectBenchmark(): void
@@ -11,6 +12,7 @@ export interface FlowE2EHook {
     revision: number
     canUndo: boolean
     canRedo: boolean
+    undoLabel?: string
     dirty: boolean
     filePath: string | null
   }
@@ -20,7 +22,9 @@ export interface FlowE2EHook {
   fail(operation: BrowserE2EFailure, enabled: boolean): void
   seedFile(path: string, json: string): void
   artifacts(): BrowserE2EArtifact[]
-  resources(): { hooks: number; listeners: number; timers: number; controllers: number }
+  artifactBytes(path: string): string | null
+  disposeApplication(): ApplicationResources
+  resourceDiagnostics(): { listeners: Array<{ type: string; stack: string }>; timers: string[] }
   reset(): void
 }
 

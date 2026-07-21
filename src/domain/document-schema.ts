@@ -20,7 +20,7 @@ export interface ParseFailure { ok: false; error: string } // 中文可读
 export type ParseResult = ParseSuccess | ParseFailure
 
 const ERR_INVALID_FORMAT = '文件格式无效，未打开文件。'
-const ERR_UNSUPPORTED_VERSION = '不支持的文件版本。'
+const ERR_UNSUPPORTED_VERSION = '文件架构无效：不支持的文件版本，请使用兼容版本重新导出。'
 const WARNING_LEGACY_MIGRATED = '已从旧版本迁移。'
 
 const PAGE_UNITS = ['mm', 'cm', 'in', 'pt', 'px']
@@ -176,7 +176,7 @@ function validateNode(node: DiagramNode): ParseFailure | null {
     return failure('节点尺寸无效。')
   }
   if (!isValidPtPosition(node.x) || !isValidPtPosition(node.y)) {
-    return failure('节点位置无效。')
+    return { ok: false, error: '文件几何无效：节点位置超出允许范围，请修正后重试。' }
   }
   if (!isFiniteNumber(node.angle) || node.angle < 0 || node.angle >= 360) {
     return failure('节点角度无效。')
@@ -202,7 +202,7 @@ function validateNode(node: DiagramNode): ParseFailure | null {
     }
   }
   if (node.link !== undefined && !isAllowedHyperlinkProtocol(node.link)) {
-    return failure('超链接协议不允许。')
+    return { ok: false, error: '文件链接无效：仅支持 http、https 或 mailto 链接，请修正后重试。' }
   }
   // 规则 8：图片节点 imageHref
   if (node.imageHref !== undefined && !isValidImageHref(node.imageHref)) {

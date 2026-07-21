@@ -32,6 +32,8 @@ test('creates, edits, formats, persists, recovers, and exports through real UI p
   await page.getByRole('menuitem', { name: '自动连线' }).click()
   await expect.poll(async () => (await snapshot(page)).document.pages[0].edges.length).toBe(1)
   const connected = (await snapshot(page)).document.pages[0].edges[0]
+  expect(connected.source.nodeId).toBe(firstId)
+  expect(connected.target.nodeId).toBe(secondId)
   expect(connected.source.port).toBeTruthy()
   expect(connected.target.port).toBeTruthy()
 

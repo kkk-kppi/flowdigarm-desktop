@@ -3,11 +3,11 @@
 Date: 2026-07-21
 Branch: `feat/flowchart-editor-v1`
 Platform executed: Windows x64
-Commit target: `test: add editor e2e performance and release gates`
+Commit target: `test: 强化真实交互清理无障碍与发布门禁`
 
 ## Result
 
-Task 9b is implemented for the locally available Windows environment. Chromium E2E, performance evidence, frontend production build, Rust tests, and a Tauri release no-bundle executable all pass. macOS Intel and Apple Silicon execution is **未覆盖** locally; the CI matrix is configuration only and is not represented as passing evidence.
+Task 9b and its review remediation are implemented for the locally available Windows environment. Chromium E2E, real resource disposal, performance evidence, frontend production build, locked Rust tests, and a locked Tauri release no-bundle executable all pass. macOS Intel and Apple Silicon execution is **未覆盖** locally; the CI matrix is configuration only and is not represented as passing evidence.
 
 The untracked `.playwright-mcp/` directory and `opencode.json` were not read, edited, staged, or removed. The session-generated `docs/superpowers/plans/2026-07-21-task-9b-release-gates.md` was deleted and excluded.
 
@@ -70,11 +70,11 @@ Performance RED/GREEN progression:
 
 | Command | Result |
 |---|---|
-| `pnpm test` | PASS: 101 files, 861 tests. |
-| `cargo test --manifest-path src-tauri/Cargo.toml` | PASS: 44 tests (34 library + 6 export integration + 4 image integration), 0 failures. |
-| `pnpm playwright test` | PASS: 13 Chromium tests, 0 failures; console/page/unhandled-rejection gate active per test. |
-| `pnpm build` | PASS: typecheck and Vite production build, 1,155 modules; no `browser-e2e-platform`, `e2e-hook`, or `__FLOW_E2E__` in emitted JavaScript. |
-| `pnpm tauri build --no-bundle` | PASS: release executable built with the official Tauri CLI flag. |
+| `pnpm test` | PASS: 102 files, 864 tests. |
+| `cargo test --locked --manifest-path src-tauri/Cargo.toml` | PASS: 44 tests (34 library + 6 export integration + 4 image integration), 0 failures. |
+| `pnpm playwright test` | PASS: 16 Chromium tests, 0 failures; console/page/unhandled-rejection handlers close the page immediately and retain teardown assertions. |
+| `pnpm build` | PASS: typecheck and Vite production build, 1,149 modules; no `resource-tracker`, `browser-e2e-platform`, `disposeApplication`, or `__FLOW_E2E__` in emitted JavaScript. |
+| `pnpm tauri build --no-bundle -- -- --locked` | PASS: release executable built; the first separator is consumed by pnpm and the second reaches Tauri so Cargo receives `--locked`. |
 
 Chromium was already installed; no browser installation was needed.
 
@@ -86,10 +86,10 @@ Fixture: 500 nodes, 800 edges, Chinese labels; one warm-up and four recorded run
 
 | Metric | Samples (ms) | Gate | Result |
 |---|---|---|---|
-| Selection | 83.6, 58.3, 55.4, 67.6 | `<150` | PASS |
-| Zoom | 129.4, 93.3, 102.1, 100.2 | `<300` | PASS |
-| Drag pointerup to settled store | 99.0, 50.9, 52.5, 57.6 | `<300` | PASS |
-| Serialize/save UI path | 251.6, 319.7, 259.9, 359.6 | `<2000` | PASS |
+| Selection | 43.6, 51.9, 48.8, 52.4 | `<150` | PASS |
+| Zoom | 102.0, 99.3, 91.3, 83.7 | `<300` | PASS |
+| Drag pointerup to settled store | 54.6, 80.0, 99.2, 74.7 | `<300` | PASS |
+| Serialize/save UI path | 275.7, 261.2, 239.1, 249.8 | `<2000` | PASS |
 
 CI applies a 2x multiplier and still rejects freezes/timeouts.
 
@@ -100,17 +100,26 @@ CI applies a 2x multiplier and still rejects freezes/timeouts.
 - Performance JSON: `test-results/performance.json`
 - Per-test attachments/failure screenshot-video-trace location: `test-results/artifacts/`
 - Windows release executable: `src-tauri/target/release/flowchart-editor.exe`
-- Windows executable size: `15,499,264` bytes (`14.78 MiB`)
+- Windows executable size: `15,496,704` bytes (`14.78 MiB`)
 
 ## CI And Release
 
 `.github/workflows/release-gate.yml` contains only:
 
 - `windows-latest` / `x86_64-pc-windows-msvc`
-- `macos-13` / `x86_64-apple-darwin`
-- `macos-14` / `aarch64-apple-darwin`
+- `macos-15-intel` / `x86_64-apple-darwin`
+- `macos-15` / `aarch64-apple-darwin`
 
-Each runner installs locked dependencies and Chromium, runs Vitest/Cargo/Playwright/build/Tauri no-bundle, caches Node/pnpm/Rust data, and uploads browser evidence plus the native executable. Tag runs build NSIS/MSI or app/DMG bundles. Signing and notarization secrets are environment-only; absent secret sets produce an explicit unsigned-build summary rather than a false signing pass.
+Each runner installs locked dependencies and Chromium, runs Vitest/Cargo `--locked`/Playwright/build/Tauri no-bundle with Cargo `--locked`, caches Node/pnpm/Rust data, and uploads browser evidence plus the native executable. Tag runs pass Cargo `--locked` through Tauri while building NSIS/MSI or app/DMG bundles. Signing and notarization secrets are environment-only; absent secret sets produce an explicit unsigned-build summary rather than a false signing pass.
+
+## Review Remediation Evidence
+
+- E2E-only tracking wraps real application timer handles and EventTarget callback pairs before mount, tracks actual persistence/settings controller disposal, unmounts Vue, and reports zero remaining listeners, timers, and controllers after menu/dialog/help interaction.
+- Canvas coverage dispatches `mouseup` directly on `window` after an outside-node drag and verifies one `移动图元` history entry; it also drags the real X6 vertex circle and verifies changed vertices plus one `编辑拐点` entry.
+- Accessibility coverage scans all visible icon-like buttons across the shell, preferences, export, and help overlays for Chinese `aria-label` and title tooltips; rendered forced-color outlines/system tokens and near-zero motion are asserted.
+- Persistence coverage reads saved/exported bytes before and after forced failures, and schema/geometry/URL rejection run as separate exact-message cases without replacing the current document.
+- Fresh browser artifacts were regenerated at `playwright-report/index.html`, `test-results/results.json`, `test-results/performance.json`, and `test-results/artifacts/`.
+- Playwright uses one worker locally and in CI so performance thresholds are measured without contention from unrelated browser suites.
 
 Release prerequisites, artifact handling, signing variables, and rollback are documented in `docs/release.md`. L1-L6 evidence and uncovered status are documented in `docs/acceptance.md`.
 
