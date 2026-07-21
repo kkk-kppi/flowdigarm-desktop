@@ -49,7 +49,7 @@ test('exposes icon labels/tooltips, contextual help, and trapped dialog focus', 
   await openCleanEditor(page)
   await expectIconControlsAccessible(page)
 
-  const helpTrigger = page.getByRole('button', { name: '形状库帮助' })
+  const helpTrigger = page.getByRole('button', { name: '图元库帮助' })
   await helpTrigger.click()
   await expect(page.getByRole('complementary', { name: '图元库帮助' })).toBeVisible()
   await page.keyboard.press('Escape')
@@ -101,7 +101,7 @@ test('disposes real application timers, listeners, and controllers after interac
   await page.getByRole('menuitem', { name: '工具' }).click()
   await page.getByRole('menuitem', { name: '首选项' }).click()
   await page.keyboard.press('Escape')
-  await page.getByRole('button', { name: '形状库帮助' }).click()
+  await page.getByRole('button', { name: '图元库帮助' }).click()
   await page.keyboard.press('Escape')
   await page.getByRole('menuitem', { name: '文件' }).click()
   await page.getByRole('menuitem', { name: '导出' }).click()

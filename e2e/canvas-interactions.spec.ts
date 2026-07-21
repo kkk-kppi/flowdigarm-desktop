@@ -1,6 +1,9 @@
+import { mkdir, stat } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import {
   captureX6CellBeforeRebuild,
   createCanvasFixture,
+  createLineJumpFixture,
   expect,
   openCleanEditor,
   snapshot,
@@ -9,6 +12,8 @@ import {
   waitForRebuiltX6Cell,
   x6Cell,
 } from './fixtures'
+
+const screenshotDirectory = resolve('test-results/screenshots')
 
 const ids = {
   group: '00000000-0000-4000-8000-000000000001',
@@ -162,4 +167,41 @@ test('renders ports, edge endpoints/vertices, connector visuals, and group/conta
   const grouped = await snapshot(page)
   expect(grouped.document.pages[0].nodes.filter(({ shape }) => shape === 'group')).toHaveLength(1)
   expect(grouped.document.pages[0].nodes.filter(({ id }) => [ids.first, ids.second].includes(id)).every(({ parentId }) => Boolean(parentId))).toBe(true)
+})
+
+test('renders a real jump arc only when unrelated orthogonal edges enable line jumps', async ({ page }) => {
+  const edgeIds = [
+    '10000000-0000-4000-8000-000000000011',
+    '10000000-0000-4000-8000-000000000012',
+  ]
+  const fixtureWithoutJumps = createLineJumpFixture(false)
+  const fixtureWithJumps = createLineJumpFixture(true)
+  const topology = (document: ReturnType<typeof createLineJumpFixture>) =>
+    document.pages[0].edges.map(({ source, target, vertices }) => ({ source, target, vertices }))
+  const pathData = () => Promise.all(
+    edgeIds.map((id) => x6Cell(page, id).locator('path').evaluateAll((paths) =>
+      [...new Set(paths.map((path) => path.getAttribute('d')).filter((path): path is string => path !== null))],
+    )),
+  )
+
+  expect(new Set(fixtureWithJumps.pages[0].edges.flatMap((edge) => [edge.source.nodeId, edge.target.nodeId])).size).toBe(4)
+  expect(topology(fixtureWithJumps)).toEqual(topology(fixtureWithoutJumps))
+
+  await page.evaluate((document) => window.__FLOW_E2E__!.injectDocument(document), fixtureWithoutJumps)
+  await expect(page.locator('.x6-edge')).toHaveCount(2)
+  const pathsWithoutJumps = await pathData()
+  expect(pathsWithoutJumps.flat().every((path) => !path.includes('C'))).toBe(true)
+
+  await page.evaluate((document) => window.__FLOW_E2E__!.injectDocument(document), fixtureWithJumps)
+  await expect(page.locator('.x6-edge')).toHaveCount(2)
+  await expect.poll(async () => (await pathData()).flat().some((path) => path.includes('C'))).toBe(true)
+  const pathsWithJumps = await pathData()
+  expect(pathsWithJumps).not.toEqual(pathsWithoutJumps)
+  const jumpArcPath = pathsWithJumps.flat().find((path) => path.includes('C'))
+  expect(jumpArcPath?.match(/C/g)).toHaveLength(2)
+
+  await mkdir(screenshotDirectory, { recursive: true })
+  const screenshotPath = resolve(screenshotDirectory, 'line-jump.png')
+  await page.getByTestId('x6-canvas').screenshot({ path: screenshotPath })
+  expect((await stat(screenshotPath)).size).toBeGreaterThan(0)
 })

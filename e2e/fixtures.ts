@@ -154,3 +154,45 @@ export function createCanvasFixture(): DiagramDocument {
   ]
   return document
 }
+
+export function createLineJumpFixture(showLineJumps: boolean): DiagramDocument {
+  const document = createEmptyDocument('跳线视觉夹具')
+  const page = document.pages[0]
+  const ids = {
+    left: '10000000-0000-4000-8000-000000000001',
+    right: '10000000-0000-4000-8000-000000000002',
+    top: '10000000-0000-4000-8000-000000000003',
+    bottom: '10000000-0000-4000-8000-000000000004',
+  }
+  page.pageSize = { preset: 'custom', width: 720, height: 520 }
+  page.showLineJumps = showLineJumps
+  page.nodes = [
+    { id: ids.left, shape: 'rect', x: 60, y: 225, width: 80, height: 50, angle: 0, zIndex: 1, text: createDefaultTextContent('左'), style: createDefaultNodeStyle() },
+    { id: ids.right, shape: 'rect', x: 580, y: 225, width: 80, height: 50, angle: 0, zIndex: 2, text: createDefaultTextContent('右'), style: createDefaultNodeStyle() },
+    { id: ids.top, shape: 'rect', x: 320, y: 45, width: 80, height: 50, angle: 0, zIndex: 3, text: createDefaultTextContent('上'), style: createDefaultNodeStyle() },
+    { id: ids.bottom, shape: 'rect', x: 320, y: 405, width: 80, height: 50, angle: 0, zIndex: 4, text: createDefaultTextContent('下'), style: createDefaultNodeStyle() },
+  ]
+  page.edges = [
+    {
+      id: '10000000-0000-4000-8000-000000000011',
+      source: { nodeId: ids.left, port: 'right' },
+      target: { nodeId: ids.right, port: 'left' },
+      connector: 'orthogonal',
+      vertices: [],
+      labels: [],
+      style: { ...createDefaultEdgeStyle(), strokeWidth: 2 },
+      zIndex: 10,
+    },
+    {
+      id: '10000000-0000-4000-8000-000000000012',
+      source: { nodeId: ids.top, port: 'bottom' },
+      target: { nodeId: ids.bottom, port: 'top' },
+      connector: 'orthogonal',
+      vertices: [],
+      labels: [],
+      style: { ...createDefaultEdgeStyle(), strokeWidth: 2 },
+      zIndex: 11,
+    },
+  ]
+  return document
+}

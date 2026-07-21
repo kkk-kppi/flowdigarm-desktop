@@ -13,16 +13,16 @@
 
 | 子项 | 状态 | 命令与结果 | 证据 |
 |---|---|---|---|
-| L1.1 Windows 10/11、macOS Intel、macOS Apple Silicon 首次启动无白屏/未捕获异常 | 未覆盖 | Windows `pnpm tauri build --no-bundle -- -- --locked` 已通过，但本任务未启动该 exe 做 PID/时长 smoke；两种 macOS 本地启动均未执行。 | `.superpowers/sdd/reports/task-9b-report.md`、`.github/workflows/release-gate.yml`（仅配置） |
+| L1.1 Windows 10/11、macOS Intel、macOS Apple Silicon 首次启动无白屏/未捕获异常 | 未覆盖 | Windows 当前源码 no-bundle 构建通过；`powershell -ExecutionPolicy Bypass -File scripts/windows-startup-smoke.ps1` 最终验证启动 PID 33096，存活 8 秒后由 `finally` 停止，exe 为 15,497,216 bytes。该 smoke 只证明进程存活，不证明 UI 语义；两种 macOS 本地启动均未执行。 | `scripts/windows-startup-smoke.ps1`、`.superpowers/sdd/reports/task-final-gaps-report.md`、`.github/workflows/release-gate.yml`（仅配置） |
 | L1.2 断网状态可新建、编辑、保存、打开、恢复、导出 | 未覆盖 | Chromium 关键路径已通过且产品无网络服务依赖，但没有在显式断网环境执行完整桌面路径。 | `e2e/editor-core.spec.ts`、`e2e/persistence-errors.spec.ts` |
-| L1.3 简体中文界面及按钮、图标、快捷键、菜单、错误可见可操作 | 通过 | `pnpm playwright test`：16/16 通过；Vitest 菜单、对话框和 tooltip 测试通过。 | `e2e/menus-accessibility.spec.ts`、`tests/component/MenuBar.test.ts`、`tests/component/Tooltip.test.ts` |
-| L1.4 无 console error、未捕获 rejection、残留定时器或失效监听 | 通过 | `pnpm playwright test`：16/16 通过；资源计数归零；`pnpm test` 全套通过。 | `e2e/fixtures.ts`、`tests/unit/e2e/resource-tracker.test.ts`、`.superpowers/sdd/reports/task-9b-report.md` |
+| L1.3 简体中文界面及按钮、图标、快捷键、菜单、错误可见可操作 | 通过 | `pnpm playwright test`：17/17 通过；Vitest 菜单、对话框和 tooltip 测试通过。 | `e2e/menus-accessibility.spec.ts`、`tests/component/MenuBar.test.ts`、`tests/component/Tooltip.test.ts` |
+| L1.4 无 console error、未捕获 rejection、残留定时器或失效监听 | 通过 | `pnpm playwright test`：17/17 通过；自动错误门禁为零、资源计数归零；`pnpm vitest run` 全套通过。 | `e2e/fixtures.ts`、`tests/unit/e2e/resource-tracker.test.ts`、`.superpowers/sdd/reports/task-final-gaps-report.md` |
 
 ## L2 文件、单位与页面
 
 | 子项 | 状态 | 命令与结果 | 证据 |
 |---|---|---|---|
-| L2.1 文件/最近/自动保存/恢复闭环，保存失败不损坏原文件 | 通过 | Cargo 44/44、Playwright 16/16 通过；强制失败前后字节一致。 | `tests/unit/editor/persistence`、`e2e/persistence-errors.spec.ts`、`src-tauri/src/persistence/atomic_file.rs` |
+| L2.1 文件/最近/自动保存/恢复闭环，保存失败不损坏原文件 | 通过 | 最近 Cargo 44/44、本次 Playwright 17/17 通过；强制失败前后字节一致。 | `tests/unit/editor/persistence`、`e2e/persistence-errors.spec.ts`、`src-tauri/src/persistence/atomic_file.rs` |
 | L2.2 `.flowdiagram` 往返，非法 schema/几何/URL 可读失败且不崩溃 | 通过 | Vitest 文档校验与 Playwright 三类错误用例通过。 | `tests/unit/domain/document-schema.test.ts`、`e2e/persistence-errors.spec.ts` |
 | L2.3 mm/cm/in/pt/px 切换保持内部 pt，标尺与属性即时换算 | 通过 | 度量、属性组件和浏览器 pt 不变量断言通过。 | `tests/unit/domain/measurement.test.ts`、`tests/component/PropertyTab.test.ts`、`e2e/editor-core.spec.ts` |
 | L2.4 标尺、网格、参考线、分页符、缩放、平移及四种适应 | 通过 | 视口/标尺/覆盖层 Vitest 与真实画布 E2E 通过。 | `tests/unit/editor/viewport`、`tests/component/RulerOverlay.test.ts`、`tests/component/PageBreakOverlay.test.ts`、`e2e/canvas-interactions.spec.ts` |
@@ -45,7 +45,7 @@
 | 子项 | 状态 | 命令与结果 | 证据 |
 |---|---|---|---|
 | L4.1 三种连接、端口、重连、标签与基础拐点 | 通过 | 最近端口、重连/拐点命令、连接器映射和真实 X6 手柄 E2E 通过。 | `tests/unit/editor/shapes/nearest-port.test.ts`、`tests/unit/editor/commands/reconnect-vertices.test.ts`、`e2e/canvas-interactions.spec.ts` |
-| L4.2 跳线只在不相连边交叉处出现且不改拓扑 | 未覆盖 | 领域到 X6 `jumpover` 映射存在，但没有直接视觉断言“只在不相连交叉处出现”。 | `src/infrastructure/x6/edge-connector-map.ts`、`tests/unit/editor/cell-mapper.test.ts` |
+| L4.2 跳线只在不相连边交叉处出现且不改拓扑 | 通过 | 四个不同端点构成两条交叉直角边；关闭时真实 X6 SVG 路径无曲线，开启时路径变化并出现两段 cubic 跳弧，前后 source/target/vertices 相同；截图已生成。 | `e2e/canvas-interactions.spec.ts`、`test-results/screenshots/line-jump.png`、`src/infrastructure/x6/edge-connector-map.ts` |
 | L4.3 六种对齐以选择序列第一个形状为基准 | 通过 | 六模式、保序锚点和菜单入口测试通过。 | `tests/unit/editor/arrangement/align-cells.test.ts`、`tests/unit/editor/menus/menu-command-controller.test.ts` |
 | L4.4 水平/垂直等距固定两端且相邻边界等距 | 通过 | 正常、顺序和间距不足测试通过。 | `tests/unit/editor/arrangement/distribute-cells.test.ts` |
 | L4.5 自动连线按选择顺序，一次撤销删除全部新边 | 通过 | 端口、顺序、n-1 边及单命令撤销测试通过。 | `tests/unit/editor/arrangement/auto-connect.test.ts` |
@@ -66,7 +66,7 @@
 |---|---|---|---|
 | L6.1 列出的每次用户动作只产生一条历史 | 通过 | 命令级、store、组件和画布 E2E 均断言单条 history label/revision。 | `tests/unit/editor/commands`、`tests/unit/stores/document-store.test.ts`、`e2e/canvas-interactions.spec.ts` |
 | L6.2 视图不入栈，新命令清 redo | 通过 | 命令历史与视口/应用 store 测试通过。 | `tests/unit/editor/commands/command-history.test.ts`、`tests/unit/editor/viewport/viewport-controller.test.ts`、`tests/unit/stores/app-store.test.ts` |
-| L6.3 Vitest、组件、Rust、Playwright E2E 全部通过 | 通过 | 本任务最终 `pnpm test` 结果记录于任务报告；最近原生/浏览器门禁为 Cargo 44/44、Playwright 16/16，repeat 48/48。 | `.superpowers/sdd/reports/task-docs-report.md`、`.superpowers/sdd/reports/task-9b-report.md` |
+| L6.3 Vitest、组件、Rust、Playwright E2E 全部通过 | 通过 | 本任务 `pnpm vitest run` 为 105 文件、889 测试通过，`pnpm playwright test` 为 17/17 通过，当前源码 no-bundle 构建通过；最近 Cargo 仍为 44/44。 | `.superpowers/sdd/reports/task-final-gaps-report.md`、`.superpowers/sdd/reports/task-9b-report.md` |
 | L6.4 500 节点/800 边选择、拖动、缩放、保存无冻结 | 通过 | 四次采样：选择 62.7-91.1ms，缩放 110.0-122.4ms，拖动 73.9-103.5ms，保存 239.9-346.4ms，均低于门禁。 | `e2e/performance.spec.ts`、`test-results/performance.json`、`.superpowers/sdd/reports/task-9b-report.md` |
 | L6.5 SVG/PNG/PDF 导出，安全链接和 PNG DPI 不改文档 | 通过 | Vitest 导出、Rust 导出 6 项集成测试和 E2E 96/150/300 DPI/PDF URI/JSON 断言通过。 | `tests/unit/editor/export`、`src-tauri/tests/export_commands.rs`、`e2e/editor-core.spec.ts` |
 | L6.6 Windows 与 macOS 分别执行完整关键路径 E2E并留报告/截图 | 未覆盖 | Windows Chromium E2E 已执行；macOS Intel 与 Apple Silicon 本地完整关键路径均未执行。CI 矩阵不能替代证据。 | `.superpowers/sdd/reports/task-9b-report.md`、`.github/workflows/release-gate.yml`（仅配置） |
@@ -75,7 +75,7 @@
 
 | 项目 | 状态 | 说明 |
 |---|---|---|
-| Windows release no-bundle | 通过 | `pnpm tauri build --no-bundle -- -- --locked` 通过，exe 为 15,496,704 bytes；本任务未执行启动 smoke。 |
+| Windows release no-bundle 与进程启动 smoke | 通过 | 当前源码 `pnpm tauri build --no-bundle -- -- --locked` 通过，exe 为 15,497,216 bytes；最终验证 PID 33096 存活 8 秒后停止。仅证明进程启动存活，不代表窗口内容或完整桌面关键路径通过。 |
 | Windows NSIS/MSI 安装与签名 | 未覆盖 | 工作流已配置；未使用真实证书 secrets 构建、安装和验证。 |
 | macOS app/DMG 两架构 | 未覆盖 | 仅有 runner/target 配置，没有本地构建、安装和关键路径报告。 |
 | macOS 签名与公证 | 未覆盖 | 未使用真实 Apple secrets 执行签名或公证。 |
@@ -83,4 +83,4 @@
 
 ## 结论
 
-Windows 自动化、性能、导出、no-bundle 构建和业务数据 JSON 编辑有通过证据；macOS 两架构本地 E2E、真实签名/公证、显式断网桌面路径、Windows 启动 smoke 和跳线视觉语义仍未覆盖。故整体状态保持 **未完成（存在未覆盖）**，不得宣称产品或发布验收完成。
+Windows 自动化、性能、导出、no-bundle 构建、进程启动 smoke、跳线视觉和业务数据 JSON 编辑有通过证据；macOS 两架构本地 E2E、真实签名/公证、Windows 安装与签名以及显式断网桌面路径仍未覆盖。故整体状态保持 **未完成（存在未覆盖）**，不得宣称产品或发布验收完成。

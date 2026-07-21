@@ -1,3 +1,5 @@
+import { mkdir, stat } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import {
   captureX6CellBeforeRebuild,
   expect,
@@ -194,4 +196,10 @@ test('creates, edits, formats, persists, recovers, and exports through real UI p
   await expect(page.getByRole('dialog', { name: '发现未完成的编辑' })).toBeVisible()
   await page.getByTestId('recovery-restore').click()
   await expect.poll(async () => (await snapshot(page)).dirty).toBe(true)
+
+  const screenshotDirectory = resolve('test-results/screenshots')
+  await mkdir(screenshotDirectory, { recursive: true })
+  const screenshotPath = resolve(screenshotDirectory, 'editor-core-complete.png')
+  await page.screenshot({ path: screenshotPath, fullPage: true })
+  expect((await stat(screenshotPath)).size).toBeGreaterThan(0)
 })

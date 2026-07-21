@@ -25,6 +25,8 @@ pnpm tauri build --no-bundle -- -- --locked
 
 Windows no-bundle 产物为 `src-tauri/target/release/flowchart-editor.exe`；macOS 为 `src-tauri/target/release/flowchart-editor`。如执行启动 smoke，必须在验收报告记录启动命令、PID、观察时长、窗口/异常结果和退出方式；没有执行就标「未覆盖」，不能只凭文件存在推断可启动。
 
+2026-07-21 Windows x64 本机证据：当前源码执行 `pnpm tauri build --no-bundle -- -- --locked` 成功；随后最终验证执行 `powershell -ExecutionPolicy Bypass -File scripts/windows-startup-smoke.ps1`，进程 PID 33096 存活 8 秒，exe 路径为 `src-tauri/target/release/flowchart-editor.exe`、大小 15,497,216 bytes，并在脚本 `finally` 中通过 `Stop-Process` 停止。此 smoke 只证明进程启动后短时存活，不验证窗口内容、保存/打开/导出等 UI 语义，也不替代 Windows 安装包或 macOS 验收。
+
 ## 平台包
 
 - Windows：`pnpm tauri build --bundles nsis,msi -- -- --locked`，产出 NSIS 与 MSI。
