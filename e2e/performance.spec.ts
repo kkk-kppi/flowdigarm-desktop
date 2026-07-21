@@ -26,7 +26,7 @@ test('500 nodes and 800 edges remain selectable, draggable, zoomable, and saveab
     const selectionBox = await x6Cell(page, selectedId).boundingBox()
     expect(selectionBox).not.toBeNull()
     let started = await now(page)
-    await page.mouse.click(selectionBox!.x + selectionBox!.width / 2, selectionBox!.y + selectionBox!.height / 4)
+    await page.mouse.click(selectionBox!.x + selectionBox!.width / 2, selectionBox!.y + selectionBox!.height / 2)
     await expect.poll(() => page.evaluate(() => window.__FLOW_E2E__!.selectionIds())).toEqual([selectedId])
     selection.push(await now(page) - started)
 
@@ -40,9 +40,9 @@ test('500 nodes and 800 edges remain selectable, draggable, zoomable, and saveab
     expect(box).not.toBeNull()
     const nodeBefore = await page.evaluate((id) => window.__FLOW_E2E__!.nodePosition(id), selectedId)
     expect(nodeBefore).not.toBeNull()
-    await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 4)
+    await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2)
     await page.mouse.down()
-    await page.mouse.move(box!.x + box!.width / 2 + 20, box!.y + box!.height / 4 + 12, { steps: 4 })
+    await page.mouse.move(box!.x + box!.width / 2 + 20, box!.y + box!.height / 2 + 12, { steps: 4 })
     started = await now(page)
     await page.mouse.up()
     await expect.poll(async () => {
