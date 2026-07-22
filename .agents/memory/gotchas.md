@@ -19,3 +19,9 @@
 
 - Vitest 配置 `globals: true` 并提供 `vitest/globals` 类型，测试中可直接使用全局 API。
 - Playwright 当前仅配置 Chromium 项目，且 `workers: 1`、`fullyParallel: false`。
+
+## X6 文本布局
+
+- X6 `lineHeight` 会直接成为 SVG `<tspan>` 的绝对 `dy`；领域模型保存的是倍率，映射时必须使用 `fontSize * lineHeight`，否则多行文字会重叠。
+- 节点实时画布、覆盖编辑器和 SVG 导出必须共用 `textAreaForNode`，统一叠加形状 `textAreaInset`、文本块四边距及段前/段后，避免编辑态与导出漂移。
+- X6 `textWrap` 的有限 `height` 会删行，极大 `height` 遇到超宽字形又可能无进展循环；节点标签不得使用它。X6 与 SVG 导出共同消费 `wrapHorizontalText` 的预分行结果。

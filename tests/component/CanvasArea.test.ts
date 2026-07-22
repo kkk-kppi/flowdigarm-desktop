@@ -58,7 +58,7 @@ function linkedDocument(link: string, edgeLink?: string): DiagramDocument {
   return linked
 }
 
-function mountCanvas(link: string, attachToBody = false) {
+function mountCanvas(link: string, attachToBody = false, stubTextEditor = true) {
   setActivePinia(createPinia())
   const documentStore = useDocumentStore()
   documentStore.loadDocument(linkedDocument(link))
@@ -71,7 +71,7 @@ function mountCanvas(link: string, attachToBody = false) {
         PageFrame: true,
         RulerCorner: true,
         RulerOverlay: true,
-        TextEditorOverlay: true,
+        ...(stubTextEditor ? { TextEditorOverlay: true } : {}),
       },
       provide: {
         [editorServicesKey as symbol]: {
@@ -268,6 +268,50 @@ describe('CanvasArea 超链接点击', () => {
     expect(wrapper.findComponent({ name: 'TextEditorOverlay' }).exists()).toBe(true)
     canvas.locateCell('node-2')
     expect(selectionStore.selectedIds).toEqual(['node-2'])
+    wrapper.unmount()
+  })
+
+  it('切换编辑目标时重建会话，不把上一节点草稿带到新目标', async () => {
+    const { wrapper, documentStore } = mountCanvas('https://example.com', true, false)
+    const canvas = wrapper.vm as unknown as CanvasController
+    canvas.editNodeText('node-1')
+    await flushPromises()
+    await wrapper.find('textarea').setValue('未提交草稿')
+
+    canvas.editNodeText('node-2')
+    await flushPromises()
+    expect((wrapper.find('textarea').element as HTMLTextAreaElement).value)
+      .toBe(documentStore.activePage!.nodes.find(({ id }) => id === 'node-2')!.text?.value ?? '')
+    wrapper.unmount()
+  })
+
+  it('重新打开同一目标时也建立新会话', async () => {
+    const { wrapper, documentStore } = mountCanvas('https://example.com', true, false)
+    const canvas = wrapper.vm as unknown as CanvasController
+    canvas.editNodeText('node-1')
+    await flushPromises()
+    await wrapper.find('textarea').setValue('未提交草稿')
+
+    canvas.editNodeText('node-1')
+    await flushPromises()
+    expect((wrapper.find('textarea').element as HTMLTextAreaElement).value)
+      .toBe(documentStore.activePage!.nodes.find(({ id }) => id === 'node-1')!.text?.value ?? '')
+    wrapper.unmount()
+  })
+
+  it.each(['Escape', 'Control+Enter'])('键盘 %s 关闭编辑器后恢复画布焦点', async (key) => {
+    const { wrapper } = mountCanvas('https://example.com', true, false)
+    const canvas = wrapper.vm as unknown as CanvasController
+    canvas.editNodeText('node-1')
+    await flushPromises()
+    const textarea = wrapper.find('textarea')
+    if (key === 'Control+Enter') await textarea.setValue('已提交')
+    await textarea.trigger('keydown', key === 'Escape'
+      ? { key: 'Escape' }
+      : { key: 'Enter', ctrlKey: true })
+    await flushPromises()
+
+    expect(document.activeElement).toBe(wrapper.find('[data-testid="x6-canvas"]').element)
     wrapper.unmount()
   })
 

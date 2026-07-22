@@ -36,12 +36,15 @@
       />
       <TextEditorOverlay
         v-if="editingSession && activePage"
+        :key="editingSessionKey"
         :page-id="activePage.id"
         :target="editingSession.target"
         :area-pt="editingSession.areaPt"
         :content="editingSession.content"
         :viewport="viewport"
-        @close="editingSession = null"
+        :angle="editingSession.angle"
+        :rotation-center-pt="editingSession.rotationCenterPt"
+        @close="closeTextEditor"
       />
     </div>
     <CanvasContextMenu
@@ -62,7 +65,7 @@
 // 视口控制器按页取自 PageManager，切换页时重渲染并应用该页视口状态（每页首次显示时 fitToPage 居中）。
 // 本文件不写 pt↔px 换算公式（一律经 ViewportController/ViewportTransform）。
 // X6 手势回流一律转为命令经 document-store.executeCommand 执行（一次手势一条记录）。
-import { computed, inject, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   createDefaultTextContent,
   type DiagramDocument,
@@ -75,7 +78,7 @@ import { ViewportTransform, type ViewportState } from '@/application/viewport/vi
 import { resolvePageBackgroundChain } from '@/application/pages/page-background-chain'
 import { computeRestoredSelection } from '@/application/selection/restore-selection'
 import { GraphAdapter, type EdgeEndpointRef } from '@/infrastructure/x6/graph-adapter'
-import { textAreaForNode } from '@/infrastructure/x6/text-layout'
+import { estimateTextSizePt, textAreaForNode } from '@/infrastructure/x6/text-layout'
 import type { TextTarget } from '@/application/text/text-target'
 import { shapeRegistry } from '@/application/shapes/shape-registry'
 import '@/application/shapes/common-shapes' // 模块副作用：注册内置形状
@@ -184,11 +187,27 @@ function findEdge(edgeId: string): DiagramEdge | undefined {
 // ---------- 文本编辑会话（覆盖层；一次会话一条 EditTextCommand，由覆盖层提交） ----------
 
 /** 打开中的文本编辑会话（null = 未编辑）；编辑期间画布键盘快捷键挂起。 */
+let textEditGeneration = 0
 const editingSession = ref<{
+  key: number
   target: TextTarget
   areaPt: { x: number; y: number; width: number; height: number }
   content: TextContent
+  angle?: number
+  rotationCenterPt?: { x: number; y: number }
 } | null>(null)
+
+const editingSessionKey = computed(() => {
+  return editingSession.value?.key ?? 0
+})
+
+async function closeTextEditor(restoreCanvasFocus = false): Promise<void> {
+  editingSession.value = null
+  if (restoreCanvasFocus) {
+    await nextTick()
+    focusCanvas()
+  }
+}
 
 /** 打开节点文本编辑：文本区 = bbox − 形状 textAreaInset（pt，文档坐标）。 */
 function openNodeTextEditor(nodeId: string): void {
@@ -198,10 +217,14 @@ function openNodeTextEditor(nodeId: string): void {
     return
   }
   const definition = shapeRegistry.get(node.shape)
+  const content = node.text ?? createDefaultTextContent()
   editingSession.value = {
+    key: ++textEditGeneration,
     target: { kind: 'node', nodeId },
-    areaPt: textAreaForNode(node, definition.textAreaInset),
-    content: node.text ?? createDefaultTextContent(),
+    areaPt: textAreaForNode(node, definition.textAreaInset, content),
+    content,
+    angle: node.angle,
+    rotationCenterPt: { x: node.x + node.width / 2, y: node.y + node.height / 2 },
   }
 }
 
@@ -212,6 +235,7 @@ function openEdgeTextEditor(edgeId: string): void {
     return
   }
   editingSession.value = {
+    key: ++textEditGeneration,
     target: { kind: 'edgeLabel', edgeId, labelIndex: 0 },
     areaPt: edgeLabelAreaPt(edge),
     content: edge.labels[0]?.text ?? createDefaultTextContent(),
@@ -224,6 +248,30 @@ function edgeLabelAreaPt(edge: DiagramEdge): { x: number; y: number; width: numb
   let point: { x: number; y: number } | null = null
   if (adapter) {
     const view = adapter.getGraph().findViewByCell(edge.id)
+    const textElement = (view as unknown as { container?: Element } | null)?.container?.querySelector('text')
+    const graphContainer = containerRef.value
+    if (textElement && graphContainer) {
+      const textRect = textElement.getBoundingClientRect()
+      const containerRect = graphContainer.getBoundingClientRect()
+      if (textRect.width > 0 && textRect.height > 0) {
+        const transform = new ViewportTransform(viewport.value)
+        const topLeft = transform.pointToDocument({
+          x: textRect.left - containerRect.left,
+          y: textRect.top - containerRect.top,
+        })
+        const bottomRight = transform.pointToDocument({
+          x: textRect.right - containerRect.left,
+          y: textRect.bottom - containerRect.top,
+        })
+        const padding = 4
+        return {
+          x: topLeft.x - padding,
+          y: topLeft.y - padding,
+          width: bottomRight.x - topLeft.x + padding * 2,
+          height: bottomRight.y - topLeft.y + padding * 2,
+        }
+      }
+    }
     if (view && 'getPointAtRatio' in view) {
       point = (view as { getPointAtRatio: (ratio: number) => { x: number; y: number } })
         .getPointAtRatio(position)
@@ -241,7 +289,10 @@ function edgeLabelAreaPt(edge: DiagramEdge): { x: number; y: number; width: numb
           }
         : { x: 0, y: 0 }
   }
-  return { x: point.x - 60, y: point.y - 14, width: 120, height: 28 }
+  const estimated = estimateTextSizePt(edge.labels[0]?.text ?? createDefaultTextContent())
+  const width = Math.max(40, estimated.width + 8)
+  const height = Math.max(28, estimated.height + 8)
+  return { x: point.x - width / 2, y: point.y - height / 2, width, height }
 }
 
 /** 双击创建入口（App 转发）：以视口中心为放置点（px→pt 经 ViewportTransform）。 */

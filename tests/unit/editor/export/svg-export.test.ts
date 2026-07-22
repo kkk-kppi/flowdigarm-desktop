@@ -130,8 +130,55 @@ describe('renderPageSvg', () => {
 
     expect(baselines).toHaveLength(3)
     expect(baselines.every((baseline) => baseline >= top && baseline <= bottom)).toBe(true)
-    if (verticalAlign === 'bottom') expect(baselines.at(-1)).toBe(bottom)
-    else expect((baselines[0] - text.style.fontSize + baselines.at(-1)!) / 2).toBeCloseTo((top + bottom) / 2)
+    if (verticalAlign === 'bottom') expect(baselines.at(-1)).toBe(bottom - text.style.fontSize * 0.3)
+    else expect(baselines[0]).toBeCloseTo((top + bottom) / 2 + text.style.fontSize * 0.3 - 12)
+  })
+
+  it.each(['top', 'middle', 'bottom'] as const)(
+    'preserves nominal five-line spacing and visible %s overflow outside a short node',
+    (verticalAlign) => {
+      const text = createDefaultTextContent('第一行\n第二行\n第三行\n第四行\n第五行')
+      text.style.fontSize = 10
+      text.paragraph.lineHeight = 1.2
+      text.block.verticalAlign = verticalAlign
+      const node = createTestNode({ id: `overflow-${verticalAlign}`, width: 120, height: 40, text })
+      const page = createEmptyPage({ id: 'page', nodes: [node] })
+      const { svg } = renderPageSvg({ ...createEmptyDocument(), pages: [page] }, page.id)
+      const group = svg.match(new RegExp(`<g data-cell-id="overflow-${verticalAlign}"[^>]*>([\\s\\S]*?)<\\/g>`))?.[1] ?? ''
+      const baselines = [...group.matchAll(/<tspan[^>]* y="([\d.-]+)"/g)].map((match) => Number(match[1]))
+      const inset = shapeRegistry.get('rect').textAreaInset
+      const top = inset.top + text.block.marginTop
+      const bottom = node.height - inset.bottom - text.block.marginBottom
+
+      expect(baselines).toHaveLength(5)
+      expect(baselines.slice(1).map((value, index) => value - baselines[index]))
+        .toEqual([12, 12, 12, 12])
+      if (verticalAlign === 'top') {
+        expect(baselines[0]).toBe(top + text.style.fontSize * 0.8)
+        expect(baselines.at(-1)).toBeGreaterThan(bottom)
+      } else if (verticalAlign === 'bottom') {
+        expect(baselines[0]).toBeLessThan(top)
+        expect(baselines.at(-1)).toBe(bottom - text.style.fontSize * 0.3)
+      } else {
+        expect(baselines[0]).toBeLessThan(top)
+        expect(baselines.at(-1)).toBeGreaterThan(bottom)
+        expect(baselines[0]).toBe((top + bottom) / 2 + text.style.fontSize * 0.3 - 24)
+      }
+    },
+  )
+
+  it('wraps a long horizontal source line to the text-area width before exporting tspans', () => {
+    const text = createDefaultTextContent('甲乙丙丁戊')
+    text.style.fontSize = 10
+    text.paragraph.lineHeight = 1.2
+    text.block.horizontalAlign = 'left'
+    text.block.verticalAlign = 'top'
+    const node = createTestNode({ id: 'auto-wrap', width: 40, height: 40, text })
+    const page = createEmptyPage({ id: 'page', nodes: [node] })
+    const { svg } = renderPageSvg({ ...createEmptyDocument(), pages: [page] }, page.id)
+    const group = svg.match(/<g data-cell-id="auto-wrap"[^>]*>([\s\S]*?)<\/g>/)?.[1] ?? ''
+    const lines = [...group.matchAll(/<tspan[^>]*>([^<]*)<\/tspan>/g)].map((match) => match[1])
+    expect(lines).toEqual(['甲乙', '丙丁', '戊'])
   })
 
   it('renders straight, orthogonal, and curved edge paths with vertices, dash, markers, opacity, labels, and z-order', () => {

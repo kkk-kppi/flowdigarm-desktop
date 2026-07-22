@@ -1,6 +1,6 @@
 // tests/unit/editor/text-layout.test.ts
 // 文本布局纯函数：竖排逐字排版（禁止旋转整段）、对齐/粗斜下划线 attrs 映射、文本区内缩计算。
-import { layoutText, textAreaForNode } from '@/infrastructure/x6/text-layout'
+import { estimateTextSizePt, layoutText, textAreaForNode } from '@/infrastructure/x6/text-layout'
 import { createDefaultTextContent, type TextContent } from '@/domain/diagram'
 import { createTestNode } from '../../helpers/test-document'
 
@@ -32,13 +32,28 @@ describe('layoutText 竖排逐字排版', () => {
     expect(result.lines).toEqual(['流', '', '程'])
   })
 
-  it('横排保持源文本行；wrap 开启交给 X6 textWrap', () => {
+  it('横排由共享分行器预处理，不再交给 X6 textWrap', () => {
     const result = layoutText({
       content: createDefaultTextContent('第一行\n第二行'),
       areaPt: { width: 100, height: 40 },
     })
     expect(result.lines).toEqual(['第一行', '第二行'])
-    expect(result.wrap).toBe(true)
+    expect(result.wrap).toBe(false)
+  })
+
+  it('横排按文本区宽度预分行且每次至少消费一个字符', () => {
+    const content = createDefaultTextContent('甲乙丙')
+    const result = layoutText({ content, areaPt: { width: 24, height: 10 } })
+    expect(result.lines).toEqual(['甲乙', '丙'])
+    expect(result.wrap).toBe(false)
+  })
+
+  it('五行横排完整保留所有源行并维持名义行距', () => {
+    const content = createDefaultTextContent('第一行\n第二行\n第三行\n第四行\n第五行')
+    const result = layoutText({ content, areaPt: { width: 100, height: 20 } })
+    expect(result.lines).toHaveLength(5)
+    expect(result.lines.at(-1)).toBe('第五行')
+    expect(result.attrs.lineHeight).toBe(14.4)
   })
 })
 
@@ -139,7 +154,8 @@ describe('layoutText attrs 映射', () => {
     }
     const { attrs } = layoutText({ content, areaPt: { width: 10, height: 10 } })
     expect(attrs.textBackground).toBe('#FFFF00')
-    expect(attrs.lineHeight).toBe(1.5)
+    // X6 的 lineHeight 是 SVG 绝对长度，不是 CSS 倍率：12pt × 1.5 = 18pt。
+    expect(attrs.lineHeight).toBe(18)
   })
 
   it('未设置背景色时不出现 textBackground 键', () => {
@@ -163,5 +179,33 @@ describe('textAreaForNode 文本区内缩', () => {
     const area = textAreaForNode(node, { top: 8, right: 8, bottom: 8, left: 8 })
     expect(area.width).toBe(0)
     expect(area.height).toBe(0)
+  })
+
+  it('在形状内缩上叠加文本四边距和段前段后', () => {
+    const content = createDefaultTextContent('甲')
+    content.block = {
+      ...content.block,
+      marginTop: 2,
+      marginRight: 3,
+      marginBottom: 5,
+      marginLeft: 7,
+    }
+    content.paragraph = { ...content.paragraph, before: 11, after: 13 }
+    const node = createTestNode({ id: 'n-1', x: 10, y: 20, width: 100, height: 80, text: content })
+    const area = textAreaForNode(node, { top: 4, right: 6, bottom: 8, left: 10 }, content)
+    expect(area).toEqual({ x: 27, y: 37, width: 74, height: 37 })
+  })
+})
+
+describe('estimateTextSizePt 边标签编辑尺寸', () => {
+  it('按最长横排行与行数估算多行文本尺寸', () => {
+    const content = createDefaultTextContent('第一行\n第二行')
+    expect(estimateTextSizePt(content)).toEqual({ width: 36, height: 28.8 })
+  })
+
+  it('竖排按单列字数估算高度', () => {
+    const content = createDefaultTextContent('流程图')
+    content.block.direction = 'vertical'
+    expect(estimateTextSizePt(content)).toEqual({ width: 14.4, height: 43.2 })
   })
 })

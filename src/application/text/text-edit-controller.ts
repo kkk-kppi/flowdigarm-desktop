@@ -9,10 +9,26 @@ export class TextEditController {
     private readonly execute: (command: EditorCommand) => void,
   ) {}
 
-  commit(pageId: string, target: TextTarget, before: string, after: string): void {
+  commit(
+    pageId: string,
+    target: TextTarget,
+    before: string,
+    after: string,
+    expectedDocument: DiagramDocument,
+  ): void {
+    const document = this.getDocument()
+    if (document !== expectedDocument) {
+      throw new Error('文档已发生变化，请重新编辑。')
+    }
+    const page = document.pages.find(({ id }) => id === pageId)
+    const current = target.kind === 'node'
+      ? page?.nodes.find(({ id }) => id === target.nodeId)?.text?.value ?? ''
+      : page?.edges.find(({ id }) => id === target.edgeId)?.labels[target.labelIndex]?.text.value ?? ''
+    if (current !== before) {
+      throw new Error('文本已被其他操作修改，请重新编辑。')
+    }
     const edgeLabelBefore = target.kind === 'edgeLabel'
-      ? this.getDocument().pages.find(({ id }) => id === pageId)
-        ?.edges.find(({ id }) => id === target.edgeId)?.labels[target.labelIndex]
+      ? page?.edges.find(({ id }) => id === target.edgeId)?.labels[target.labelIndex]
       : undefined
     this.execute(new EditTextCommand(target.kind === 'edgeLabel'
       ? {

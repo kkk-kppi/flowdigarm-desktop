@@ -52,6 +52,66 @@ test('selects singly, with Shift, and by rubberband; shows transform handles', a
   await expect(page.locator('.x6-widget-transform-rotate')).toBeVisible()
 })
 
+test('keeps all centered multiline text visible beyond a short fixed node', async ({ page }) => {
+  const beforeState = await snapshot(page)
+  const beforeNode = beforeState.document.pages[0].nodes.find(({ id }) => id === ids.first)!
+  await x6Cell(page, ids.first).dblclick({ force: true })
+  const overlay = page.getByTestId('text-editor-overlay')
+  const textarea = page.getByTestId('text-editor-textarea')
+  await expect(textarea).toBeFocused()
+  await expect(overlay).toHaveCSS('background-color', 'rgb(255, 255, 255)')
+
+  const overlayBox = await overlay.boundingBox()
+  const textareaBox = await textarea.boundingBox()
+  expect(overlayBox && textareaBox).toBeTruthy()
+  expect(Math.abs(
+    textareaBox!.y + textareaBox!.height / 2 - (overlayBox!.y + overlayBox!.height / 2),
+  )).toBeLessThan(2)
+
+  await textarea.fill('第一行\n第二行\n第三行\n第四行\n第五行')
+  const beforeCommit = await captureX6CellBeforeRebuild(page, ids.first)
+  await textarea.press('Control+Enter')
+  await waitForRebuiltX6Cell(page, ids.first, beforeCommit)
+  const cell = x6Cell(page, ids.first)
+  const spans = cell.locator('text tspan')
+  const lineOffsets = await spans.evaluateAll((items) =>
+    items.slice(1).map((span) => Number(span.getAttribute('dy'))),
+  )
+  expect(lineOffsets).toEqual([14.4, 14.4, 14.4, 14.4])
+  const bodyBox = await cell.locator('rect').first().boundingBox()
+  const firstLineBox = await spans.first().boundingBox()
+  const lastLineBox = await spans.last().boundingBox()
+  expect(bodyBox && firstLineBox && lastLineBox).toBeTruthy()
+  expect(firstLineBox!.y).toBeLessThan(bodyBox!.y)
+  expect(lastLineBox!.y + lastLineBox!.height).toBeGreaterThan(bodyBox!.y + bodyBox!.height)
+  const afterState = await snapshot(page)
+  const afterNode = afterState.document.pages[0].nodes.find(({ id }) => id === ids.first)!
+  expect(afterNode).toMatchObject({
+    x: beforeNode.x,
+    y: beforeNode.y,
+    width: beforeNode.width,
+    height: beforeNode.height,
+    angle: beforeNode.angle,
+  })
+  expect(afterState.revision).toBe(beforeState.revision + 1)
+  expect(afterState.undoLabel).toBe('编辑文本')
+})
+
+test('prewraps a long logical line without X6 textWrap truncation', async ({ page }) => {
+  await x6Cell(page, ids.first).dblclick({ force: true })
+  const textarea = page.getByTestId('text-editor-textarea')
+  const value = '甲乙丙丁戊己庚辛壬癸'
+  await textarea.fill(value)
+  const beforeCommit = await captureX6CellBeforeRebuild(page, ids.first)
+  await textarea.press('Control+Enter')
+  await waitForRebuiltX6Cell(page, ids.first, beforeCommit)
+
+  const spans = x6Cell(page, ids.first).locator('text tspan')
+  const lines = await spans.allTextContents()
+  expect(lines.length).toBeGreaterThan(1)
+  expect(lines.join('')).toBe(value)
+})
+
 test('commits one drag history when pointerup occurs outside the node', async ({ page }) => {
   const before = await snapshot(page)
   const nodeBefore = before.document.pages[0].nodes.find(({ id }) => id === ids.third)!

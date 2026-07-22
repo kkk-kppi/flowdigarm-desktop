@@ -17,6 +17,8 @@ interface OverlayProps {
   areaPt: typeof AREA_PT
   content: TextContent
   viewport: typeof VIEWPORT
+  angle?: number
+  rotationCenterPt?: { x: number; y: number }
 }
 
 function baseProps(partial: Partial<OverlayProps> = {}): OverlayProps {
@@ -96,6 +98,86 @@ describe('TextEditorOverlay 位置与镜像', () => {
     expect(textarea.value).toBe('开始')
     expect(document.activeElement).toBe(textarea)
   })
+
+  it('未设置文字背景时以面板色遮住 X6 原标签', () => {
+    const { wrapper } = mountOverlay()
+    const overlay = wrapper.find<HTMLElement>('[data-testid="text-editor-overlay"]')
+    expect(overlay.element.style.background).toBe('var(--color-panel)')
+  })
+
+  it('编辑内容允许超过固定锚区高度且不被外层裁剪', () => {
+    const content = createDefaultTextContent('第一行\n第二行\n第三行\n第四行\n第五行')
+    const { wrapper } = mountOverlay(baseProps({
+      content,
+      areaPt: { ...AREA_PT, height: 20 },
+    }))
+    const overlay = wrapper.find<HTMLElement>('[data-testid="text-editor-overlay"]').element
+    const editorContent = wrapper.find<HTMLElement>('.text-editor-content').element
+    expect(overlay.style.overflow).toBe('visible')
+    expect(editorContent.style.maxHeight).toBe('none')
+    expect(editorContent.style.overflow).toBe('visible')
+  })
+
+  it.each([
+    ['top', 'flex-start'],
+    ['middle', 'center'],
+    ['bottom', 'flex-end'],
+  ] as const)('将垂直对齐 %s 映射为编辑文本块的 %s', (verticalAlign, alignItems) => {
+    const content = createDefaultTextContent('开始')
+    content.block.verticalAlign = verticalAlign
+    const { wrapper } = mountOverlay(baseProps({ content }))
+    const overlay = wrapper.find<HTMLElement>('[data-testid="text-editor-overlay"]')
+    expect(overlay.element.style.alignItems).toBe(alignItems)
+  })
+
+  it('围绕节点中心旋转编辑区域，与 X6 节点旋转一致', () => {
+    const { wrapper } = mountOverlay(baseProps({
+      angle: 90,
+      rotationCenterPt: { x: 75, y: 60 },
+    }))
+    const overlay = wrapper.find<HTMLElement>('[data-testid="text-editor-overlay"]').element
+    expect(overlay.style.transform).toBe('rotate(90deg)')
+    // 节点中心相对 area 左上角：(75-15, 60-30)pt → (80, 40)px。
+    expect(overlay.style.transformOrigin).toBe('80px 40px')
+  })
+
+  it('竖排文本逐字分行，源换行显示为空行槽位', async () => {
+    const content = createDefaultTextContent('开始')
+    content.block.direction = 'vertical'
+    const { wrapper, store } = mountOverlay(baseProps({ content }))
+    const textarea = wrapper.find('textarea').element as HTMLTextAreaElement
+    expect(textarea.value).toBe('开\n始')
+
+    await wrapper.find('textarea').setValue('开\n\n始')
+    await wrapper.vm.$nextTick()
+    expect((wrapper.find('textarea').element as HTMLTextAreaElement).value).toBe('开\n\u200B\n始')
+    await wrapper.find('textarea').trigger('blur')
+    expect(store.document.pages[0].nodes[0].text?.value).toBe('开\n始')
+  })
+
+  it('竖排粘贴多字符后立即恢复逐字分行，清空仍提交空字符串', async () => {
+    const content = createDefaultTextContent('开始')
+    content.block.direction = 'vertical'
+    const { wrapper, store } = mountOverlay(baseProps({ content }))
+    const textarea = wrapper.find('textarea')
+    await textarea.setValue('流程')
+    await wrapper.vm.$nextTick()
+    expect((textarea.element as HTMLTextAreaElement).value).toBe('流\n程')
+
+    await textarea.setValue('')
+    await textarea.trigger('blur')
+    expect(store.document.pages[0].nodes[0].text?.value).toBe('')
+  })
+
+  it('竖排值中的真实零宽空格使用转义表示，不会变成源换行', async () => {
+    const content = createDefaultTextContent('开\u200B始')
+    content.block.direction = 'vertical'
+    const { wrapper } = mountOverlay(baseProps({ content }))
+    expect((wrapper.find('textarea').element as HTMLTextAreaElement).value)
+      .toBe('开\n\u200B\u200B\n始')
+    await wrapper.find('textarea').trigger('blur')
+    expect(wrapper.emitted('close')).toHaveLength(1)
+  })
 })
 
 describe('TextEditorOverlay 提交与取消', () => {
@@ -150,6 +232,24 @@ describe('TextEditorOverlay 提交与取消', () => {
     expect(store.document.pages[0].nodes[0].text?.value).toBe('Ctrl提交')
   })
 
+  it('提交失败时保留编辑器与草稿，允许用户修正后重试', async () => {
+    const { wrapper, store } = mountOverlay()
+    const textarea = wrapper.find('textarea')
+    const overlong = '字'.repeat(10_001)
+    await textarea.setValue(overlong)
+    await textarea.trigger('keydown', { key: 'Enter', ctrlKey: true })
+
+    expect(wrapper.emitted('close')).toBeUndefined()
+    expect((textarea.element as HTMLTextAreaElement).value).toBe(overlong)
+    expect(store.lastNotice).toBe('文本长度超出限制。')
+    expect(store.document.pages[0].nodes[0].text?.value).toBe('开始')
+
+    await textarea.setValue('修正后文本')
+    await textarea.trigger('keydown', { key: 'Enter', ctrlKey: true })
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    expect(store.document.pages[0].nodes[0].text?.value).toBe('修正后文本')
+  })
+
   it('Enter（无 Ctrl）不提交：保持编辑中', async () => {
     const { wrapper } = mountOverlay()
     const textarea = wrapper.find('textarea')
@@ -186,5 +286,25 @@ describe('TextEditorOverlay IME 组合', () => {
     await textarea.trigger('keydown', { key: 'Enter', ctrlKey: true })
     expect(wrapper.emitted('close')).toBeUndefined()
     expect(store.canUndo).toBe(false)
+  })
+
+  it('composition 中 Escape 只交给输入法，不取消编辑会话', async () => {
+    const { wrapper, store } = mountOverlay()
+    const textarea = wrapper.find('textarea')
+    await textarea.trigger('compositionstart')
+    await textarea.setValue('ni')
+    await textarea.trigger('keydown', { key: 'Escape', isComposing: true })
+    expect(wrapper.emitted('close')).toBeUndefined()
+    expect(store.canUndo).toBe(false)
+  })
+})
+
+describe('TextEditorOverlay 可访问性', () => {
+  it.each([
+    [{ kind: 'node', nodeId: 'node-1' }, '编辑节点文本'],
+    [{ kind: 'edgeLabel', edgeId: 'edge-1', labelIndex: 0 }, '编辑连线标签'],
+  ] as const)('按目标类型提供编辑控件名称', (target, label) => {
+    const { wrapper } = mountOverlay(baseProps({ target }))
+    expect(wrapper.find('textarea').attributes('aria-label')).toBe(label)
   })
 })

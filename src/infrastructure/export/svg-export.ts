@@ -10,6 +10,7 @@ import type {
 } from '@/domain/diagram'
 import type { ExportLinkAnnotation } from '@/application/export/export-ports'
 import { buildEdgeGeometry } from './svg-edge-geometry'
+import { textAreaForNode, wrapHorizontalText } from '@/infrastructure/x6/text-layout'
 
 export interface RenderedPageSvg {
   svg: string
@@ -70,29 +71,31 @@ function textAnchor(content: TextContent): 'start' | 'middle' | 'end' {
   return { left: 'start', center: 'middle', right: 'end' }[content.block.horizontalAlign] as 'start' | 'middle' | 'end'
 }
 
-function textLayout(node: DiagramNode, content: TextContent): { x: number; baselines: number[]; area: { x: number; y: number; width: number; height: number } } {
+function textLayout(node: DiagramNode, content: TextContent): { x: number; lines: string[]; baselines: number[]; area: { x: number; y: number; width: number; height: number } } {
   const { block, style, paragraph } = content
   const inset = shapeRegistry.get(node.shape).textAreaInset
-  const left = node.x + inset.left + block.marginLeft
-  const right = Math.max(left, node.x + node.width - inset.right - block.marginRight)
-  const top = node.y + inset.top + block.marginTop + paragraph.before
-  const bottom = Math.max(top, node.y + node.height - inset.bottom - block.marginBottom - paragraph.after)
-  const width = Math.max(0, right - left)
-  const height = Math.max(0, bottom - top)
-  const lineCount = Math.max(1, content.block.direction === 'vertical' ? [...content.value].length : content.value.split('\n').length)
-  const baselineOffset = Math.min(style.fontSize, height)
+  const area = textAreaForNode(node, inset, content)
+  const left = area.x
+  const right = area.x + area.width
+  const top = area.y
+  const bottom = area.y + area.height
+  const { height } = area
+  const lines = content.block.direction === 'vertical'
+    ? [...content.value]
+    : wrapHorizontalText(content, area.width)
+  const lineCount = Math.max(1, lines.length)
   const advance = lineCount > 1
-    ? Math.min(style.fontSize * paragraph.lineHeight, Math.max(0, height - baselineOffset) / (lineCount - 1))
+    ? style.fontSize * paragraph.lineHeight
     : 0
-  const blockHeight = baselineOffset + advance * (lineCount - 1)
-  const firstBaseline = block.verticalAlign === 'top' ? top + baselineOffset
-    : block.verticalAlign === 'bottom' ? bottom - advance * (lineCount - 1)
-      : top + (height - blockHeight) / 2 + baselineOffset
+  const firstBaseline = block.verticalAlign === 'top' ? top + style.fontSize * 0.8
+    : block.verticalAlign === 'bottom' ? bottom - style.fontSize * 0.3 - advance * (lineCount - 1)
+      : top + height / 2 + style.fontSize * 0.3 - advance * (lineCount - 1) / 2
   const x = block.horizontalAlign === 'left' ? left : block.horizontalAlign === 'right' ? right : (left + right) / 2
   return {
     x,
+    lines,
     baselines: Array.from({ length: lineCount }, (_, index) => firstBaseline + advance * index),
-    area: { x: left, y: top, width, height },
+    area,
   }
 }
 
@@ -107,11 +110,10 @@ function renderText(node: DiagramNode): string {
     ? `<rect x="${number(layout.area.x)}" y="${number(layout.area.y)}" width="${number(layout.area.width)}" height="${number(layout.area.height)}" fill="${xml(style.background)}"/>`
     : ''
   if (content.block.direction === 'vertical') {
-    const glyphs = [...content.value].map((character, index) => `<tspan x="${number(layout.x)}" y="${number(layout.baselines[index])}">${xml(character)}</tspan>`).join('')
+    const glyphs = layout.lines.map((character, index) => `<tspan x="${number(layout.x)}" y="${number(layout.baselines[index])}">${xml(character)}</tspan>`).join('')
     return `${background}<text ${attrs}>${glyphs}</text>`
   }
-  const lines = content.value.split('\n')
-  const spans = lines.map((line, index) => `<tspan x="${number(layout.x)}" y="${number(layout.baselines[index])}">${xml(line)}</tspan>`).join('')
+  const spans = layout.lines.map((line, index) => `<tspan x="${number(layout.x)}" y="${number(layout.baselines[index])}">${xml(line)}</tspan>`).join('')
   return `${background}<text ${attrs}>${spans}</text>`
 }
 

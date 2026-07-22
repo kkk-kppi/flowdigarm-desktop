@@ -128,7 +128,7 @@ function edgeStyleOf(edge: DiagramEdge): Record<string, unknown> {
  * 节点 label 渲染：文本区 = bbox − textAreaInset（经 layoutText 布局一次，文本与样式同源）。
  * 锚点定位：textAnchor/textVerticalAnchor 决定 x/y 落在文本区左中右/上中下；
  * refX/refY 归 0（覆盖 X6 默认 0.5 相对定位，避免与绝对 x/y 叠乘）。
- * 横排开启 textWrap（超出文本区裁剪，不自动增大节点）；竖排逐字 \n 分行、关闭 textWrap。
+ * 横排由共享测量函数按文本区宽度预分行；竖排逐字 \n 分行；两者都不使用 X6 textWrap。
  */
 function nodeLabelOf(
   node: DiagramNode,
@@ -137,7 +137,7 @@ function nodeLabelOf(
   if (!node.text) {
     return { style: {} }
   }
-  const area = textAreaForNode(node, definition.textAreaInset)
+  const area = textAreaForNode(node, definition.textAreaInset, node.text)
   const layout = layoutText({
     content: node.text,
     areaPt: { width: area.width, height: area.height },
@@ -162,9 +162,6 @@ function nodeLabelOf(
   }
   for (const [key, value] of Object.entries(layout.attrs)) {
     style[`label/${key}`] = value
-  }
-  if (layout.wrap) {
-    style['label/textWrap'] = { width: area.width, height: area.height, breakWord: true }
   }
   return { text: layout.lines.join('\n'), style }
 }
