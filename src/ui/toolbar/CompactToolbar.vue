@@ -330,11 +330,13 @@ function commitFontSize(event: Event): void {
 
 <style scoped>
 .compact-toolbar {
+  box-sizing: border-box;
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   height: var(--toolbar-h);
-  padding: 0 8px;
+  padding: 0 4px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-panel);
   overflow: hidden;
@@ -342,8 +344,10 @@ function commitFontSize(event: Event): void {
 
 .toolbar-group {
   display: flex;
+  flex: 0 1 auto;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  min-width: 0;
 }
 
 .toolbar-divider {
@@ -356,9 +360,9 @@ function commitFontSize(event: Event): void {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 2px;
   font-size: 12px;
-  padding: 4px 8px;
+  padding: 3px 4px;
   border: 1px solid transparent;
   border-radius: 3px;
   background: none;
@@ -397,33 +401,35 @@ function commitFontSize(event: Event): void {
 .style-btn,
 .align-btn {
   min-width: 26px;
-  padding-right: 4px;
-  padding-left: 4px;
 }
 
 .toolbar-control {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 
 .toolbar-group select,
 .font-size-input {
   font-size: 12px;
-  padding: 3px 6px;
+  padding: 2px 3px;
   border: 1px solid var(--color-border);
   border-radius: 3px;
   background: var(--color-panel);
   color: var(--color-text);
 }
 
+.toolbar-group select {
+  width: 76px;
+}
+
 .font-size-input {
-  width: 52px;
+  width: 44px;
 }
 
 .toolbar-group input[type='color'] {
-  width: 28px;
+  width: 24px;
   height: 24px;
   padding: 0;
   border: 1px solid var(--color-border);

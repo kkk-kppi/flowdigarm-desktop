@@ -94,6 +94,46 @@ test('keeps narrow layouts usable and exposes non-color state', async ({ page })
   await expect(page.getByTestId('status-grid')).toContainText(/开|关/)
 })
 
+test('keeps every compact toolbar control visible at 960px', async ({ page }) => {
+  await page.setViewportSize({ width: 960, height: 700 })
+  await openCleanEditor(page)
+
+  const layout = await page.getByTestId('compact-toolbar').evaluate((toolbar) => {
+    const bounds = toolbar.getBoundingClientRect()
+    const outsideControls = [...toolbar.querySelectorAll<HTMLElement>('button, select, input')]
+      .filter((control) => control.getClientRects().length > 0)
+      .filter((control) => {
+        const controlBounds = control.getBoundingClientRect()
+        return controlBounds.left < bounds.left
+          || controlBounds.right > bounds.right
+          || controlBounds.top < bounds.top
+          || controlBounds.bottom > bounds.bottom
+      })
+      .map((control) => control.dataset.testid ?? control.getAttribute('aria-label') ?? control.tagName)
+
+    return {
+      height: bounds.height,
+      clientWidth: toolbar.clientWidth,
+      scrollWidth: toolbar.scrollWidth,
+      outsideControls,
+    }
+  })
+
+  expect({
+    height: layout.height,
+    fitsWithoutScrolling: layout.scrollWidth <= layout.clientWidth,
+    clientWidth: layout.clientWidth,
+    scrollWidth: layout.scrollWidth,
+    outsideControls: layout.outsideControls,
+  }).toEqual({
+    height: 48,
+    fitsWithoutScrolling: true,
+    clientWidth: layout.clientWidth,
+    scrollWidth: layout.clientWidth,
+    outsideControls: [],
+  })
+})
+
 test('disposes real application timers, listeners, and controllers after interactive overlays', async ({ page }) => {
   await openCleanEditor(page)
   await page.getByRole('menuitem', { name: '文件' }).click()
