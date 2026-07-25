@@ -29,6 +29,45 @@ async function select(
 }
 
 describe('CompactToolbar 操作组', () => {
+  it('为全部工具栏操作渲染语义图标，并保留原生控件语义', () => {
+    const { wrapper } = mountToolbar()
+    const icons = {
+      'tb-undo': 'undo',
+      'tb-redo': 'redo',
+      'tb-copy': 'copy',
+      'tb-cut': 'cut',
+      'tb-paste': 'paste',
+      'tb-format-painter': 'formatPaint',
+      'tb-bold': 'bold',
+      'tb-italic': 'italic',
+      'tb-underline': 'underline',
+      'tb-strikethrough': 'strikethrough',
+      'tb-align-left': 'alignLeft',
+      'tb-align-center': 'alignCenter',
+      'tb-align-right': 'alignRight',
+      'tb-valign-top': 'alignTop',
+      'tb-valign-middle': 'alignMiddle',
+      'tb-valign-bottom': 'alignBottom',
+    } as const
+
+    for (const [testId, icon] of Object.entries(icons)) {
+      expect(wrapper.find(`[data-testid="${testId}"] [data-icon="${icon}"]`).exists()).toBe(true)
+    }
+
+    expect(
+      wrapper.get('[data-testid="tb-font-family"]').element.parentElement?.querySelector('[data-icon="font"]'),
+    ).not.toBeNull()
+    expect(
+      wrapper.get('[data-testid="tb-font-size"]').element.parentElement?.querySelector('[data-icon="fontSize"]'),
+    ).not.toBeNull()
+    expect(
+      wrapper.get('[data-testid="tb-text-color"]').element.parentElement?.querySelector('[data-icon="textColor"]'),
+    ).not.toBeNull()
+    expect(
+      wrapper.get('[data-testid="tb-text-background"]').element.parentElement?.querySelector('[data-icon="fillColor"]'),
+    ).not.toBeNull()
+  })
+
   it('初始撤销/重做禁用；执行命令后撤销可用且 tooltip 含命令标签', async () => {
     const { wrapper, store, selection } = mountToolbar()
     const undo = wrapper.find('[data-testid="tb-undo"]')
@@ -211,6 +250,31 @@ describe('CompactToolbar 段落对齐组', () => {
 })
 
 describe('CompactToolbar 格式刷', () => {
+  it('在禁用、off、once 和 continuous 状态始终渲染格式刷图标', async () => {
+    const { wrapper, selection } = mountToolbar()
+    const paint = useFormatPaintStore()
+    const expectFormatPaintIcon = () => {
+      expect(
+        wrapper.find('[data-testid="tb-format-painter"] [data-icon="formatPaint"]').exists(),
+      ).toBe(true)
+    }
+
+    expect(wrapper.get('[data-testid="tb-format-painter"]').attributes('disabled')).toBeDefined()
+    expectFormatPaintIcon()
+
+    await select(wrapper, selection, ['node-1'])
+    expect(paint.mode).toBe('off')
+    expectFormatPaintIcon()
+
+    await wrapper.get('[data-testid="tb-format-painter"]').trigger('click')
+    expect(paint.mode).toBe('once')
+    expectFormatPaintIcon()
+
+    await wrapper.get('[data-testid="tb-format-painter"]').trigger('dblclick')
+    expect(paint.mode).toBe('continuous')
+    expectFormatPaintIcon()
+  })
+
   it('非单选禁用；恰好 1 选中时可用；tooltip 含完整说明与 Esc 提示', async () => {
     const { wrapper, selection } = mountToolbar()
     const painter = wrapper.find('[data-testid="tb-format-painter"]')

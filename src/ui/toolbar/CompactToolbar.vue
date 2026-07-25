@@ -10,7 +10,8 @@
         aria-label="撤销"
         @click="documentStore.undo()"
       >
-        ↩ 撤销
+        <AppIcon name="undo" />
+        撤销
       </button>
       <button
         type="button"
@@ -20,7 +21,8 @@
         aria-label="重做"
         @click="documentStore.redo()"
       >
-        ↪ 重做
+        <AppIcon name="redo" />
+        重做
       </button>
     </div>
     <div class="toolbar-divider" />
@@ -35,6 +37,7 @@
         aria-label="复制"
         @click="documentStore.copySelection()"
       >
+        <AppIcon name="copy" />
         复制
       </button>
       <button
@@ -45,6 +48,7 @@
         aria-label="剪切"
         @click="documentStore.cutSelection()"
       >
+        <AppIcon name="cut" />
         剪切
       </button>
       <button
@@ -55,6 +59,7 @@
         aria-label="粘贴"
         @click="documentStore.pasteClipboard()"
       >
+        <AppIcon name="paste" />
         粘贴
       </button>
       <button
@@ -68,6 +73,7 @@
         @click="formatPaintStore.armOnce()"
         @dblclick="formatPaintStore.armContinuous()"
       >
+        <AppIcon name="formatPaint" />
         格式刷
       </button>
       <QuickHelpButton help-id="format-paint" label="格式刷" />
@@ -76,30 +82,36 @@
 
     <!-- 字体 -->
     <div class="toolbar-group" role="group" aria-label="字体">
-      <select
-        data-testid="tb-font-family"
-        title="字体：设置选中文本的字体"
-        aria-label="字体"
-        :disabled="textAgg.style.fontFamily.kind === 'none'"
-        :value="selectValue(textAgg.style.fontFamily)"
-        @change="writeTextPatch({ style: { fontFamily: ($event.target as HTMLSelectElement).value } })"
-      >
-        <option v-if="textAgg.style.fontFamily.kind === 'mixed'" value="__mixed__" disabled>多个值</option>
-        <option v-for="family in fontFamilies" :key="family" :value="family">{{ family }}</option>
-      </select>
-      <input
-        type="number"
-        class="font-size-input"
-        data-testid="tb-font-size"
-        title="字号：设置选中文本的字号（可输入 8–72）"
-        aria-label="字号"
-        min="1"
-        list="tb-font-size-options"
-        :disabled="textAgg.style.fontSize.kind === 'none'"
-        :value="numberValue(textAgg.style.fontSize)"
-        :placeholder="textAgg.style.fontSize.kind === 'mixed' ? '多个值' : ''"
-        @change="commitFontSize"
-      />
+      <span class="toolbar-control">
+        <AppIcon name="font" />
+        <select
+          data-testid="tb-font-family"
+          title="字体：设置选中文本的字体"
+          aria-label="字体"
+          :disabled="textAgg.style.fontFamily.kind === 'none'"
+          :value="selectValue(textAgg.style.fontFamily)"
+          @change="writeTextPatch({ style: { fontFamily: ($event.target as HTMLSelectElement).value } })"
+        >
+          <option v-if="textAgg.style.fontFamily.kind === 'mixed'" value="__mixed__" disabled>多个值</option>
+          <option v-for="family in fontFamilies" :key="family" :value="family">{{ family }}</option>
+        </select>
+      </span>
+      <span class="toolbar-control">
+        <AppIcon name="fontSize" />
+        <input
+          type="number"
+          class="font-size-input"
+          data-testid="tb-font-size"
+          title="字号：设置选中文本的字号（可输入 8–72）"
+          aria-label="字号"
+          min="1"
+          list="tb-font-size-options"
+          :disabled="textAgg.style.fontSize.kind === 'none'"
+          :value="numberValue(textAgg.style.fontSize)"
+          :placeholder="textAgg.style.fontSize.kind === 'mixed' ? '多个值' : ''"
+          @change="commitFontSize"
+        />
+      </span>
       <datalist id="tb-font-size-options">
         <option v-for="size in fontSizes" :key="size" :value="size" />
       </datalist>
@@ -116,26 +128,32 @@
         :disabled="textAgg.style[btn.key].kind === 'none'"
         @click="toggleStyleBool(btn.key)"
       >
-        {{ btn.label }}
+        <AppIcon :name="btn.icon" />
       </button>
-      <input
-        type="color"
-        data-testid="tb-text-color"
-        title="文字颜色：设置选中文本的颜色"
-        aria-label="文字颜色"
-        :disabled="textAgg.style.color.kind === 'none'"
-        :value="colorValue(textAgg.style.color, '#000000')"
-        @change="writeTextPatch({ style: { color: ($event.target as HTMLInputElement).value } })"
-      />
-      <input
-        type="color"
-        data-testid="tb-text-background"
-        title="文字背景色：设置选中文本的背景色"
-        aria-label="文字背景色"
-        :disabled="textAgg.style.background.kind === 'none'"
-        :value="colorValue(textAgg.style.background, '#000000')"
-        @change="writeTextPatch({ style: { background: ($event.target as HTMLInputElement).value } })"
-      />
+      <span class="toolbar-control">
+        <AppIcon name="textColor" />
+        <input
+          type="color"
+          data-testid="tb-text-color"
+          title="文字颜色：设置选中文本的颜色"
+          aria-label="文字颜色"
+          :disabled="textAgg.style.color.kind === 'none'"
+          :value="colorValue(textAgg.style.color, '#000000')"
+          @change="writeTextPatch({ style: { color: ($event.target as HTMLInputElement).value } })"
+        />
+      </span>
+      <span class="toolbar-control">
+        <AppIcon name="fillColor" />
+        <input
+          type="color"
+          data-testid="tb-text-background"
+          title="文字背景色：设置选中文本的背景色"
+          aria-label="文字背景色"
+          :disabled="textAgg.style.background.kind === 'none'"
+          :value="colorValue(textAgg.style.background, '#000000')"
+          @change="writeTextPatch({ style: { background: ($event.target as HTMLInputElement).value } })"
+        />
+      </span>
       <QuickHelpButton help-id="text-style" label="文本格式" />
     </div>
     <div class="toolbar-divider" />
@@ -146,6 +164,7 @@
         v-for="opt in verticalOptions"
         :key="opt.value"
         type="button"
+        class="align-btn"
         :data-testid="`tb-valign-${opt.value}`"
         :title="opt.title"
         :aria-label="opt.title"
@@ -154,12 +173,13 @@
         :disabled="textAgg.block.verticalAlign.kind === 'none'"
         @click="writeTextPatch({ block: { verticalAlign: opt.value } })"
       >
-        {{ opt.label }}
+        <AppIcon :name="opt.icon" />
       </button>
       <button
         v-for="opt in horizontalOptions"
         :key="opt.value"
         type="button"
+        class="align-btn"
         :data-testid="`tb-align-${opt.value}`"
         :title="opt.title"
         :aria-label="opt.title"
@@ -168,7 +188,7 @@
         :disabled="textAgg.block.horizontalAlign.kind === 'none'"
         @click="writeTextPatch({ block: { horizontalAlign: opt.value } })"
       >
-        {{ opt.label }}
+        <AppIcon :name="opt.icon" />
       </button>
     </div>
   </div>
@@ -183,6 +203,8 @@
 // 格式刷：单击 armOnce（恰好 1 选中否则禁用）、双击 armContinuous（橙色 continuous 态）、
 // Esc 全局 keydown 取消（输入控件聚焦/文本编辑中不拦截）；应用由 CanvasArea 点击图元触发。
 import { computed, onBeforeUnmount, onMounted } from 'vue'
+import AppIcon from '@/ui/icons/AppIcon.vue'
+import type { IconName } from '@/ui/icons/icon-registry'
 import QuickHelpButton from '@/ui/help/QuickHelpButton.vue'
 import type { TextBlock, TextStyle } from '@/domain/diagram'
 import { PropertyController, type TextStylePatch } from '@/application/inspector/property-controller'
@@ -250,27 +272,27 @@ const textAgg = computed(() => {
   return aggregateTextStyles(textContentsForSelection(page, selectionStore.selectedIds))
 })
 
-const styleButtons: {
+const styleButtons: Array<{
   key: 'bold' | 'italic' | 'underline' | 'strikethrough'
-  label: string
+  icon: IconName
   title: string
   ariaLabel: string
-}[] = [
-  { key: 'bold', label: 'B', title: '加粗：切换选中文本加粗', ariaLabel: '加粗' },
-  { key: 'italic', label: 'I', title: '斜体：切换选中文本斜体', ariaLabel: '斜体' },
-  { key: 'underline', label: 'U', title: '下划线：切换选中文本下划线', ariaLabel: '下划线' },
-  { key: 'strikethrough', label: 'S', title: '删除线：切换选中文本删除线', ariaLabel: '删除线' },
+}> = [
+  { key: 'bold', icon: 'bold', title: '加粗：切换选中文本加粗', ariaLabel: '加粗' },
+  { key: 'italic', icon: 'italic', title: '斜体：切换选中文本斜体', ariaLabel: '斜体' },
+  { key: 'underline', icon: 'underline', title: '下划线：切换选中文本下划线', ariaLabel: '下划线' },
+  { key: 'strikethrough', icon: 'strikethrough', title: '删除线：切换选中文本删除线', ariaLabel: '删除线' },
 ]
 
-const verticalOptions: { value: TextBlock['verticalAlign']; label: string; title: string }[] = [
-  { value: 'top', label: '⬒', title: '顶端对齐' },
-  { value: 'middle', label: '⬍', title: '垂直居中' },
-  { value: 'bottom', label: '⬓', title: '底端对齐' },
+const verticalOptions: { value: TextBlock['verticalAlign']; icon: IconName; title: string }[] = [
+  { value: 'top', icon: 'alignTop', title: '顶端对齐' },
+  { value: 'middle', icon: 'alignMiddle', title: '垂直居中' },
+  { value: 'bottom', icon: 'alignBottom', title: '底端对齐' },
 ]
-const horizontalOptions: { value: TextBlock['horizontalAlign']; label: string; title: string }[] = [
-  { value: 'left', label: '⇤', title: '左对齐' },
-  { value: 'center', label: '⇹', title: '居中对齐' },
-  { value: 'right', label: '⇥', title: '右对齐' },
+const horizontalOptions: { value: TextBlock['horizontalAlign']; icon: IconName; title: string }[] = [
+  { value: 'left', icon: 'alignLeft', title: '左对齐' },
+  { value: 'center', icon: 'alignCenter', title: '居中对齐' },
+  { value: 'right', icon: 'alignRight', title: '右对齐' },
 ]
 
 function selectValue(agg: Aggregate<unknown>): string {
@@ -331,6 +353,10 @@ function commitFontSize(event: Event): void {
 }
 
 .toolbar-group button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   font-size: 12px;
   padding: 4px 8px;
   border: 1px solid transparent;
@@ -368,9 +394,18 @@ function commitFontSize(event: Event): void {
   border-color: var(--color-border);
 }
 
-.style-btn {
+.style-btn,
+.align-btn {
   min-width: 26px;
-  font-weight: 600;
+  padding-right: 4px;
+  padding-left: 4px;
+}
+
+.toolbar-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
 }
 
 .toolbar-group select,
