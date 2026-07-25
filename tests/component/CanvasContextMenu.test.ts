@@ -44,6 +44,7 @@ describe('CanvasContextMenu', () => {
   it('opens command submenus with ArrowRight and executes a child', async () => {
     const items = contextMenuItems('multi', state)
     const wrapper = mount(CanvasContextMenu, { props: { x: 0, y: 0, items } })
+    expect(wrapper.find('[data-command-id="arrange-align"] [data-icon="chevronRight"]').exists()).toBe(true)
     for (let index = 0; index < 4; index += 1) {
       await wrapper.find('[role="menu"]').trigger('keydown', { key: 'ArrowDown' })
     }

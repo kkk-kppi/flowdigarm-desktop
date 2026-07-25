@@ -36,10 +36,10 @@
             @click="runItem(item)"
             @mouseenter="activeItem = itemIndex; submenuIndex = item.children ? itemIndex : -1"
           >
-            <span class="check" aria-hidden="true">{{ item.checked ? '✓' : '' }}</span>
+            <span class="check" aria-hidden="true"><AppIcon v-if="item.checked" name="check" :size="14" /></span>
             <span>{{ item.label }}</span>
             <kbd v-if="item.shortcut">{{ item.shortcut }}</kbd>
-            <span v-if="item.children" class="arrow" aria-hidden="true">›</span>
+            <AppIcon v-if="item.children" class="arrow" name="chevronRight" :size="14" />
           </button>
           <div v-if="item.children && submenuIndex === itemIndex" class="submenu" role="menu">
             <button
@@ -63,6 +63,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, type ComponentPublicInstance } from 'vue'
 import type { MenuDefinition, MenuItem } from '@/application/menus/menu-model'
+import AppIcon from '@/ui/icons/AppIcon.vue'
 
 const props = defineProps<{ menus: MenuDefinition[] }>()
 const emit = defineEmits<{ execute: [id: string, trigger: HTMLButtonElement | null]; openChange: [open: boolean] }>()

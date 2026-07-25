@@ -20,7 +20,7 @@
         :class="{ active: index === activeIndex, disabled: item.disabledReason }"
         @click="execute(item)"
         @mouseenter="activeIndex = index; submenuIndex = item.children ? index : -1"
-      >{{ item.label }}<span v-if="item.children" aria-hidden="true">›</span></button>
+      >{{ item.label }}<AppIcon v-if="item.children" class="arrow" name="chevronRight" :size="14" /></button>
       <div v-if="item.children && submenuIndex === index" class="context-submenu" role="menu" :aria-label="`${item.label}子菜单`">
         <button
           v-for="(child, indexOfChild) in item.children"
@@ -41,6 +41,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, type ComponentPublicInstance } from 'vue'
 import type { MenuItem } from '@/application/menus/menu-model'
+import AppIcon from '@/ui/icons/AppIcon.vue'
 
 const props = defineProps<{ x: number; y: number; items: MenuItem[]; returnFocus?: HTMLElement | null }>()
 const emit = defineEmits<{ execute: [id: string]; close: [] }>()

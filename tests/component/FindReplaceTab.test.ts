@@ -53,6 +53,7 @@ describe('FindReplaceTab', () => {
     expect(wrapper.emitted('back')).toBeTruthy()
     await wrapper.trigger('keydown', { key: 'Escape' })
     expect(wrapper.emitted('back')).toHaveLength(2)
+    expect(wrapper.find('[data-testid="find-help"] [data-icon="help"]').exists()).toBe(true)
     await wrapper.find('[data-testid="find-help"]').trigger('click')
     expect(wrapper.emitted('help')?.[0]).toEqual(['find-replace'])
     wrapper.unmount()

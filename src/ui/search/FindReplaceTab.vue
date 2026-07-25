@@ -2,7 +2,7 @@
   <section class="find-replace" tabindex="-1" @keydown="onKeydown">
     <div class="find-heading">
       <button type="button" class="back" data-testid="find-back" @click="$emit('back')">返回属性</button>
-      <button type="button" class="help" data-testid="find-help" aria-label="查找替换帮助" title="查找替换帮助。查看搜索范围、替换与撤销说明。" @click="$emit('help', 'find-replace')">?</button>
+      <button type="button" class="help" data-testid="find-help" aria-label="查找替换帮助" title="查找替换帮助。查看搜索范围、替换与撤销说明。" @click="$emit('help', 'find-replace')"><AppIcon name="help" :size="16" /></button>
     </div>
     <label>查找<input v-model="query" data-testid="find-query" type="search" @input="refresh" /></label>
     <label>替换<input v-model="replacement" data-testid="find-replacement" type="text" /></label>
@@ -30,6 +30,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { FindMatch, FindTextRequest } from '@/application/search/find-text'
+import AppIcon from '@/ui/icons/AppIcon.vue'
 interface Controller {
   search(request: FindTextRequest): FindMatch[]
   next(): FindMatch | null

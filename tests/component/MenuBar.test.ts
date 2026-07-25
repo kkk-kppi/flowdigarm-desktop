@@ -55,7 +55,7 @@ describe('MenuBar', () => {
     })
     const wrapper = mount(MenuBar, { props: { menus: stateMenus } })
     await wrapper.find('[data-menu-id="view"]').trigger('click')
-    expect(wrapper.find('[data-command-id="view-grid"]').text()).toContain('✓')
+    expect(wrapper.find('[data-command-id="view-grid"] [data-icon="check"]').exists()).toBe(true)
     await wrapper.find('[data-menu-id="edit"]').trigger('click')
     const undo = wrapper.find('[data-command-id="edit-undo"]')
     expect(undo.attributes('aria-disabled')).toBe('true')
@@ -65,6 +65,7 @@ describe('MenuBar', () => {
   it('expands a submenu with ArrowRight and executes its active child', async () => {
     const wrapper = mount(MenuBar, { props: { menus }, attachTo: document.body })
     await wrapper.find('[data-menu-id="tools"]').trigger('keydown', { key: 'ArrowDown' })
+    expect(wrapper.find('[data-command-id="arrange-align"] [data-icon="chevronRight"]').exists()).toBe(true)
     await wrapper.find('[role="menu"]').trigger('keydown', { key: 'ArrowDown' })
     await wrapper.find('[role="menu"]').trigger('keydown', { key: 'ArrowDown' })
     await wrapper.find('[role="menu"]').trigger('keydown', { key: 'ArrowRight' })

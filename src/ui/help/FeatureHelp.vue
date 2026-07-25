@@ -1,6 +1,6 @@
 <template>
   <aside v-if="entry" ref="panel" class="feature-help" role="complementary" tabindex="-1" :aria-label="`${entry.title}帮助`">
-    <header><h2>{{ entry.title }}</h2><button ref="closeButton" type="button" aria-label="关闭帮助" title="关闭帮助。返回此前的编辑位置。" @click="close">×</button></header>
+    <header><h2>{{ entry.title }}</h2><button ref="closeButton" type="button" aria-label="关闭帮助" title="关闭帮助。返回此前的编辑位置。" @click="close"><AppIcon name="close" :size="16" /></button></header>
     <dl>
       <dt>目的</dt><dd>{{ entry.purpose }}</dd>
       <dt>操作方式</dt><dd>{{ entry.operation }}</dd>
@@ -14,6 +14,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import AppIcon from '@/ui/icons/AppIcon.vue'
 import { getFeatureHelp } from './feature-help-registry'
 const props = defineProps<{ helpId: string; returnFocus?: HTMLElement | null }>()
 const emit = defineEmits<{ close: [] }>()

@@ -20,6 +20,7 @@ describe('FeatureHelp', () => {
     await wrapper.vm.$nextTick()
     expect(wrapper.attributes('role')).toBe('complementary')
     expect(wrapper.text()).toContain('影响范围')
+    expect(wrapper.find('[aria-label="关闭帮助"] [data-icon="close"]').exists()).toBe(true)
     expect(document.activeElement).toBe(wrapper.find<HTMLButtonElement>('[aria-label="关闭帮助"]').element)
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await wrapper.vm.$nextTick()

@@ -6,12 +6,13 @@
     :aria-label="`${entry?.title ?? label}帮助`"
     :title="entry ? `${entry.title}：${entry.purpose}` : `${label}帮助`"
     @click.stop="appStore.openHelp(helpId)"
-  >?</button>
+  ><AppIcon name="help" :size="16" /></button>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useAppStore } from '@/stores/app-store'
+import AppIcon from '@/ui/icons/AppIcon.vue'
 import { getFeatureHelp } from './feature-help-registry'
 const props = defineProps<{ helpId: string; label: string }>()
 const appStore = useAppStore()

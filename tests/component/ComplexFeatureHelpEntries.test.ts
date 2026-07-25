@@ -33,6 +33,7 @@ describe('complex feature help entries', () => {
     const wrappers = [mount(ElementLibrary), mount(PageSetupTab), mount(CompactToolbar), mount(PropertyTab)]
     const ids = wrappers.flatMap((wrapper) => wrapper.findAll('[data-help-id]').map((button) => button.attributes('data-help-id')))
     expect(ids).toEqual(expect.arrayContaining(['page-setup', 'text-style', 'format-paint', 'connect', 'shape-library', 'group-container']))
+    expect(wrappers.some((wrapper) => wrapper.find('[data-help-id="shape-library"] [data-icon="help"]').exists())).toBe(true)
     wrappers.forEach((wrapper) => wrapper.unmount())
   })
 })

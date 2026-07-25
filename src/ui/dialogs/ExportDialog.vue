@@ -11,8 +11,8 @@
       <header>
         <h2 id="export-title">导出</h2>
         <div class="header-actions">
-          <button data-testid="export-help" type="button" aria-label="导出帮助" title="导出帮助。查看格式、页面范围、分辨率与安全链接说明。" :disabled="busy" @click="emit('help')">?</button>
-          <button type="button" aria-label="关闭导出" title="关闭导出。返回此前的编辑位置。" :disabled="busy" @click="emit('close')">×</button>
+          <button data-testid="export-help" type="button" aria-label="导出帮助" title="导出帮助。查看格式、页面范围、分辨率与安全链接说明。" :disabled="busy" @click="emit('help')"><AppIcon name="help" :size="16" /></button>
+          <button type="button" aria-label="关闭导出" title="关闭导出。返回此前的编辑位置。" :disabled="busy" @click="emit('close')"><AppIcon name="close" :size="16" /></button>
         </div>
       </header>
 
@@ -68,6 +68,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import type { ExportFormat, ExportOptions, ExportScope } from '@/application/export/export-ports'
+import AppIcon from '@/ui/icons/AppIcon.vue'
 
 interface ExportDialogController {
   chooseDestination(input: { format: ExportFormat; fileName: string }): Promise<string | null>
