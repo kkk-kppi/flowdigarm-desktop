@@ -10,3 +10,4 @@
 2026-07-25 | update | `src/styles/tokens.css`, `tests/unit/root-layout.test.ts` | 清除 WebView 默认根边距并添加根布局回归测试；960 项测试及生产构建通过
 2026-07-25 | update | `.agents/memory/project-overview.md` | 添加 CodeGraph 代码图谱工具的安装与初始化说明 | 每个开发者需要运行 codegraph init 生成本地索引
 2026-07-25 | create | `docs/superpowers/specs/2026-07-25-application-icon-system-design.md` | 记录全应用外壳 SVG 图标系统、CSS Mask 渲染、窗口状态同步与验证设计
+2026-07-25 | create | `docs/superpowers/plans/2026-07-25-application-icon-system.md` | 将批准的图标系统设计拆分为 8 个 TDD 实施与验证任务
