@@ -27,3 +27,12 @@
 - **artifact**: X6 节点标签、覆盖编辑器、SVG 导出与画布 E2E
 - **action**: 将裁剪策略改为固定节点尺寸下的可见溢出；以共享测量分行替代 X6 `textWrap`，同步 X6 基线语义并处理极窄文本区、emoji 和长行性能风险。
 - **validation**: `pnpm test` 959 项通过；`pnpm build` 通过；`e2e/canvas-interactions.spec.ts` Chromium 7 项通过；`git diff --check` 无错误。
+
+## 2026-07-25 | WebView 根边距修复
+
+- **date**: 2026-07-25
+- **capability**: systematic-debugging + test-driven-development
+- **result**: helped
+- **artifact**: `src/styles/tokens.css`、`tests/unit/root-layout.test.ts`
+- **action**: 重置 `html`、`body` 与 `#app` 挂载链，清除 WebView 默认 `body` 外边距并禁止页面级滚动。
+- **validation**: 聚焦测试通过；`pnpm test` 960 项通过；`pnpm build` 通过。

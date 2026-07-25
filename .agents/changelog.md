@@ -7,3 +7,4 @@
 2026-07-22 | update | text overflow behavior | 节点保持固定尺寸，X6、覆盖编辑器与 SVG 导出改为显示全部溢出文本
 2026-07-22 | update | .agents/memory/gotchas.md | 记录 X6 无限高度换行的窄文本区保护约束
 2026-07-22 | update | .agents/memory/outcomes.md | 记录固定节点文字可见溢出的实现与验证结果
+2026-07-25 | update | `src/styles/tokens.css`, `tests/unit/root-layout.test.ts` | 清除 WebView 默认根边距并添加根布局回归测试；960 项测试及生产构建通过

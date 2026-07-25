@@ -17,6 +17,18 @@
   --ruler-size: 20px;
 }
 
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+}
+
 :root[data-theme='dark'] {
   color-scheme: dark;
   --color-bg: #111827;
