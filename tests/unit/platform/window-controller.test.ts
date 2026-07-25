@@ -7,19 +7,33 @@ import { readFileSync } from 'node:fs'
 
 function nativeWindow() {
   let closeHandler: ((event: { preventDefault(): void }) => void | Promise<void>) | undefined
+  let resizeHandler: (() => void) | undefined
   const native: NativeWindowPort & {
     calls: string[]
+    maximized: boolean
     emitClose(event: { preventDefault(): void }): Promise<void>
+    emitResize(): Promise<void>
   } = {
     calls: [],
+    maximized: false,
     async minimize() { this.calls.push('minimize') },
-    async toggleMaximize() { this.calls.push('toggleMaximize') },
+    async toggleMaximize() {
+      this.calls.push('toggleMaximize')
+      this.maximized = !this.maximized
+      await this.emitResize()
+    },
+    async isMaximized() { return this.maximized },
+    async onResized(handler) {
+      resizeHandler = handler
+      return () => { resizeHandler = undefined }
+    },
     async destroy() { this.calls.push('destroy') },
     async onCloseRequested(handler) {
       closeHandler = handler
       return () => { closeHandler = undefined }
     },
     async emitClose(event) { await closeHandler?.(event) },
+    async emitResize() { await resizeHandler?.() },
   }
   return native
 }
@@ -33,6 +47,7 @@ describe('TauriWindowController', () => {
     expect(capability.permissions).toEqual(expect.arrayContaining([
       'core:window:allow-minimize',
       'core:window:allow-toggle-maximize',
+      'core:window:allow-is-maximized',
       'core:window:allow-destroy',
       'core:window:allow-start-dragging',
     ]))
@@ -45,6 +60,42 @@ describe('TauriWindowController', () => {
     await controller.minimize()
     await controller.toggleMaximize()
     expect(native.calls).toEqual(['minimize', 'toggleMaximize'])
+  })
+
+  it('reports confirmed maximize state, ignores stale queries, and stops after disposal', async () => {
+    const native = nativeWindow()
+    const values: boolean[] = []
+    const controller = new TauriWindowController(native, async () => true)
+    const stop = await controller.watchMaximized((value) => values.push(value))
+    await vi.waitFor(() => expect(values).toEqual([false]))
+
+    native.maximized = true
+    await native.emitResize()
+    await vi.waitFor(() => expect(values).toEqual([false, true]))
+
+    stop()
+    native.maximized = false
+    await native.emitResize()
+    expect(values).toEqual([false, true])
+  })
+
+  it('ignores an older maximize query that resolves after a newer resize query', async () => {
+    const native = nativeWindow()
+    const pending: Array<(value: boolean) => void> = []
+    native.isMaximized = vi.fn(() => new Promise<boolean>((resolve) => pending.push(resolve)))
+    const values: boolean[] = []
+    const controller = new TauriWindowController(native, async () => true)
+    const stop = await controller.watchMaximized((value) => values.push(value))
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+
+    await native.emitResize()
+    await vi.waitFor(() => expect(pending).toHaveLength(2))
+    pending[1](true)
+    await vi.waitFor(() => expect(values).toEqual([true]))
+    pending[0](false)
+    await Promise.resolve()
+    expect(values).toEqual([true])
+    stop()
   })
 
   it('prevents native close and only destroys after the dirty guard approves', async () => {

@@ -8,7 +8,7 @@ describe('desktop shell bars', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
   it('shows dirty title and emits all window controls with accessible tooltips', async () => {
-    const wrapper = mount(TitleBar, { props: { fileName: '示例.flowdiagram', dirty: true } })
+    const wrapper = mount(TitleBar, { props: { fileName: '示例.flowdiagram', dirty: true, maximized: false } })
     expect(wrapper.find('[data-testid="titlebar"]').attributes('data-tauri-drag-region')).toBeDefined()
     expect(wrapper.text()).toContain('流程图编辑器 - 示例.flowdiagram*未保存')
     for (const [testid, event] of [['minimize', 'minimize'], ['maximize', 'maximize'], ['close', 'close']] as const) {
@@ -18,6 +18,16 @@ describe('desktop shell bars', () => {
       await button.trigger('click')
       expect(wrapper.emitted(event)).toBeTruthy()
     }
+  })
+
+  it('shows confirmed maximize and restore controls', () => {
+    const normal = mount(TitleBar, { props: { fileName: '示例.flowdiagram', dirty: false, maximized: false } })
+    const maximized = mount(TitleBar, { props: { fileName: '示例.flowdiagram', dirty: false, maximized: true } })
+
+    expect(normal.find('[data-testid="title-maximize"] [data-icon="maximize"]').exists()).toBe(true)
+    expect(normal.get('[data-testid="title-maximize"]').attributes('aria-label')).toBe('最大化窗口')
+    expect(maximized.find('[data-testid="title-maximize"] [data-icon="restore"]').exists()).toBe(true)
+    expect(maximized.get('[data-testid="title-maximize"]').attributes('aria-label')).toBe('还原窗口')
   })
 
   it('shows selection/page/zoom/save state and toggles view settings outside history', async () => {

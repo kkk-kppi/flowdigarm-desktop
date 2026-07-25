@@ -16,6 +16,18 @@ function memoryStorage(): Storage {
 }
 
 describe('BrowserE2EPlatform', () => {
+  it('publishes deterministic maximize state to browser shell watchers', async () => {
+    const runtime = createBrowserE2EPlatform(memoryStorage())
+    const values: boolean[] = []
+    const stop = await runtime.window.watchMaximized((value) => values.push(value))
+    expect(values).toEqual([false])
+    await runtime.window.toggleMaximize()
+    expect(values).toEqual([false, true])
+    stop()
+    await runtime.window.toggleMaximize()
+    expect(values).toEqual([false, true])
+  })
+
   it('persists save, recent, settings, and recovery data without network or native APIs', async () => {
     const storage = memoryStorage()
     const runtime = createBrowserE2EPlatform(storage)

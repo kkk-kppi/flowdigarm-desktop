@@ -8,6 +8,8 @@ interface CloseRequestEvent {
 export interface NativeWindowPort {
   minimize(): Promise<void>
   toggleMaximize(): Promise<void>
+  isMaximized(): Promise<boolean>
+  onResized(handler: () => void): Promise<() => void>
   destroy(): Promise<void>
   onCloseRequested(handler: (event: CloseRequestEvent) => void | Promise<void>): Promise<() => void>
 }
@@ -26,6 +28,31 @@ export class TauriWindowController implements WindowController {
 
   toggleMaximize(): Promise<void> {
     return this.window.toggleMaximize()
+  }
+
+  async watchMaximized(handler: (maximized: boolean) => void): Promise<() => void> {
+    let disposed = false
+    let generation = 0
+    let last: boolean | undefined
+    const refresh = async () => {
+      const current = ++generation
+      try {
+        const maximized = await this.window.isMaximized()
+        if (disposed || current !== generation || maximized === last) return
+        last = maximized
+        handler(maximized)
+      } catch {
+        // A resize can trigger another confirmed query; keep the last state.
+      }
+    }
+    const unlisten = await this.window.onResized(() => { void refresh() })
+    void refresh()
+    return () => {
+      if (disposed) return
+      disposed = true
+      generation += 1
+      unlisten()
+    }
   }
 
   async requestClose(): Promise<void> {

@@ -10,6 +10,7 @@
         <TitleBar
           :file-name="fileName"
           :dirty="documentStore.dirty"
+          :maximized="maximized"
           @minimize="onWindowCommand('minimize')"
           @maximize="onWindowCommand('maximize')"
           @close="onWindowCommand('close')"
@@ -157,7 +158,11 @@ const exportOpen = ref(false)
 const exportReturnFocus = ref<HTMLElement | null>(null)
 const menuOpen = ref(false)
 const unsavedReturnFocus = ref<HTMLElement | null>(null)
+const maximized = ref(false)
 const viewport = reactive<ViewportState>({ zoom: 1, panX: 0, panY: 0 })
+
+let windowStateDisposed = false
+let stopWatchingMaximized: (() => void) | undefined
 
 const unsavedRequest = computed(() => services?.unsaved.request.value ?? null)
 const editorReady = computed(() => startupComplete.value && recoverySnapshot.value === null)
@@ -329,6 +334,16 @@ function onWindowCommand(command: 'minimize' | 'maximize' | 'close'): void {
   else void services.window.requestClose()
 }
 
+function watchWindowState(): void {
+  if (!services) return
+  void services.window.watchMaximized((value) => { maximized.value = value })
+    .then((stop) => {
+      if (windowStateDisposed) stop()
+      else stopWatchingMaximized = stop
+    })
+    .catch(() => documentStore.setNotice('窗口状态同步失败，窗口控制仍可使用。'))
+}
+
 function onMenuExecute(id: string, trigger: HTMLButtonElement | null): void {
   if (!editorReady.value) return
   const recentMatch = /^file-recent-(\d+)$/.exec(id)
@@ -440,7 +455,12 @@ watch(interactionBlocked, (blocked) => {
   else appStore.endInteractionBlock('shell-overlay')
 }, { immediate: true })
 
-onBeforeUnmount(() => appStore.endInteractionBlock('shell-overlay'))
+onBeforeUnmount(() => {
+  windowStateDisposed = true
+  stopWatchingMaximized?.()
+  stopWatchingMaximized = undefined
+  appStore.endInteractionBlock('shell-overlay')
+})
 
 function openHelp(helpId: string, request: MenuInvocation): void {
   helpReturnFocus.value = request.trigger?.isConnected ? request.trigger : null
@@ -491,6 +511,7 @@ function onViewportChange(state: ViewportState): void {
 }
 
 onMounted(async () => {
+  watchWindowState()
   if (!services) return
   let startupDependencyFailed = false
   try {

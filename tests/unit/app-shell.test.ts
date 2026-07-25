@@ -100,6 +100,7 @@ function fakeServices(overrides: Partial<EditorServices> = {}): EditorServices {
     window: {
       minimize: vi.fn(async () => {}),
       toggleMaximize: vi.fn(async () => {}),
+      watchMaximized: vi.fn(async (handler) => { handler(false); return () => {} }),
       requestClose: vi.fn(async () => {}),
       onCloseRequested: vi.fn(async () => () => {}),
     },
@@ -213,6 +214,45 @@ describe('AppShell 组装', () => {
     expect(services.window.minimize).toHaveBeenCalledOnce()
     expect(services.window.toggleMaximize).toHaveBeenCalledOnce()
     expect(useDocumentStore().lastNotice ?? '').not.toContain('下一步桌面接线')
+  })
+
+  it('renders restore after the native maximize watcher confirms state', async () => {
+    let maximizeHandler!: (maximized: boolean) => void
+    const services = fakeServices({
+      window: {
+        ...fakeServices().window,
+        watchMaximized: vi.fn(async (handler) => {
+          maximizeHandler = handler
+          handler(false)
+          return () => {}
+        }),
+      },
+    })
+    const wrapper = mountShellWithServices(services)
+    await flushPromises()
+
+    maximizeHandler(true)
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-testid="title-maximize"] [data-icon="restore"]').exists()).toBe(true)
+  })
+
+  it('cleans up maximize watching when registration resolves after unmount', async () => {
+    let resolveRegistration!: (stop: () => void) => void
+    const stop = vi.fn()
+    const services = fakeServices({
+      window: {
+        ...fakeServices().window,
+        watchMaximized: vi.fn(() => new Promise<() => void>((resolve) => { resolveRegistration = resolve })),
+      },
+    })
+    const wrapper = mountShellWithServices(services)
+    wrapper.unmount()
+
+    resolveRegistration(stop)
+    await flushPromises()
+
+    expect(stop).toHaveBeenCalledOnce()
   })
 
   it('opens export help and restores focus to the persistent File trigger when help closes', async () => {

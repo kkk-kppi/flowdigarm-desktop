@@ -71,6 +71,8 @@ function fileName(path: string): string {
 export function createBrowserE2EPlatform(storage: Storage = localStorage): BrowserE2EPlatform {
   let state = readState(storage)
   let artifacts: BrowserE2EArtifact[] = []
+  let maximized = false
+  const maximizeHandlers = new Set<(maximized: boolean) => void>()
   const failures = new Set<BrowserE2EFailure>(state.failures ?? [])
   const persist = () => storage.setItem(STORAGE_KEY, JSON.stringify(state))
   const rejectIfFailed = (operation: BrowserE2EFailure, message: string) => {
@@ -190,7 +192,15 @@ export function createBrowserE2EPlatform(storage: Storage = localStorage): Brows
   }
   const windowController: WindowController = {
     minimize: async () => {},
-    toggleMaximize: async () => {},
+    toggleMaximize: async () => {
+      maximized = !maximized
+      for (const handler of [...maximizeHandlers]) handler(maximized)
+    },
+    watchMaximized: async (handler) => {
+      maximizeHandlers.add(handler)
+      handler(maximized)
+      return () => { maximizeHandlers.delete(handler) }
+    },
     requestClose: async () => {},
     onCloseRequested: async () => () => {},
   }
