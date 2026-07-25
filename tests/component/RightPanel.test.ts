@@ -30,6 +30,8 @@ describe('RightPanel', () => {
     expect(wrapper.find('[data-testid="right-panel"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="property-tab"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="rp-title"]').text()).toBe('属性')
+    expect(wrapper.find('[data-testid="rp-collapse"] [data-icon="chevronRight"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="rp-close"] [data-icon="close"]').exists()).toBe(true)
 
     await wrapper.find('[data-testid="rp-tab-page"]').trigger('click')
     expect(wrapper.find('[data-testid="page-setup-tab"]').exists()).toBe(true)
@@ -44,14 +46,17 @@ describe('RightPanel', () => {
   it('折叠按钮收起整栏（仅留展开钮）；再次点击展开', async () => {
     setWindowWidth(1280)
     const { wrapper, appStore } = mountPanel()
+    expect(wrapper.find('[data-testid="rp-collapse"] [data-icon="chevronRight"]').exists()).toBe(true)
     await wrapper.find('[data-testid="rp-collapse"]').trigger('click')
     expect(appStore.rightPanelCollapsed).toBe(true)
     expect(wrapper.find('[data-testid="right-panel"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="rp-collapse"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="rp-collapse"] [data-icon="chevronLeft"]').exists()).toBe(true)
 
     await wrapper.find('[data-testid="rp-collapse"]').trigger('click')
     expect(appStore.rightPanelCollapsed).toBe(false)
     expect(wrapper.find('[data-testid="right-panel"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="rp-collapse"] [data-icon="chevronRight"]').exists()).toBe(true)
     wrapper.unmount()
   })
 

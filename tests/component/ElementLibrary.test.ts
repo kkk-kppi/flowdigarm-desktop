@@ -19,6 +19,8 @@ describe('ElementLibrary', () => {
     expect(wrapper.attributes('data-testid')).toBe('element-library')
     expect(wrapper.text()).toContain('图元')
     expect(wrapper.find('input[placeholder="搜索图元..."]').exists()).toBe(true)
+    expect(wrapper.find('[data-icon="search"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="more-shapes"] [data-icon="add"]').exists()).toBe(true)
 
     const cells = wrapper.findAll('[data-testid="shape-cell"]')
     expect(cells).toHaveLength(12)
@@ -30,6 +32,7 @@ describe('ElementLibrary', () => {
     }
     expect(wrapper.find('[data-testid="shape-cell"][aria-label="矩形"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="shape-cell"][aria-label="判定"]').exists()).toBe(true)
+    expect(wrapper.findAll('[data-testid="shape-cell"] .shape-thumb')).toHaveLength(12)
     // 文本框/图片不进入图元库两个分类
     expect(wrapper.find('[data-testid="shape-cell"][aria-label="文本框"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="shape-cell"][aria-label="图片"]').exists()).toBe(false)
@@ -40,10 +43,12 @@ describe('ElementLibrary', () => {
     expect(wrapper.text()).toContain('基本形状')
     expect(wrapper.text()).toContain('流程图')
     expect(wrapper.findAll('[data-testid="shape-cell"]')).toHaveLength(12)
+    expect(wrapper.find('[data-testid="category-basic-header"] [data-icon="chevronDown"]').exists()).toBe(true)
 
     await wrapper.find('[data-testid="category-basic-header"]').trigger('click')
     expect(wrapper.findAll('[data-testid="shape-cell"]')).toHaveLength(6)
     expect(wrapper.find('[data-testid="shape-cell"][aria-label="流程"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="category-basic-header"] [data-icon="chevronRight"]').exists()).toBe(true)
   })
 
   it('搜索按 label 过滤（大小写不敏感），无匹配时显示空态', async () => {
@@ -102,9 +107,11 @@ describe('ElementLibrary', () => {
 
   it('折叠按钮折叠整栏', async () => {
     const wrapper = 挂载()
+    expect(wrapper.find('.collapse-toggle [data-icon="chevronLeft"]').exists()).toBe(true)
     await wrapper.find('[data-testid="collapse-toggle"]').trigger('click')
     expect(wrapper.find('input[placeholder="搜索图元..."]').exists()).toBe(false)
     expect(wrapper.findAll('[data-testid="shape-cell"]')).toHaveLength(0)
+    expect(wrapper.find('.collapse-toggle [data-icon="chevronRight"]').exists()).toBe(true)
   })
 })
 
@@ -116,6 +123,7 @@ describe('ElementLibrary 常用区', () => {
     expect(topHeader.exists()).toBe(true)
     expect(topHeader.text()).toContain('常用')
     expect(topHeader.attributes('aria-expanded')).toBe('true')
+    expect(topHeader.find('[data-icon="chevronDown"]').exists()).toBe(true)
     // 常用区位于基本形状之前
     const headers = wrapper.findAll('.category-header')
     expect(headers[0].text()).toContain('常用')

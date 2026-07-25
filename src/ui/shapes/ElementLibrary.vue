@@ -12,17 +12,20 @@
         :aria-expanded="!collapsed"
         @click="collapsed = !collapsed"
       >
-        {{ collapsed ? '»' : '«' }}
+        <AppIcon :name="collapsed ? 'chevronRight' : 'chevronLeft'" :size="14" />
       </button>
     </div>
     <template v-if="!collapsed">
-      <input
-        v-model="query"
-        class="library-search"
-        type="search"
-        placeholder="搜索图元..."
-        aria-label="搜索图元"
-      />
+      <div class="library-search-wrap">
+        <AppIcon name="search" :size="14" />
+        <input
+          v-model="query"
+          class="library-search"
+          type="search"
+          placeholder="搜索图元..."
+          aria-label="搜索图元"
+        />
+      </div>
       <div class="library-body">
         <!-- 常用（Top 20，搜索时隐藏）：与分类格子同一创建交互 -->
         <section v-if="normalizedQuery === ''" class="category">
@@ -33,7 +36,11 @@
             :aria-expanded="topExpanded"
             @click="topExpanded = !topExpanded"
           >
-            <span class="category-arrow">{{ topExpanded ? '▾' : '▸' }}</span>
+            <AppIcon
+              class="category-arrow"
+              :name="topExpanded ? 'chevronDown' : 'chevronRight'"
+              :size="12"
+            />
             常用
           </button>
           <div v-if="topExpanded" class="category-grid">
@@ -84,7 +91,11 @@
             :aria-expanded="section.expanded"
             @click="section.expanded = !section.expanded"
           >
-            <span class="category-arrow">{{ section.expanded ? '▾' : '▸' }}</span>
+            <AppIcon
+              class="category-arrow"
+              :name="section.expanded ? 'chevronDown' : 'chevronRight'"
+              :size="12"
+            />
             {{ section.title }}
           </button>
           <div v-if="section.expanded" class="category-grid">
@@ -135,7 +146,8 @@
         data-testid="more-shapes"
         @click="emit('more-shapes')"
       >
-        + 更多形状...
+        <AppIcon name="add" :size="14" />
+        更多形状...
       </button>
     </template>
   </aside>
@@ -148,6 +160,7 @@
 // 拖拽经 X6 Dnd（CanvasArea 注入 shapeDragStartKey）获得画布内拖拽预览；双击/回车直接创建。
 import { computed, inject, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import QuickHelpButton from '@/ui/help/QuickHelpButton.vue'
+import AppIcon from '@/ui/icons/AppIcon.vue'
 import { shapeRegistry, type ShapeDefinition } from '@/application/shapes/shape-registry'
 import '@/application/shapes/common-shapes' // 模块副作用：注册内置形状
 import { computeTopShapes } from '@/application/shapes/shape-usage-repository'
@@ -277,6 +290,9 @@ onBeforeUnmount(() => clearPendingDrag?.())
 }
 
 .collapse-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: none;
   cursor: pointer;
@@ -284,9 +300,25 @@ onBeforeUnmount(() => clearPendingDrag?.())
   padding: 2px 6px;
 }
 
-.library-search {
+.library-search-wrap {
+  position: relative;
   margin: 0 8px 6px;
+}
+
+.library-search-wrap > .app-icon {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-secondary, #666666);
+  pointer-events: none;
+}
+
+.library-search {
+  box-sizing: border-box;
+  width: 100%;
   padding: 4px 8px;
+  padding-left: 26px;
   font-size: 12px;
   border: 1px solid var(--color-border, #d9d9d9);
   border-radius: 4px;
@@ -313,7 +345,7 @@ onBeforeUnmount(() => clearPendingDrag?.())
 }
 
 .category-arrow {
-  font-size: 10px;
+  color: var(--color-text-secondary, #666666);
 }
 
 .category-grid {
@@ -367,6 +399,10 @@ onBeforeUnmount(() => clearPendingDrag?.())
 }
 
 .more-shapes {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   margin: 6px 8px 8px;
   padding: 6px 0;
   border: 1px dashed var(--color-border, #d9d9d9);

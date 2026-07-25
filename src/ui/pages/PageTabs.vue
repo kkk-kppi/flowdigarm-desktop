@@ -34,7 +34,7 @@
         title="删除此页"
         @click.stop="askDelete(page.id)"
       >
-        ×
+        <AppIcon name="close" :size="12" />
       </button>
       <div
         v-if="confirmingDeleteId === page.id"
@@ -71,7 +71,7 @@
       title="新建页面"
       @click="addPage"
     >
-      +
+      <AppIcon name="add" :size="14" />
     </button>
     <div class="zoom-controls">
       <input
@@ -97,6 +97,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { DiagramPage } from '@/domain/diagram'
 import { PageTabsController } from '@/application/pages/page-tabs-controller'
 import { useDocumentStore } from '@/stores/document-store'
+import AppIcon from '@/ui/icons/AppIcon.vue'
 
 const documentStore = useDocumentStore()
 const pageTabsController = new PageTabsController({
@@ -254,6 +255,9 @@ function onZoomInput(event: Event): void {
 }
 
 .page-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: transparent;
   color: var(--color-text-secondary);
@@ -305,6 +309,9 @@ function onZoomInput(event: Event): void {
 
 .page-tab-add {
   align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   margin-left: 4px;
   width: 22px;
   height: 22px;

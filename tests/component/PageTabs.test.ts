@@ -34,6 +34,8 @@ describe('PageTabs', () => {
     expect(tabs[1].text()).toContain('页面 2')
     expect(tabs[0].classes()).toContain('active')
     expect(tabs[1].classes()).not.toContain('active')
+    expect(wrapper.find('[aria-label="新建页面"] [data-icon="add"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="close-tab"] [data-icon="close"]').exists()).toBe(true)
   })
 
   it('单击页签切换活动页（视图行为，不产生命令）', async () => {

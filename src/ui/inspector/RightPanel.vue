@@ -8,7 +8,10 @@
       :title="appStore.rightPanelCollapsed ? '展开右侧面板' : '折叠右侧面板'"
       @click="appStore.toggleRightPanel()"
     >
-      {{ appStore.rightPanelCollapsed ? '«' : '»' }}
+      <AppIcon
+        :name="appStore.rightPanelCollapsed ? 'chevronLeft' : 'chevronRight'"
+        :size="12"
+      />
     </button>
     <aside
       v-if="!appStore.rightPanelCollapsed"
@@ -26,7 +29,7 @@
           title="关闭面板"
           @click="appStore.toggleRightPanel()"
         >
-          ×
+          <AppIcon name="close" :size="14" />
         </button>
       </div>
       <template v-if="actualMode === 'tabs'">
@@ -72,6 +75,7 @@
 // mode='find' 显示外壳注入的查找替换内容。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useAppStore } from '@/stores/app-store'
+import AppIcon from '@/ui/icons/AppIcon.vue'
 import PageSetupTab from '@/ui/pages/PageSetupTab.vue'
 import PropertyTab from './PropertyTab.vue'
 
@@ -157,6 +161,9 @@ onBeforeUnmount(() => {
 
 .collapse-toggle {
   position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   left: -14px;
   top: 50%;
   transform: translateY(-50%);
@@ -191,6 +198,9 @@ onBeforeUnmount(() => {
 }
 
 .panel-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: none;
   cursor: pointer;
