@@ -10,6 +10,7 @@ src-tauri/gen/
 
 # SDD 过程文件（进度台账除外，保留在仓库外）
 .superpowers/
+.worktrees/
 
 # 测试与覆盖率
 coverage/
