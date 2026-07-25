@@ -58,6 +58,40 @@ Tauri v2 + Vue 3 + TypeScript 桌面应用，使用 AntV X6 作为画布渲染�
 | `pnpm build` | 前端类型检查 + 生产构建 |
 | `pnpm tauri build --no-bundle -- -- --locked` | 当前平台 release 可执行文件构建 |
 
+## CodeGraph（代码图谱）
+
+本项目使用 CodeGraph 提供语义代码智能，帮助 AI Agent 快速理解代码结构。
+
+### 首次设置（每个开发者）
+
+```bash
+# 1. 全局安装 CLI（只需一次）
+npm i -g @colbymchenry/codegraph
+
+# 2. 连接 Agent（只需一次）
+codegraph install
+
+# 3. 初始化项目索引（每个项目）
+cd flowdigarm-desktop
+codegraph init
+```
+
+### 注意事项
+
+- `.codegraph/` 目录包含本地索引数据，**不应提交到 Git**
+- 索引会自动同步：编辑文件后图谱自动更新
+- 每个开发者需要在自己的机器上运行 `codegraph init`
+- 数据库文件（`codegraph.db`）是机器相关的，包含本地路径
+
+### 使用方式
+
+在 Agent 会话中使用 `codegraph_explore` 工具查询代码图谱：
+
+```
+codegraph_explore "how does edge routing work"
+codegraph_explore "DiagramNode DiagramEdge"
+```
+
 ## 关键约束
 
 - 依赖方向：`ui -> application -> domain`，`infrastructure` 实现端口。
