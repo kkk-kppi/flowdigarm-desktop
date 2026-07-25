@@ -75,147 +75,147 @@ async function createApplicationRuntime(): Promise<ApplicationRuntime> {
 }
 
 async function bootstrap(): Promise<void> {
-const resourceTracker: ApplicationResourceTracker | undefined = import.meta.env.VITE_E2E === '1'
-  ? (await import('@/e2e/resource-tracker')).installApplicationResourceTracker(window)
-  : undefined
-const runtime = await createApplicationRuntime()
+  const resourceTracker: ApplicationResourceTracker | undefined = import.meta.env.VITE_E2E === '1'
+    ? (await import('@/e2e/resource-tracker')).installApplicationResourceTracker(window)
+    : undefined
+  const runtime = await createApplicationRuntime()
 
-const app = createApp(App)
-const pinia = createPinia()
-app.use(pinia)
-app.provide(platformKey, runtime.desktop)
-const documentStore = useDocumentStore(pinia)
-const selectionStore = useSelectionStore(pinia)
-const appStore = useAppStore(pinia)
-documentStore.setShapeUsageRepository(runtime.shapeUsage)
-documentStore.setSystemClipboard(new SystemClipboard(
-  !runtime.e2e && typeof navigator !== 'undefined' ? navigator.clipboard : undefined,
-  (message) => documentStore.setNotice(message),
-))
-const persistenceController = new DocumentPersistenceController(
-  {
-    snapshot: () => ({
-      document: documentStore.document,
-      filePath: documentStore.filePath,
-      dirty: documentStore.dirty,
-      revision: documentStore.currentRevision,
-      documentEpoch: documentStore.documentEpoch,
-    }),
-    replaceDocument: (document, path) => documentStore.replaceDocument(document, path),
-    markSaved: (path, revision) => documentStore.markSaved(path, revision),
-    updateFilePath: (path) => documentStore.updateFilePath(path),
-    subscribe: (listener) => documentStore.$subscribe(() => listener(), { detached: true }),
-  },
-  runtime.files,
-  runtime.recovery,
-  (message) => documentStore.setNotice(message),
-  shapeDocumentValidationContext,
-)
-const { unsaved, ui: fileWorkflowUi } = createUnsavedDialogService(
-  (message) => documentStore.setNotice(message),
-)
-const fileWorkflowController = new FileWorkflowController(
-  documentStore,
-  persistenceController,
-  runtime.files,
-  runtime.recents,
-  fileWorkflowUi,
-  shapeDocumentValidationContext,
-)
-const recoveryController = new RecoveryController(
-  documentStore,
-  runtime.recovery,
-  (message) => documentStore.setNotice(message),
-  shapeDocumentValidationContext,
-)
-const settingsController = new SettingsController(
-  {
-    applyPreferences: (settings) => {
-      appStore.applyPreferences(settings)
-      documentStore.configureDefaults(settings)
+  const app = createApp(App)
+  const pinia = createPinia()
+  app.use(pinia)
+  app.provide(platformKey, runtime.desktop)
+  const documentStore = useDocumentStore(pinia)
+  const selectionStore = useSelectionStore(pinia)
+  const appStore = useAppStore(pinia)
+  documentStore.setShapeUsageRepository(runtime.shapeUsage)
+  documentStore.setSystemClipboard(new SystemClipboard(
+    !runtime.e2e && typeof navigator !== 'undefined' ? navigator.clipboard : undefined,
+    (message) => documentStore.setNotice(message),
+  ))
+  const persistenceController = new DocumentPersistenceController(
+    {
+      snapshot: () => ({
+        document: documentStore.document,
+        filePath: documentStore.filePath,
+        dirty: documentStore.dirty,
+        revision: documentStore.currentRevision,
+        documentEpoch: documentStore.documentEpoch,
+      }),
+      replaceDocument: (document, path) => documentStore.replaceDocument(document, path),
+      markSaved: (path, revision) => documentStore.markSaved(path, revision),
+      updateFilePath: (path) => documentStore.updateFilePath(path),
+      subscribe: (listener) => documentStore.$subscribe(() => listener(), { detached: true }),
     },
-    setNotice: (message) => documentStore.setNotice(message),
-  },
-  runtime.settings,
-)
-resourceTracker?.trackController(persistenceController)
-resourceTracker?.trackController(settingsController)
-const windowController = runtime.createWindowController(() => fileWorkflowController.requestClose())
-const exportController = new ExportController({
-  snapshot: () => ({ document: documentStore.document, activePageId: documentStore.activePageId }),
-}, runtime.exporter, shapeDocumentValidationContext)
-const canvasInteractionController = new CanvasInteractionController({
-  getDocument: () => documentStore.document,
-  getActivePageId: () => documentStore.activePageId,
-  executeCommand: (command) => documentStore.executeCommand(command),
-  setNotice: (message) => documentStore.setNotice(message),
-  openExternalLink: (url) => runtime.desktop.openExternalLink(url),
-  select: (ids) => selectionStore.setSelection(ids),
-  recordShapeUsage: (shape) => { void documentStore.recordShapeUsage(shape) },
-})
-const services: EditorServices = {
-  file: fileWorkflowController,
-  recovery: recoveryController,
-  settings: settingsController,
-  imageImport: () => importImage(runtime.images, {
-    get activePage() { return documentStore.activePage },
-    executeCommand: (command) => documentStore.executeCommand(command),
-    select: (ids) => selectionStore.setSelection(ids),
-    setNotice: (message) => documentStore.setNotice(message),
-  }),
-  export: exportController,
-  window: windowController,
-  unsaved,
-  canvas: canvasInteractionController,
-}
-app.provide(editorServicesKey, services)
-
-let closeDisposed = false
-let closeUnlisten: (() => void) | undefined
-void windowController.onCloseRequested().then((unlisten) => {
-  if (closeDisposed) unlisten()
-  else closeUnlisten = unlisten
-}).catch(() => {})
-const disposeCloseListener = () => {
-  if (closeDisposed) return
-  closeDisposed = true
-  closeUnlisten?.()
-  closeUnlisten = undefined
-}
-let disposeE2EHook = () => {}
-let lifecycleDisposed = false
-let applicationUnmounted = false
-const disposeLifecycle = () => {
-  if (lifecycleDisposed) return
-  lifecycleDisposed = true
-  persistenceController.dispose()
-  settingsController.dispose()
-  disposeCloseListener()
-  disposeE2EHook()
-  window.removeEventListener('beforeunload', disposeApplication)
-}
-const disposeApplication = (): ApplicationResources => {
-  if (!applicationUnmounted) {
-    applicationUnmounted = true
-    app.unmount()
-  }
-  disposeLifecycle()
-  const resources = resourceTracker?.resources() ?? { listeners: 0, timers: 0, controllers: 0 }
-  resourceTracker?.restore()
-  return resources
-}
-if (import.meta.env.VITE_E2E === '1' && runtime.e2e) {
-  disposeE2EHook = (await import('@/e2e/e2e-hook')).installE2EHook(window, {
+    runtime.files,
+    runtime.recovery,
+    (message) => documentStore.setNotice(message),
+    shapeDocumentValidationContext,
+  )
+  const { unsaved, ui: fileWorkflowUi } = createUnsavedDialogService(
+    (message) => documentStore.setNotice(message),
+  )
+  const fileWorkflowController = new FileWorkflowController(
     documentStore,
-    selectionStore,
-    runtime: runtime.e2e,
-    disposeApplication,
-    resourceDiagnostics: () => resourceTracker?.diagnostics() ?? { listeners: [], timers: [] },
+    persistenceController,
+    runtime.files,
+    runtime.recents,
+    fileWorkflowUi,
+    shapeDocumentValidationContext,
+  )
+  const recoveryController = new RecoveryController(
+    documentStore,
+    runtime.recovery,
+    (message) => documentStore.setNotice(message),
+    shapeDocumentValidationContext,
+  )
+  const settingsController = new SettingsController(
+    {
+      applyPreferences: (settings) => {
+        appStore.applyPreferences(settings)
+        documentStore.configureDefaults(settings)
+      },
+      setNotice: (message) => documentStore.setNotice(message),
+    },
+    runtime.settings,
+  )
+  resourceTracker?.trackController(persistenceController)
+  resourceTracker?.trackController(settingsController)
+  const windowController = runtime.createWindowController(() => fileWorkflowController.requestClose())
+  const exportController = new ExportController({
+    snapshot: () => ({ document: documentStore.document, activePageId: documentStore.activePageId }),
+  }, runtime.exporter, shapeDocumentValidationContext)
+  const canvasInteractionController = new CanvasInteractionController({
+    getDocument: () => documentStore.document,
+    getActivePageId: () => documentStore.activePageId,
+    executeCommand: (command) => documentStore.executeCommand(command),
+    setNotice: (message) => documentStore.setNotice(message),
+    openExternalLink: (url) => runtime.desktop.openExternalLink(url),
+    select: (ids) => selectionStore.setSelection(ids),
+    recordShapeUsage: (shape) => { void documentStore.recordShapeUsage(shape) },
   })
-}
-window.addEventListener('beforeunload', disposeApplication)
-app.onUnmount(disposeLifecycle)
-app.mount('#app')
+  const services: EditorServices = {
+    file: fileWorkflowController,
+    recovery: recoveryController,
+    settings: settingsController,
+    imageImport: () => importImage(runtime.images, {
+      get activePage() { return documentStore.activePage },
+      executeCommand: (command) => documentStore.executeCommand(command),
+      select: (ids) => selectionStore.setSelection(ids),
+      setNotice: (message) => documentStore.setNotice(message),
+    }),
+    export: exportController,
+    window: windowController,
+    unsaved,
+    canvas: canvasInteractionController,
+  }
+  app.provide(editorServicesKey, services)
+
+  let closeDisposed = false
+  let closeUnlisten: (() => void) | undefined
+  void windowController.onCloseRequested().then((unlisten) => {
+    if (closeDisposed) unlisten()
+    else closeUnlisten = unlisten
+  }).catch(() => {})
+  const disposeCloseListener = () => {
+    if (closeDisposed) return
+    closeDisposed = true
+    closeUnlisten?.()
+    closeUnlisten = undefined
+  }
+  let disposeE2EHook = () => {}
+  let lifecycleDisposed = false
+  let applicationUnmounted = false
+  const disposeLifecycle = () => {
+    if (lifecycleDisposed) return
+    lifecycleDisposed = true
+    persistenceController.dispose()
+    settingsController.dispose()
+    disposeCloseListener()
+    disposeE2EHook()
+    window.removeEventListener('beforeunload', disposeApplication)
+  }
+  const disposeApplication = (): ApplicationResources => {
+    if (!applicationUnmounted) {
+      applicationUnmounted = true
+      app.unmount()
+    }
+    disposeLifecycle()
+    const resources = resourceTracker?.resources() ?? { listeners: 0, timers: 0, controllers: 0 }
+    resourceTracker?.restore()
+    return resources
+  }
+  if (import.meta.env.VITE_E2E === '1' && runtime.e2e) {
+    disposeE2EHook = (await import('@/e2e/e2e-hook')).installE2EHook(window, {
+      documentStore,
+      selectionStore,
+      runtime: runtime.e2e,
+      disposeApplication,
+      resourceDiagnostics: () => resourceTracker?.diagnostics() ?? { listeners: [], timers: [] },
+    })
+  }
+  window.addEventListener('beforeunload', disposeApplication)
+  app.onUnmount(disposeLifecycle)
+  app.mount('#app')
 }
 
 void bootstrap().catch((err) => {
