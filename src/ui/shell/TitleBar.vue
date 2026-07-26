@@ -1,7 +1,7 @@
 <template>
   <header class="title-bar" data-testid="titlebar" data-tauri-drag-region>
     <AppIcon class="title-brand-icon" name="appGraph" data-tauri-drag-region />
-    <span class="title" data-tauri-drag-region>流程图编辑器 - {{ fileName }}{{ dirty ? '*未保存' : '' }}</span>
+    <span class="title" data-tauri-drag-region>流程图编辑器 - {{ fileName }}{{ dirty ? ' *未保存' : '' }}</span>
     <div class="window-actions">
       <button type="button" data-testid="title-minimize" aria-label="最小化窗口" title="最小化窗口。将编辑器收起到任务栏。" @click="$emit('minimize')"><AppIcon name="minimize" /></button>
       <button
