@@ -36,7 +36,9 @@
             @click="runItem(item)"
             @mouseenter="activeItem = itemIndex; submenuIndex = item.children ? itemIndex : -1"
           >
-            <span class="check" aria-hidden="true"><AppIcon v-if="item.checked" name="check" :size="14" /></span>
+            <span v-if="hasCheckColumn(menu.items)" class="check" aria-hidden="true">
+              <AppIcon v-if="item.checked" name="check" :size="14" />
+            </span>
             <span>{{ item.label }}</span>
             <kbd v-if="item.shortcut">{{ item.shortcut }}</kbd>
             <AppIcon v-if="item.children" class="arrow" name="chevronRight" :size="14" />
@@ -75,6 +77,9 @@ const activeItem = ref(0)
 const submenuIndex = ref(-1)
 const activeChild = ref(0)
 
+function hasCheckColumn(items: MenuItem[]): boolean {
+  return items.some((item) => item.checked !== undefined)
+}
 function asElement(value: Element | ComponentPublicInstance | null): HTMLButtonElement | null {
   return value instanceof HTMLButtonElement ? value : null
 }

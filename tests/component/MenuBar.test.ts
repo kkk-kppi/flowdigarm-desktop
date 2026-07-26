@@ -48,18 +48,28 @@ describe('MenuBar', () => {
     remove.mockRestore()
   })
 
-  it('shows checked text and disabled Chinese reason', async () => {
+  it('only reserves a check column for menus containing checkable items', async () => {
     const stateMenus = createMainMenus({
-      canUndo: false, canRedo: false, hasSelection: false, canPaste: false, showGrid: true,
+      canUndo: false, canRedo: false, hasSelection: false, canPaste: false,
+      showRulers: false, showGrid: false, showGuides: false, showPageBreaks: false,
       selectedNodeCount: 0, eligibleNodeCount: 0, selectedGroupCount: 0, selectedContainerCount: 0, hasTextSelection: false,
     })
     const wrapper = mount(MenuBar, { props: { menus: stateMenus } })
-    await wrapper.find('[data-menu-id="view"]').trigger('click')
-    expect(wrapper.find('[data-command-id="view-grid"] [data-icon="check"]').exists()).toBe(true)
+
     await wrapper.find('[data-menu-id="edit"]').trigger('click')
+    expect(wrapper.findAll('.menu-popup .check')).toHaveLength(0)
     const undo = wrapper.find('[data-command-id="edit-undo"]')
     expect(undo.attributes('aria-disabled')).toBe('true')
     expect(undo.attributes('title')).toBe('没有可撤销的操作。')
+
+    await wrapper.find('[data-menu-id="view"]').trigger('click')
+    expect(wrapper.findAll('.menu-popup .check')).toHaveLength(stateMenus[2].items.length)
+    expect(wrapper.find('[data-command-id="view-grid"] [data-icon="check"]').exists()).toBe(false)
+
+    stateMenus[2].items.find((item) => item.id === 'view-grid')!.checked = true
+    await wrapper.setProps({ menus: [...stateMenus] })
+    expect(wrapper.findAll('.menu-popup .check')).toHaveLength(stateMenus[2].items.length)
+    expect(wrapper.find('[data-command-id="view-grid"] [data-icon="check"]').exists()).toBe(true)
   })
 
   it('expands a submenu with ArrowRight and executes its active child', async () => {

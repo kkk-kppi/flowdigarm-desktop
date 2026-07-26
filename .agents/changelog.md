@@ -21,3 +21,6 @@
 2026-07-26 | create | `docs/superpowers/plans/2026-07-26-editor-layout-prototype-alignment.md` | 将批准的编辑器布局原型对齐设计拆分为外壳页签、图元分类、属性面板和浏览器回归验证任务
 2026-07-26 | update | editor layout prototype alignment, verification, and `.agents/memory/outcomes.md` | 完成页签归入画布列并移除重复缩放、图元分类全宽灰底、属性分区平直边框、几何字段两列及顺序验证，并覆盖多页窄窗口滚动和删除确认态；完整 Vitest 116 个文件/977 项、生产构建 1206 个模块、完整 Chromium 25 项及 `git diff --check` 通过
 2026-07-26 | update | `src/ui/pages/PageTabs.vue`, `e2e/editor-core.spec.ts`, `.agents/memory/outcomes.md` | 修复删除确认层固定在页签栏最右侧的问题；按点击页签定位并做左右边界夹取，滚动或缩放时关闭；完整 Vitest 116 个文件/977 项、构建 1206 个模块、Chromium 26 项通过
+2026-07-26 | create | `docs/superpowers/specs/2026-07-26-menu-conditional-check-column-design.md` | 记录仅在当前菜单包含可勾选项时保留统一勾选列的设计
+2026-07-26 | create | `docs/superpowers/plans/2026-07-26-menu-conditional-check-column.md` | 将菜单条件勾选列设计拆分为组件 TDD、菜单 Chromium 与完整回归验证步骤
+2026-07-27 | update | `src/ui/shell/MenuBar.vue`, `tests/component/MenuBar.test.ts`, `tests/component/DesktopShellParts.test.ts`, `.agents/memory/outcomes.md` | 菜单仅在含可勾选项时保留勾选列，并同步已提交标题空格行为的陈旧断言；完整 Vitest 116 个文件/977 项、Chromium 菜单 9 项、构建 1206 个模块及 `git diff --check` 通过

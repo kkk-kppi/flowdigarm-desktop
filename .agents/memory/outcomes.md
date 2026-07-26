@@ -75,3 +75,12 @@
 - **action**: 在 Chromium 中验证页签/三栏边界、唯一状态栏缩放、分类标题背景、平直属性分区和两列几何布局；补充几何字段顺序断言、多页窄窗口滚动及删除确认态下新增按钮可达性，并将核心流程中非唯一的字形按钮定位器限定到工具栏测试 ID。用户反馈后将删除确认层改为按被点击页签动态定位，并在左右边界夹取；页签滚动或窗口缩放时关闭失效确认层。
 - **validation**: 删除确认定位测试先复现 525.4px 错位再通过；完整 Vitest 116 个文件/977 项、生产构建 1206 个模块及完整 Chromium 26 项通过；`git diff --check` 退出 0，仅输出工作区 LF/CRLF 转换警告。
 - **correction or failure**: 首次完整 Chromium 运行通过 23 项、失败 1 项；根因为既有核心流程按“加粗”等非唯一可访问名称同时匹配工具栏和属性面板控件。随后用户发现确认层为保留滚动而移出页签后被固定到最右侧，原浏览器测试只验证可见性和滚动，未验证与点击页签的空间关系；已增加页面 2 锚定、4px 下距、左右夹取及滚动/缩放失效覆盖。
+
+## 2026-07-27 | MenuBar 条件勾选列
+
+- **date**: 2026-07-27
+- **capability**: test-driven-development + verification-before-completion
+- **result**: helped
+- **artifact**: `src/ui/shell/MenuBar.vue`、`tests/component/MenuBar.test.ts`、`tests/component/DesktopShellParts.test.ts`
+- **action**: 先以组件断言复现编辑菜单错误保留 8 个空 `.check` 元素，再用 `checked !== undefined` 判断当前顶层菜单是否需要统一勾选列，并保持既有勾选图标与样式不变。
+- **validation**: RED 为组件测试 5 项中 1 项按预期失败（期望 0、实际 8）；GREEN 聚焦 Vitest 2 个文件/9 项通过。经用户确认同步当前已提交标题空格行为的陈旧断言后，完整 Vitest 116 个文件/977 项、Chromium 菜单 9 项通过；`pnpm build` 退出 0、转换 1206 个模块，`git diff --check` 退出 0。
