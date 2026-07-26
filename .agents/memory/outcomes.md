@@ -36,3 +36,12 @@
 - **artifact**: `src/styles/tokens.css`、`tests/unit/root-layout.test.ts`
 - **action**: 重置 `html`、`body` 与 `#app` 挂载链，清除 WebView 默认 `body` 外边距并禁止页面级滚动。
 - **validation**: 聚焦测试通过；`pnpm test` 960 项通过；`pnpm build` 通过。
+
+## 2026-07-26 | 应用图标系统
+
+- **date**: 2026-07-26
+- **capability**: test-driven-development + verification-before-completion
+- **result**: helped
+- **artifact**: `src/ui/icons/` 本地 SVG 注册表与 Mask 组件、桌面外壳控件、窗口状态适配、组件/架构测试及 `e2e/menus-accessibility.spec.ts`
+- **action**: 以类型化本地 SVG 注册表和共享 CSS Mask 组件替换桌面外壳临时字符图标；同步原生确认的最大化/还原状态，并覆盖无障碍名称、强制颜色、资源边界及 960/1024/1280/1440px 工具栏布局。
+- **validation**: `pnpm test` 通过 116 个测试文件、975 项测试；`pnpm build` 退出 0（仅保留已知的大 chunk 警告）；`pnpm exec playwright test e2e/menus-accessibility.spec.ts --project=chromium` 通过 9 项测试；`git diff --check` 退出 0、无空白错误（仅提示两个记录文件后续 Git 操作时将 LF 转为 CRLF）。
