@@ -3,7 +3,7 @@ import { expect, openCleanEditor, test } from './fixtures'
 async function expectIconControlsAccessible(page: Parameters<typeof openCleanEditor>[0]): Promise<void> {
   const violations = await page.locator('button:visible').evaluateAll((buttons) => buttons.flatMap((button) => {
     const text = (button.textContent ?? '').replace(/\s/g, '')
-    const iconOnly = Boolean(button.querySelector('svg, img, [aria-hidden="true"]'))
+    const iconOnly = Boolean(button.querySelector('svg, img, [data-icon]')) && text.length === 0
       || text.length <= 3 && (!/[\u3400-\u9fff]/u.test(text) || /^[?×−□«»+]+$/u.test(text))
     if (!iconOnly) return []
     const ariaLabel = button.getAttribute('aria-label') ?? ''
@@ -48,6 +48,16 @@ test('supports seven-menu keyboard navigation, submenus, Escape, and focus retur
 test('exposes icon labels/tooltips, contextual help, and trapped dialog focus', async ({ page }) => {
   await openCleanEditor(page)
   await expectIconControlsAccessible(page)
+
+  const maximizeButton = page.getByTestId('title-maximize')
+  await expect(maximizeButton).toHaveAccessibleName('最大化窗口')
+  await expect(maximizeButton.locator('[data-icon]')).toHaveAttribute('data-icon', 'maximize')
+  await maximizeButton.click()
+  await expect(maximizeButton).toHaveAccessibleName('还原窗口')
+  await expect(maximizeButton.locator('[data-icon]')).toHaveAttribute('data-icon', 'restore')
+  await maximizeButton.click()
+  await expect(maximizeButton).toHaveAccessibleName('最大化窗口')
+  await expect(maximizeButton.locator('[data-icon]')).toHaveAttribute('data-icon', 'maximize')
 
   const helpTrigger = page.getByRole('button', { name: '图元库帮助' })
   await helpTrigger.click()
@@ -94,45 +104,26 @@ test('keeps narrow layouts usable and exposes non-color state', async ({ page })
   await expect(page.getByTestId('status-grid')).toContainText(/开|关/)
 })
 
-test('keeps every compact toolbar control visible at 960px', async ({ page }) => {
-  await page.setViewportSize({ width: 960, height: 700 })
-  await openCleanEditor(page)
-
-  const layout = await page.getByTestId('compact-toolbar').evaluate((toolbar) => {
-    const bounds = toolbar.getBoundingClientRect()
-    const outsideControls = [...toolbar.querySelectorAll<HTMLElement>('button, select, input')]
-      .filter((control) => control.getClientRects().length > 0)
-      .filter((control) => {
-        const controlBounds = control.getBoundingClientRect()
-        return controlBounds.left < bounds.left
-          || controlBounds.right > bounds.right
-          || controlBounds.top < bounds.top
-          || controlBounds.bottom > bounds.bottom
-      })
-      .map((control) => control.dataset.testid ?? control.getAttribute('aria-label') ?? control.tagName)
-
-    return {
-      height: bounds.height,
-      clientWidth: toolbar.clientWidth,
-      scrollWidth: toolbar.scrollWidth,
-      outsideControls,
-    }
+for (const width of [960, 1024, 1280, 1440]) {
+  test(`keeps every toolbar control visible at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 })
+    await openCleanEditor(page)
+    const toolbar = page.getByTestId('compact-toolbar')
+    await expect(toolbar).toHaveCSS('height', '48px')
+    const layout = await toolbar.evaluate((element) => ({
+      scrollWidth: element.scrollWidth,
+      clientWidth: element.clientWidth,
+      height: element.getBoundingClientRect().height,
+      clipped: [...element.querySelectorAll('button, input, select')].filter((control) => {
+        const controlBox = control.getBoundingClientRect()
+        const toolbarBox = element.getBoundingClientRect()
+        return controlBox.left < toolbarBox.left || controlBox.right > toolbarBox.right
+      }).length,
+    }))
+    expect(layout).toMatchObject({ height: 48, clipped: 0 })
+    expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth)
   })
-
-  expect({
-    height: layout.height,
-    fitsWithoutScrolling: layout.scrollWidth <= layout.clientWidth,
-    clientWidth: layout.clientWidth,
-    scrollWidth: layout.scrollWidth,
-    outsideControls: layout.outsideControls,
-  }).toEqual({
-    height: 48,
-    fitsWithoutScrolling: true,
-    clientWidth: layout.clientWidth,
-    scrollWidth: layout.clientWidth,
-    outsideControls: [],
-  })
-})
+}
 
 test('disposes real application timers, listeners, and controllers after interactive overlays', async ({ page }) => {
   await openCleanEditor(page)
@@ -176,6 +167,15 @@ test('applies dark, forced-color, and reduced-motion preferences', async ({ page
   expect(maximumMotionSeconds).toBeLessThanOrEqual(0.001)
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--color-border').trim())).toBe('CanvasText')
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim())).toBe('Highlight')
+  const invisibleIcons = await page.locator('[data-icon]:visible').evaluateAll((icons) => icons.flatMap((icon) => {
+    const style = getComputedStyle(icon)
+    const box = icon.getBoundingClientRect()
+    return box.width > 0 && box.height > 0 && style.backgroundColor !== 'rgba(0, 0, 0, 0)'
+      ? []
+      : [icon.getAttribute('data-icon')]
+  }))
+  expect(invisibleIcons).toEqual([])
+  await expectIconControlsAccessible(page)
   const focusTarget = page.getByTestId('status-grid')
   await focusTarget.focus()
   const focusStyle = await focusTarget.evaluate((element) => {
