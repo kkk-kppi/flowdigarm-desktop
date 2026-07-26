@@ -2,33 +2,57 @@ import { globSync, readFileSync } from 'node:fs'
 
 const iconRegistry = 'src/ui/icons/icon-registry.ts'
 
-function cssUrlReferences(source: string): string[] {
-  return [...source.matchAll(/url\(\s*(?:(['"])(.*?)\1|([^)]*?))\s*\)/gi)]
-    .map((match) => (match[2] ?? match[3] ?? '').trim())
+type StaticResourceReference = {
+  kind: 'module' | 'html' | 'css'
+  value: string
 }
 
-function hasDirectSvgReference(source: string): boolean {
-  const directSvg = /^(?:@\/|\.{1,2}\/)[^?#]*\.svg(?:[?#].*)?$/i
-  return /['"`](?:@\/|\.{1,2}\/)[^'"`]*\.svg(?:[?#][^'"`]*)?['"`]/i.test(source)
-    || cssUrlReferences(source).some((reference) => directSvg.test(reference))
+function staticResourceReferences(source: string): StaticResourceReference[] {
+  const references: StaticResourceReference[] = []
+  const collect = (kind: StaticResourceReference['kind'], pattern: RegExp, valueIndex: number) => {
+    for (const match of source.matchAll(pattern)) {
+      references.push({ kind, value: match[valueIndex].trim() })
+    }
+  }
+
+  collect('module', /\bimport\s*(['"])([^'"\r\n]+)\1/g, 2)
+  collect('module', /\bfrom\s*(['"])([^'"\r\n]+)\1/g, 2)
+  collect('module', /\bimport\s*\(\s*(['"])([^'"\r\n]+)\1\s*\)/g, 2)
+  collect('html', /\bsrc\s*=\s*(['"])(.*?)\1/gi, 2)
+
+  for (const match of source.matchAll(/url\(\s*(?:(['"])(.*?)\1|([^)]*?))\s*\)/gi)) {
+    references.push({ kind: 'css', value: (match[2] ?? match[3] ?? '').trim() })
+  }
+  return references
 }
 
-function hasRemoteIconReference(source: string): boolean {
-  return /https?:\/\/[^'"\s)]*(?:\.svg(?:[?#][^'"\s)]*)?|\/icons?(?:[/?#][^'"\s)]*)?)/i.test(source)
+function isSvgReference(reference: string): boolean {
+  return !/^(?:data:|#)/i.test(reference) && /\.svg(?:[?#].*)?$/i.test(reference)
+}
+
+function hasStaticSvgReference(source: string, allowModuleImports = false): boolean {
+  return staticResourceReferences(source).some(({ kind, value }) =>
+    isSvgReference(value) && !(allowModuleImports && kind === 'module'),
+  )
+}
+
+function hasCustomNetworkIconReference(source: string): boolean {
+  return /https?:\/\/[^'"\s)]*(?:iconify|\/icons?(?:[/?#][^'"\s)]*)?)/i.test(source)
+    || /\bfetch\s*\(\s*(['"])https?:\/\/[^'"\s)]*\.svg(?:[?#][^'"\s)]*)?\1/i.test(source)
 }
 
 function hasIconBoundaryViolation(source: string): boolean {
   return /<iconify-icon/i.test(source)
-    || hasDirectSvgReference(source)
-    || hasRemoteIconReference(source)
+    || hasStaticSvgReference(source)
+    || hasCustomNetworkIconReference(source)
 }
 
 function fileHasIconBoundaryViolation(file: string): boolean {
   const normalizedFile = file.replaceAll('\\', '/')
   const source = readFileSync(file, 'utf8')
   return /<iconify-icon/i.test(source)
-    || hasRemoteIconReference(source)
-    || normalizedFile !== iconRegistry && hasDirectSvgReference(source)
+    || hasCustomNetworkIconReference(source)
+    || hasStaticSvgReference(source, normalizedFile === iconRegistry)
 }
 
 it('loads local UI icons only through the shared registry boundary', () => {
@@ -38,6 +62,8 @@ it('loads local UI icons only through the shared registry boundary', () => {
   expect(hasIconBoundaryViolation("fetch('https://api.iconify.design/mdi/undo.svg')"))
     .toBe(true)
   expect(hasIconBoundaryViolation("import undo from '../icons/svg/foo.svg'"))
+    .toBe(true)
+  expect(hasIconBoundaryViolation("import close from 'icons/close.svg?url'"))
     .toBe(true)
   expect(hasIconBoundaryViolation("fetch('https://example.com/foo.svg')"))
     .toBe(true)
@@ -49,6 +75,28 @@ it('loads local UI icons only through the shared registry boundary', () => {
     .toBe(true)
   expect(hasIconBoundaryViolation("background: url('../icons/svg/foo.svg')"))
     .toBe(true)
+  expect(hasIconBoundaryViolation('background: url(/src/ui/icons/svg/close.svg)'))
+    .toBe(true)
+  expect(hasIconBoundaryViolation('background: url("/src/ui/icons/svg/close.svg")'))
+    .toBe(true)
+  expect(hasIconBoundaryViolation('background: url(icons/close.svg)'))
+    .toBe(true)
+  expect(hasIconBoundaryViolation("background: url('icons/close.svg')"))
+    .toBe(true)
+  expect(hasIconBoundaryViolation('<img src="/src/ui/icons/svg/close.svg">'))
+    .toBe(true)
+  expect(hasIconBoundaryViolation("<img src='/src/ui/icons/svg/close.svg'>"))
+    .toBe(true)
+  expect(hasIconBoundaryViolation('<img src="icons/close.svg">'))
+    .toBe(true)
+  expect(hasIconBoundaryViolation("<img src='icons/close.svg'>"))
+    .toBe(true)
+  expect(hasIconBoundaryViolation('background: url(data:image/svg+xml,%3Csvg%3E%3C/svg%3E)'))
+    .toBe(false)
+  expect(hasIconBoundaryViolation('background: url(#close-icon)'))
+    .toBe(false)
+  expect(hasIconBoundaryViolation("const filename = 'icons/close.svg'"))
+    .toBe(false)
   expect(hasIconBoundaryViolation('content: url(https://example.com/docs)'))
     .toBe(false)
   expect(hasIconBoundaryViolation("window.open('https://example.com/docs')"))
