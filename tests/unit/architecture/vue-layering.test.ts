@@ -1,8 +1,27 @@
-import { readFileSync } from 'node:fs'
-import { globSync } from 'node:fs'
+import { globSync, readFileSync } from 'node:fs'
+
+const iconRegistry = 'src/ui/icons/icon-registry.ts'
+
+function hasDirectSvgReference(source: string): boolean {
+  return /['"`](?:@\/|\.{1,2}\/)[^'"`]*\.svg(?:\?[^'"`]*)?['"`]/i.test(source)
+}
+
+function hasRemoteIconReference(source: string): boolean {
+  return /https?:\/\/[^'"\s)]*(?:\.svg(?:[?#][^'"\s)]*)?|\/icons?(?:[/?#][^'"\s)]*)?)/i.test(source)
+}
 
 function hasIconBoundaryViolation(source: string): boolean {
-  return /<iconify-icon|(?:@\/ui\/icons|\.\/icons)\/svg\/|https?:\/\/[^'"\s]*(?:iconify|icons)/i.test(source)
+  return /<iconify-icon/i.test(source)
+    || hasDirectSvgReference(source)
+    || hasRemoteIconReference(source)
+}
+
+function fileHasIconBoundaryViolation(file: string): boolean {
+  const normalizedFile = file.replaceAll('\\', '/')
+  const source = readFileSync(file, 'utf8')
+  return /<iconify-icon/i.test(source)
+    || hasRemoteIconReference(source)
+    || normalizedFile !== iconRegistry && hasDirectSvgReference(source)
 }
 
 it('loads local UI icons only through the shared registry boundary', () => {
@@ -11,12 +30,16 @@ it('loads local UI icons only through the shared registry boundary', () => {
     .toBe(true)
   expect(hasIconBoundaryViolation("fetch('https://api.iconify.design/mdi/undo.svg')"))
     .toBe(true)
+  expect(hasIconBoundaryViolation("import undo from '../icons/svg/foo.svg'"))
+    .toBe(true)
+  expect(hasIconBoundaryViolation("fetch('https://example.com/foo.svg')"))
+    .toBe(true)
+  expect(hasIconBoundaryViolation("window.open('https://example.com/docs')"))
+    .toBe(false)
   expect(hasIconBoundaryViolation("import AppIcon from '@/ui/icons/AppIcon.vue'"))
     .toBe(false)
 
-  const violations = globSync('src/ui/**/*.vue').filter((file) =>
-    hasIconBoundaryViolation(readFileSync(file, 'utf8')),
-  )
+  const violations = globSync('src/**/*.{vue,ts,tsx,js,jsx}').filter(fileHasIconBoundaryViolation)
   expect(violations).toEqual([])
 })
 

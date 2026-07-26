@@ -82,7 +82,10 @@
 
     <!-- 字体 -->
     <div class="toolbar-group" role="group" aria-label="字体">
-      <span class="toolbar-control">
+      <span
+        class="toolbar-control"
+        :aria-disabled="textAgg.style.fontFamily.kind === 'none'"
+      >
         <AppIcon name="font" />
         <select
           data-testid="tb-font-family"
@@ -96,7 +99,10 @@
           <option v-for="family in fontFamilies" :key="family" :value="family">{{ family }}</option>
         </select>
       </span>
-      <span class="toolbar-control">
+      <span
+        class="toolbar-control"
+        :aria-disabled="textAgg.style.fontSize.kind === 'none'"
+      >
         <AppIcon name="fontSize" />
         <input
           type="number"
@@ -130,7 +136,10 @@
       >
         <AppIcon :name="btn.icon" />
       </button>
-      <span class="toolbar-control">
+      <span
+        class="toolbar-control"
+        :aria-disabled="textAgg.style.color.kind === 'none'"
+      >
         <AppIcon name="textColor" />
         <input
           type="color"
@@ -142,7 +151,10 @@
           @change="writeTextPatch({ style: { color: ($event.target as HTMLInputElement).value } })"
         />
       </span>
-      <span class="toolbar-control">
+      <span
+        class="toolbar-control"
+        :aria-disabled="textAgg.style.background.kind === 'none'"
+      >
         <AppIcon name="fillColor" />
         <input
           type="color"

@@ -322,6 +322,36 @@ describe('PropertyTab 单节点', () => {
     }
   })
 
+  it('在复合文本控件启用和禁用时同步包装器与图标状态', async () => {
+    const controls = [
+      ['font-family', 'font'],
+      ['font-size', 'fontSize'],
+      ['text-color', 'textColor'],
+      ['text-background', 'fillColor'],
+    ] as const
+    const enabled = mountTab()
+    await select(enabled.wrapper, enabled.selection, ['node-1'])
+
+    for (const [testId, icon] of controls) {
+      const control = enabled.wrapper.get(`[data-testid="${testId}"]`)
+      expect(control.attributes('disabled')).toBeUndefined()
+      expect(control.element.parentElement?.getAttribute('aria-disabled')).toBe('false')
+      expect(control.element.parentElement?.querySelector(`[data-icon="${icon}"]`)).not.toBeNull()
+    }
+
+    const document = createTestDocument()
+    document.pages[0].nodes[0].text = undefined
+    const disabled = mountTab(document)
+    await select(disabled.wrapper, disabled.selection, ['node-1'])
+
+    for (const [testId, icon] of controls) {
+      const control = disabled.wrapper.get(`[data-testid="${testId}"]`)
+      expect(control.attributes('disabled')).toBeDefined()
+      expect(control.element.parentElement?.getAttribute('aria-disabled')).toBe('true')
+      expect(control.element.parentElement?.querySelector(`[data-icon="${icon}"]`)).not.toBeNull()
+    }
+  })
+
   it('为每个展开与折叠的区段标题显示对应箭头', async () => {
     const { wrapper, selection } = mountTab()
     await select(wrapper, selection, ['node-1'])

@@ -265,7 +265,10 @@
               @blur="commitNodeName"
             />
           </label>
-          <label class="prop-row">
+          <label
+            class="prop-row"
+            :aria-disabled="textAgg.style.fontFamily.kind === 'none'"
+          >
             <span class="prop-label">字体</span>
             <AppIcon name="font" :size="14" />
             <select
@@ -279,7 +282,10 @@
               <option v-for="family in fontFamilies" :key="family" :value="family">{{ family }}</option>
             </select>
           </label>
-          <label class="prop-row">
+          <label
+            class="prop-row"
+            :aria-disabled="textAgg.style.fontSize.kind === 'none'"
+          >
             <span class="prop-label">字号</span>
             <AppIcon name="fontSize" :size="14" />
             <select
@@ -312,7 +318,10 @@
               </button>
             </div>
           </div>
-          <div class="prop-row">
+          <div
+            class="prop-row"
+            :aria-disabled="textAgg.style.color.kind === 'none'"
+          >
             <span class="prop-label">字体颜色</span>
             <AppIcon name="textColor" :size="14" />
             <input
@@ -325,7 +334,10 @@
             />
             <span v-if="textAgg.style.color.kind === 'mixed'" class="mixed-mark" data-testid="text-color-mixed">多个值</span>
           </div>
-          <div class="prop-row">
+          <div
+            class="prop-row"
+            :aria-disabled="textAgg.style.background.kind === 'none'"
+          >
             <span class="prop-label">字体背景色</span>
             <AppIcon name="fillColor" :size="14" />
             <input

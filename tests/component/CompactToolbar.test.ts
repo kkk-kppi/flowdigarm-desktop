@@ -125,6 +125,31 @@ describe('CompactToolbar 粘贴板组', () => {
 })
 
 describe('CompactToolbar 字体组聚合态', () => {
+  it('在复合字体控件启用和禁用时同步包装器与图标状态', async () => {
+    const { wrapper, selection } = mountToolbar()
+    const controls = [
+      ['tb-font-family', 'font'],
+      ['tb-font-size', 'fontSize'],
+      ['tb-text-color', 'textColor'],
+      ['tb-text-background', 'fillColor'],
+    ] as const
+
+    for (const [testId, icon] of controls) {
+      const control = wrapper.get(`[data-testid="${testId}"]`)
+      expect(control.attributes('disabled')).toBeDefined()
+      expect(control.element.parentElement?.getAttribute('aria-disabled')).toBe('true')
+      expect(control.element.parentElement?.querySelector(`[data-icon="${icon}"]`)).not.toBeNull()
+    }
+
+    await select(wrapper, selection, ['node-1'])
+    for (const [testId, icon] of controls) {
+      const control = wrapper.get(`[data-testid="${testId}"]`)
+      expect(control.attributes('disabled')).toBeUndefined()
+      expect(control.element.parentElement?.getAttribute('aria-disabled')).toBe('false')
+      expect(control.element.parentElement?.querySelector(`[data-icon="${icon}"]`)).not.toBeNull()
+    }
+  })
+
   it('无选择时 B/I/U/S 禁用（none）', () => {
     const { wrapper } = mountToolbar()
     for (const key of ['bold', 'italic', 'underline', 'strikethrough']) {

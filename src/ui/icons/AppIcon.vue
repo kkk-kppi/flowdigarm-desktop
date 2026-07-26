@@ -46,13 +46,13 @@ const iconStyle = computed(() => {
     background-color: CanvasText;
   }
 
-  :global(button:disabled) .app-icon,
-  :global([aria-disabled='true']) .app-icon {
-    background-color: GrayText;
+  :global(button:disabled .app-icon),
+  :global([aria-disabled='true'] .app-icon) {
+    background-color: GrayText !important;
   }
 
-  :global([aria-pressed='true']) .app-icon {
-    background-color: Highlight;
+  :global([aria-pressed='true'] .app-icon) {
+    background-color: Highlight !important;
   }
 }
 </style>

@@ -174,14 +174,47 @@ test('applies dark, forced-color, and reduced-motion preferences', async ({ page
   expect(maximumMotionSeconds).toBeLessThanOrEqual(0.001)
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--color-border').trim())).toBe('CanvasText')
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim())).toBe('Highlight')
-  const invisibleIcons = await page.locator('[data-icon]:visible').evaluateAll((icons) => icons.flatMap((icon) => {
+  const invalidIcons = await page.locator('[data-icon]:visible').evaluateAll((icons) => icons.flatMap((icon) => {
     const style = getComputedStyle(icon)
     const box = icon.getBoundingClientRect()
-    return box.width > 0 && box.height > 0 && style.backgroundColor !== 'rgba(0, 0, 0, 0)'
+    const maskImage = style.maskImage !== 'none'
+      ? style.maskImage
+      : style.getPropertyValue('-webkit-mask-image')
+    const maskUrl = maskImage.match(/^url\(["']?(.*?)["']?\)$/)?.[1] ?? ''
+    let bundledSvgMask = maskUrl.startsWith('data:image/svg+xml')
+    if (maskUrl && !bundledSvgMask) {
+      const url = new URL(maskUrl, window.location.href)
+      bundledSvgMask = url.origin === window.location.origin && url.pathname.endsWith('.svg')
+    }
+    return box.width > 0
+      && box.height > 0
+      && style.backgroundColor !== 'rgba(0, 0, 0, 0)'
+      && maskImage !== 'none'
+      && bundledSvgMask
       ? []
-      : [icon.getAttribute('data-icon')]
+      : [{ icon: icon.getAttribute('data-icon'), maskImage, backgroundColor: style.backgroundColor }]
   }))
-  expect(invisibleIcons).toEqual([])
+  expect(invalidIcons).toEqual([])
+
+  const systemColors = await page.evaluate(() => {
+    const resolveBackground = (color: string) => {
+      const reference = document.createElement('span')
+      reference.style.cssText = `position:fixed;left:-9999px;background-color:${color};forced-color-adjust:none`
+      document.body.append(reference)
+      const computed = getComputedStyle(reference).backgroundColor
+      reference.remove()
+      return computed
+    }
+    return { grayText: resolveBackground('GrayText'), highlight: resolveBackground('Highlight') }
+  })
+  const disabledFontControl = page.getByTestId('tb-font-family')
+  await expect(disabledFontControl).toBeDisabled()
+  const disabledFontWrapper = disabledFontControl.locator('..')
+  await expect(disabledFontWrapper).toHaveAttribute('aria-disabled', 'true')
+  expect(await disabledFontWrapper.locator('[data-icon="font"]').evaluate(
+    (icon) => getComputedStyle(icon).backgroundColor,
+  )).toBe(systemColors.grayText)
+
   await expectIconControlsAccessible(page)
   const focusTarget = page.getByTestId('status-grid')
   await focusTarget.focus()
@@ -193,4 +226,14 @@ test('applies dark, forced-color, and reduced-motion preferences', async ({ page
   expect(Number.parseFloat(focusStyle.outlineWidth)).toBeGreaterThanOrEqual(2)
   expect(focusStyle.outlineColor).not.toBe('rgba(0, 0, 0, 0)')
   expect(focusStyle.borderColor).not.toBe('rgba(0, 0, 0, 0)')
+
+  if (await focusTarget.getAttribute('aria-pressed') === 'true') {
+    await focusTarget.click()
+    await expect(focusTarget).toHaveAttribute('aria-pressed', 'false')
+  }
+  await focusTarget.click()
+  await expect(focusTarget).toHaveAttribute('aria-pressed', 'true')
+  await expect.poll(() => focusTarget.locator('[data-icon]').evaluate(
+    (icon) => getComputedStyle(icon).backgroundColor,
+  )).toBe(systemColors.highlight)
 })
