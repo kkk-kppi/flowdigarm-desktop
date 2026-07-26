@@ -15,3 +15,5 @@
 2026-07-26 | create | `docs/superpowers/specs/2026-07-26-element-library-collapse-design.md` | 记录图元库帮助按钮对齐及折叠后展开按钮可达性修复设计
 2026-07-26 | create | `docs/superpowers/plans/2026-07-26-element-library-collapse-fix.md` | 将图元库折叠头部修复拆分为组件 TDD、浏览器边界验证和完整回归步骤
 2026-07-26 | update | Element Library collapse header and `.agents/memory/outcomes.md` | 标题与帮助按钮改为仅展开时渲染，48px 折叠头部居中保留展开按钮；组件 11 项、Chromium E2E 9 项、完整 Vitest 116 个文件/977 项及生产构建（1206 个模块）通过
+2026-07-26 | update | `src/ui/shell/TitleBar.vue`, `tests/component/DesktopShellParts.test.ts`, `e2e/menus-accessibility.spec.ts` | 隔离品牌图标 scoped 样式，消除三个窗口图标 4px 左偏；组件测试、浏览器中心点断言、完整 Vitest 116 个文件/978 项、Chromium E2E 9 项及生产构建通过
+2026-07-26 | update | `.agents/memory/project-overview.md`, `.agents/memory/outcomes.md` | 记录压缩恢复后必须校验目标工作树的 standing correction，以及本轮错误工作区写入的纠正结果

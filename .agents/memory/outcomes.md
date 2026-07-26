@@ -54,3 +54,14 @@
 - **artifact**: `src/ui/shapes/ElementLibrary.vue`、组件回归测试及 `e2e/menus-accessibility.spec.ts`
 - **action**: 将标题与帮助按钮组合为仅展开时渲染的 `.library-heading`，并在 48px 折叠状态居中保留原展开按钮；以组件 RED/GREEN 和浏览器边界框包含断言验证可达性。
 - **validation**: 聚焦组件测试 1 个文件/11 项通过；Chromium 聚焦 E2E 9 项通过；`pnpm test` 116 个文件/977 项通过；`pnpm build` 退出 0、转换 1206 个模块（仅保留已知的大 chunk 警告）。
+
+## 2026-07-26 | 标题栏窗口按钮居中与工作树纠正
+
+- **date**: 2026-07-26
+- **capability**: systematic-debugging + test-driven-development
+- **result**: corrected
+- **artifact**: `src/ui/shell/TitleBar.vue`、`tests/component/DesktopShellParts.test.ts`
+- **action**: 将左侧品牌图标样式从共享 `.app-icon` 隔离为 `.title-brand-icon`，阻止 `margin-right: 8px` 经 Vue scoped 子组件根节点泄漏到三个窗口图标；同时将误落在根工作区的本轮修改全部恢复，并迁移到 `feat/application-icon-system` 工作树。
+- **validation**: 浏览器断言修复前实测按钮与图标中心相差 4px、修复后重合；根工作区状态干净且无暂存差异；目标工作树聚焦组件测试 5 项、Chromium 聚焦测试 1 项通过，`pnpm test` 116 个文件/978 项、完整 Chromium E2E 9 项通过，`pnpm build` 退出 0、转换 1206 个模块（仅保留已知的大 chunk 警告）。
+- **correction or failure**: 压缩后未按摘要校验活动工作树，错误地使用了进程默认根目录；首次修复只检查 CSS 声明，误把原生按钮内边距当作根因，没有验证实际图标边界。
+- **next action**: 每次压缩恢复后先执行目标工作树的 `git branch --show-current` 和 `git status --short`，再读取或编辑文件。

@@ -108,4 +108,5 @@ codegraph_explore "DiagramNode DiagramEdge"
 
 ## Standing corrections
 
-（暂无）
+- 压缩上下文恢复后，必须先按摘要中的工作树路径和分支校验当前目录；本功能的修改、验证与提交均在 `.worktrees/application-icon-system` 的 `feat/application-icon-system` 上进行，不得落到仓库根工作区。
+- 图标居中等视觉布局修复不能只断言 CSS 文本；必须在 Chromium 中比较实际元素边界或提供等价视觉证据。

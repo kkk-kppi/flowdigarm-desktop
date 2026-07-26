@@ -30,6 +30,15 @@ describe('desktop shell bars', () => {
     expect(maximized.get('[data-testid="title-maximize"]').attributes('aria-label')).toBe('还原窗口')
   })
 
+  it('centers every window action icon in its button box', () => {
+    const wrapper = mount(TitleBar, { props: { fileName: '示例.flowdiagram', dirty: false, maximized: false } })
+
+    expect(wrapper.get('[data-icon="appGraph"]').classes()).toContain('title-brand-icon')
+    for (const action of ['minimize', 'maximize', 'close']) {
+      expect(wrapper.get(`[data-testid="title-${action}"] [data-icon]`).classes()).not.toContain('title-brand-icon')
+    }
+  })
+
   it('shows selection/page/zoom/save state and toggles view settings outside history', async () => {
     const app = useAppStore()
     const wrapper = mount(StatusBar, { props: { selectedCount: 2, anchorX: '10.0 mm', anchorY: '20.0 mm', pageIndex: 2, pageCount: 4, zoom: 1.25, dirty: true } })

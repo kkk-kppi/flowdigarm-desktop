@@ -50,6 +50,20 @@ test('exposes icon labels/tooltips, contextual help, and trapped dialog focus', 
   await expectIconControlsAccessible(page)
 
   const maximizeButton = page.getByTestId('title-maximize')
+  for (const action of ['minimize', 'maximize', 'close']) {
+    const centers = await page.getByTestId(`title-${action}`).evaluate((button) => {
+      const icon = button.querySelector<HTMLElement>('[data-icon]')
+      if (!icon) throw new Error(`Missing ${action} icon`)
+      const buttonRect = button.getBoundingClientRect()
+      const iconRect = icon.getBoundingClientRect()
+      return {
+        button: { x: buttonRect.x + buttonRect.width / 2, y: buttonRect.y + buttonRect.height / 2 },
+        icon: { x: iconRect.x + iconRect.width / 2, y: iconRect.y + iconRect.height / 2 },
+      }
+    })
+    expect(centers.icon.x).toBeCloseTo(centers.button.x, 5)
+    expect(centers.icon.y).toBeCloseTo(centers.button.y, 5)
+  }
   await expect(maximizeButton).toHaveAccessibleName('最大化窗口')
   await expect(maximizeButton.locator('[data-icon]')).toHaveAttribute('data-icon', 'maximize')
   await maximizeButton.click()

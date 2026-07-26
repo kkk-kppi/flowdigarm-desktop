@@ -1,6 +1,6 @@
 <template>
   <header class="title-bar" data-testid="titlebar" data-tauri-drag-region>
-    <AppIcon class="app-icon" name="appGraph" data-tauri-drag-region />
+    <AppIcon class="title-brand-icon" name="appGraph" data-tauri-drag-region />
     <span class="title" data-tauri-drag-region>流程图编辑器 - {{ fileName }}{{ dirty ? '*未保存' : '' }}</span>
     <div class="window-actions">
       <button type="button" data-testid="title-minimize" aria-label="最小化窗口" title="最小化窗口。将编辑器收起到任务栏。" @click="$emit('minimize')"><AppIcon name="minimize" /></button>
@@ -25,10 +25,10 @@ defineEmits<{ minimize: []; maximize: []; close: [] }>()
 
 <style scoped>
 .title-bar { display: flex; align-items: center; height: var(--titlebar-h); padding-left: 9px; background: #263247; color: #f8fafc; user-select: none; }
-.app-icon { margin-right: 8px; color: #9dc1ff; }
+.title-brand-icon { margin-right: 8px; color: #9dc1ff; }
 .title { flex: 1; font-size: 12px; text-align: center; }
 .window-actions { display: flex; align-self: stretch; }
-.window-actions button { display: grid; width: 44px; place-items: center; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.window-actions button { display: grid; width: 44px; padding: 0; place-items: center; border: 0; background: transparent; color: inherit; cursor: pointer; }
 .window-actions button:hover, .window-actions button:focus-visible { background: rgb(255 255 255 / 12%); outline: 2px solid #9dc1ff; outline-offset: -2px; }
 .window-actions button:last-child:hover { background: #c42b1c; }
 </style>
