@@ -3,7 +3,7 @@ import { globSync, readFileSync } from 'node:fs'
 const iconRegistry = 'src/ui/icons/icon-registry.ts'
 
 type StaticResourceReference = {
-  kind: 'module' | 'html' | 'css'
+  kind: 'module-static' | 'module-dynamic' | 'html' | 'css'
   value: string
 }
 
@@ -15,9 +15,8 @@ function staticResourceReferences(source: string): StaticResourceReference[] {
     }
   }
 
-  collect('module', /\bimport\s*(['"])([^'"\r\n]+)\1/g, 2)
-  collect('module', /\bfrom\s*(['"])([^'"\r\n]+)\1/g, 2)
-  collect('module', /\bimport\s*\(\s*(['"])([^'"\r\n]+)\1\s*\)/g, 2)
+  collect('module-static', /\bimport\s+(?!\()(?:(?:type\s+)?[^'"\r\n;]+?\s+from\s+)?(['"])([^'"\r\n]+)\1/g, 2)
+  collect('module-dynamic', /\bimport\s*\(\s*(['"])([^'"\r\n]+)\1\s*\)/g, 2)
   collect('html', /\bsrc\s*=\s*(['"])(.*?)\1/gi, 2)
 
   for (const match of source.matchAll(/url\(\s*(?:(['"])(.*?)\1|([^)]*?))\s*\)/gi)) {
@@ -30,9 +29,15 @@ function isSvgReference(reference: string): boolean {
   return !/^(?:data:|#)/i.test(reference) && /\.svg(?:[?#].*)?$/i.test(reference)
 }
 
-function hasStaticSvgReference(source: string, allowModuleImports = false): boolean {
+function hasStaticSvgReference(source: string): boolean {
+  return staticResourceReferences(source).some(({ value }) => isSvgReference(value))
+}
+
+function hasInvalidRegistrySvgReference(source: string): boolean {
+  const allowedRegistryImport = /^\.\/svg\/[A-Za-z0-9_-]+\.svg\?url$/
   return staticResourceReferences(source).some(({ kind, value }) =>
-    isSvgReference(value) && !(allowModuleImports && kind === 'module'),
+    isSvgReference(value)
+      && !(kind === 'module-static' && allowedRegistryImport.test(value)),
   )
 }
 
@@ -47,12 +52,16 @@ function hasIconBoundaryViolation(source: string): boolean {
     || hasCustomNetworkIconReference(source)
 }
 
+function sourceHasIconBoundaryViolation(source: string, isIconRegistry = false): boolean {
+  return /<iconify-icon/i.test(source)
+    || hasCustomNetworkIconReference(source)
+    || (isIconRegistry ? hasInvalidRegistrySvgReference(source) : hasStaticSvgReference(source))
+}
+
 function fileHasIconBoundaryViolation(file: string): boolean {
   const normalizedFile = file.replaceAll('\\', '/')
   const source = readFileSync(file, 'utf8')
-  return /<iconify-icon/i.test(source)
-    || hasCustomNetworkIconReference(source)
-    || hasStaticSvgReference(source, normalizedFile === iconRegistry)
+  return sourceHasIconBoundaryViolation(source, normalizedFile === iconRegistry)
 }
 
 it('loads local UI icons only through the shared registry boundary', () => {
@@ -103,6 +112,20 @@ it('loads local UI icons only through the shared registry boundary', () => {
     .toBe(false)
   expect(hasIconBoundaryViolation("import AppIcon from '@/ui/icons/AppIcon.vue'"))
     .toBe(false)
+
+  expect(sourceHasIconBoundaryViolation("import close from './svg/close.svg?url'", true))
+    .toBe(false)
+  const invalidRegistryImports = [
+    "import x from 'https://example.com/foo.svg'",
+    "import x from 'package/foo.svg'",
+    "import x from '/src/ui/icons/svg/foo.svg?url'",
+    "import('https://example.com/foo.svg')",
+    "import('./svg/foo.svg?url')",
+    "import x from './svg/foo.svg'",
+  ]
+  for (const source of invalidRegistryImports) {
+    expect(sourceHasIconBoundaryViolation(source, true), source).toBe(true)
+  }
 
   const productionFiles = [
     ...globSync('src/**/*.{vue,ts,tsx,js,jsx}'),
