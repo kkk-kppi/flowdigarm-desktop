@@ -172,6 +172,9 @@ describe('AppShell 组装', () => {
     await wrapper.find('[data-menu-id="tools"]').trigger('click')
     await wrapper.find('[data-command-id="tool-layers"]').trigger('click')
     expect(wrapper.find('[data-testid="layer-manager"]').exists()).toBe(true)
+    const layerClose = wrapper.get('button[aria-label="关闭图层管理"]')
+    expect(layerClose.attributes('title')).toBe('关闭图层管理。返回完整画布空间。')
+    expect(layerClose.find('[data-icon="close"]').exists()).toBe(true)
 
     await wrapper.find('[data-menu-id="help"]').trigger('click')
     await wrapper.find('[data-command-id="help-shortcuts"]').trigger('click')

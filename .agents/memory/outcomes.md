@@ -43,5 +43,5 @@
 - **capability**: test-driven-development + verification-before-completion
 - **result**: helped
 - **artifact**: `src/ui/icons/` 本地 SVG 注册表与 Mask 组件、桌面外壳控件、窗口状态适配、组件/架构测试及 `e2e/menus-accessibility.spec.ts`
-- **action**: 以类型化本地 SVG 注册表和共享 CSS Mask 组件替换桌面外壳临时字符图标；同步原生确认的最大化/还原状态；最终审阅补齐复合控件 `aria-disabled` 图标传播、强制颜色下的本地 SVG Mask/GrayText/Highlight 浏览器证据，以及覆盖 Vue/TS/TSX/JS/JSX 的 SVG 资源边界。
-- **validation**: `pnpm test` 通过 116 个测试文件、977 项测试；`pnpm build` 退出 0（仅保留已知的大 chunk 警告）；`pnpm exec playwright test e2e/menus-accessibility.spec.ts --project=chromium` 通过 9 项测试；`git diff --check` 退出 0、无空白错误（仅提示 7 个代码/测试文件后续 Git 操作时将 LF 转为 CRLF）。
+- **action**: 以类型化本地 SVG 注册表和共享 CSS Mask 组件替换桌面外壳临时字符图标（含图层管理关闭按钮）；同步原生确认的最大化/还原状态；最终审阅补齐复合控件 `aria-disabled` 图标传播、强制颜色下的本地 SVG Mask/GrayText/Highlight 浏览器证据，以及覆盖 Vue/TS/TSX/JS/JSX、生产 CSS 和根 `index.html` 的 SVG 资源边界。
+- **validation**: `pnpm test` 通过 116 个测试文件、977 项测试；`pnpm build` 退出 0、转换 1206 个模块（仅保留已知的大 chunk 警告）；`pnpm exec playwright test e2e/menus-accessibility.spec.ts --project=chromium` 通过 9 项测试；`git diff --check` 退出 0、无空白错误（仅提示 5 个代码/测试/记录文件后续 Git 操作时将 LF 转为 CRLF）。

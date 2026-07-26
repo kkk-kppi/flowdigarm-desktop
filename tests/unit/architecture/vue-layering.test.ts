@@ -2,8 +2,15 @@ import { globSync, readFileSync } from 'node:fs'
 
 const iconRegistry = 'src/ui/icons/icon-registry.ts'
 
+function cssUrlReferences(source: string): string[] {
+  return [...source.matchAll(/url\(\s*(?:(['"])(.*?)\1|([^)]*?))\s*\)/gi)]
+    .map((match) => (match[2] ?? match[3] ?? '').trim())
+}
+
 function hasDirectSvgReference(source: string): boolean {
-  return /['"`](?:@\/|\.{1,2}\/)[^'"`]*\.svg(?:\?[^'"`]*)?['"`]/i.test(source)
+  const directSvg = /^(?:@\/|\.{1,2}\/)[^?#]*\.svg(?:[?#].*)?$/i
+  return /['"`](?:@\/|\.{1,2}\/)[^'"`]*\.svg(?:[?#][^'"`]*)?['"`]/i.test(source)
+    || cssUrlReferences(source).some((reference) => directSvg.test(reference))
 }
 
 function hasRemoteIconReference(source: string): boolean {
@@ -34,12 +41,29 @@ it('loads local UI icons only through the shared registry boundary', () => {
     .toBe(true)
   expect(hasIconBoundaryViolation("fetch('https://example.com/foo.svg')"))
     .toBe(true)
+  expect(hasIconBoundaryViolation('background: url(https://example.com/icon.svg)'))
+    .toBe(true)
+  expect(hasIconBoundaryViolation('background: url("https://example.com/icon.svg")'))
+    .toBe(true)
+  expect(hasIconBoundaryViolation('background: url(../icons/svg/foo.svg)'))
+    .toBe(true)
+  expect(hasIconBoundaryViolation("background: url('../icons/svg/foo.svg')"))
+    .toBe(true)
+  expect(hasIconBoundaryViolation('content: url(https://example.com/docs)'))
+    .toBe(false)
   expect(hasIconBoundaryViolation("window.open('https://example.com/docs')"))
     .toBe(false)
   expect(hasIconBoundaryViolation("import AppIcon from '@/ui/icons/AppIcon.vue'"))
     .toBe(false)
 
-  const violations = globSync('src/**/*.{vue,ts,tsx,js,jsx}').filter(fileHasIconBoundaryViolation)
+  const productionFiles = [
+    ...globSync('src/**/*.{vue,ts,tsx,js,jsx}'),
+    ...globSync('src/**/*.css'),
+    'index.html',
+  ].map((file) => file.replaceAll('\\', '/'))
+  expect(productionFiles).toContain('src/styles/tokens.css')
+  expect(productionFiles).toContain('index.html')
+  const violations = productionFiles.filter(fileHasIconBoundaryViolation)
   expect(violations).toEqual([])
 })
 

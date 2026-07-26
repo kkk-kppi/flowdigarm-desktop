@@ -32,7 +32,7 @@
             </template>
           </RightPanel>
           <div v-if="appStore.layerManagerOpen" class="layer-wrap">
-            <button type="button" class="layer-close" aria-label="关闭图层管理" title="关闭图层管理。返回完整画布空间。" @click="appStore.closeLayerManager()">×</button>
+            <button type="button" class="layer-close" aria-label="关闭图层管理" title="关闭图层管理。返回完整画布空间。" @click="appStore.closeLayerManager()"><AppIcon name="close" /></button>
             <LayerManager :controller="layerController" />
           </div>
         </div>
@@ -107,6 +107,7 @@ import UnsavedChangesDialog from '@/ui/dialogs/UnsavedChangesDialog.vue'
 import RecoveryDialog from '@/ui/dialogs/RecoveryDialog.vue'
 import PreferencesDialog from '@/ui/dialogs/PreferencesDialog.vue'
 import ExportDialog from '@/ui/dialogs/ExportDialog.vue'
+import AppIcon from '@/ui/icons/AppIcon.vue'
 import { shapeDragStartKey } from '@/ui/shapes/shape-drag-key'
 import { createMainMenus } from '@/application/menus/menu-model'
 import { isContainerNode } from '@/application/shapes/container-node'
