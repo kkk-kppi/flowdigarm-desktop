@@ -107,11 +107,27 @@ describe('ElementLibrary', () => {
 
   it('折叠按钮折叠整栏', async () => {
     const wrapper = 挂载()
-    expect(wrapper.find('.collapse-toggle [data-icon="chevronLeft"]').exists()).toBe(true)
-    await wrapper.find('[data-testid="collapse-toggle"]').trigger('click')
+    const toggle = wrapper.get('[data-testid="collapse-toggle"]')
+    const heading = wrapper.get('.library-heading')
+    expect(heading.get('.library-title').text()).toBe('图元')
+    expect(heading.find('[data-help-id="shape-library"]').exists()).toBe(true)
+    expect(toggle.find('[data-icon="chevronLeft"]').exists()).toBe(true)
+
+    await toggle.trigger('click')
+    expect(wrapper.find('.library-heading').exists()).toBe(false)
+    expect(wrapper.find('[data-help-id="shape-library"]').exists()).toBe(false)
     expect(wrapper.find('input[placeholder="搜索图元..."]').exists()).toBe(false)
     expect(wrapper.findAll('[data-testid="shape-cell"]')).toHaveLength(0)
-    expect(wrapper.find('.collapse-toggle [data-icon="chevronRight"]').exists()).toBe(true)
+    expect(toggle.attributes('aria-label')).toBe('展开图元库')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(toggle.find('[data-icon="chevronRight"]').exists()).toBe(true)
+
+    await toggle.trigger('click')
+    expect(wrapper.get('.library-heading').text()).toContain('图元')
+    expect(wrapper.find('[data-help-id="shape-library"]').exists()).toBe(true)
+    expect(wrapper.find('input[placeholder="搜索图元..."]').exists()).toBe(true)
+    expect(toggle.attributes('aria-label')).toBe('折叠图元库')
+    expect(toggle.find('[data-icon="chevronLeft"]').exists()).toBe(true)
   })
 })
 

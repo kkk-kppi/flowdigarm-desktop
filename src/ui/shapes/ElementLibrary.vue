@@ -1,8 +1,10 @@
 <template>
   <aside class="element-library" :class="{ collapsed }" data-testid="element-library">
     <div class="library-header">
-      <span class="library-title">图元</span>
-      <QuickHelpButton help-id="shape-library" label="形状库" />
+      <div v-if="!collapsed" class="library-heading">
+        <span class="library-title">图元</span>
+        <QuickHelpButton help-id="shape-library" label="形状库" />
+      </div>
       <button
         type="button"
         class="collapse-toggle"
@@ -287,6 +289,18 @@ onBeforeUnmount(() => clearPendingDrag?.())
   padding: 6px 8px;
   font-size: 13px;
   font-weight: 600;
+}
+
+.library-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.element-library.collapsed .library-header {
+  justify-content: center;
+  padding-inline: 0;
 }
 
 .collapse-toggle {

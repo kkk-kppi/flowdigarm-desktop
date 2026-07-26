@@ -14,3 +14,4 @@
 2026-07-26 | update | application icon system and `.agents/memory/outcomes.md` | 完成类型化本地 SVG Mask 图标系统（含图层管理关闭按钮）、复合控件禁用/强制颜色传播、覆盖 Vue/TS/TSX/JS/JSX/CSS/根 HTML 的资源架构守卫及无障碍/宽度矩阵覆盖；`pnpm test` 116 个文件/977 项、`pnpm build`（1206 个模块）、Chromium E2E 9 项及 `git diff --check` 通过
 2026-07-26 | create | `docs/superpowers/specs/2026-07-26-element-library-collapse-design.md` | 记录图元库帮助按钮对齐及折叠后展开按钮可达性修复设计
 2026-07-26 | create | `docs/superpowers/plans/2026-07-26-element-library-collapse-fix.md` | 将图元库折叠头部修复拆分为组件 TDD、浏览器边界验证和完整回归步骤
+2026-07-26 | update | Element Library collapse header and `.agents/memory/outcomes.md` | 标题与帮助按钮改为仅展开时渲染，48px 折叠头部居中保留展开按钮；组件 11 项、Chromium E2E 9 项、完整 Vitest 116 个文件/977 项及生产构建（1206 个模块）通过
