@@ -18,6 +18,7 @@ const canvasCalls = {
   editNodeText: vi.fn(),
   editEdgeLabel: vi.fn(),
   locateCell: vi.fn(),
+  fitPage: vi.fn(),
 }
 
 const CanvasAreaStub = defineComponent({
@@ -28,7 +29,7 @@ const CanvasAreaStub = defineComponent({
       editNodeText: canvasCalls.editNodeText,
       editEdgeLabel: canvasCalls.editEdgeLabel,
       locateCell: canvasCalls.locateCell,
-      zoomIn: vi.fn(), zoomOut: vi.fn(), setZoom: vi.fn(), fitPage: vi.fn(), fitContent: vi.fn(), fitSelection: vi.fn(),
+      zoomIn: vi.fn(), zoomOut: vi.fn(), setZoom: vi.fn(), fitPage: canvasCalls.fitPage, fitContent: vi.fn(), fitSelection: vi.fn(),
       createShapeAtViewportCenter: vi.fn(), startShapeDrag: vi.fn(),
     })
     return {}
@@ -49,6 +50,7 @@ function mountShell(attachToBody = false) {
   canvasCalls.editNodeText.mockReset()
   canvasCalls.editEdgeLabel.mockReset()
   canvasCalls.locateCell.mockReset()
+  canvasCalls.fitPage.mockReset()
   setActivePinia(createPinia())
   const store = useDocumentStore()
   const selection = useSelectionStore()
@@ -486,6 +488,12 @@ describe('AppShell 组装', () => {
     const { wrapper } = mountShell()
     await wrapper.find('[data-testid="canvas-area-stub"]').trigger('click')
     expect(wrapper.find<HTMLSelectElement>('[data-testid="status-zoom"]').element.value).toBe('1.5')
+  })
+
+  it('routes the dedicated status fit control through the existing viewport fit behavior', async () => {
+    const { wrapper } = mountShell()
+    await wrapper.get('[data-testid="status-fit"]').trigger('click')
+    expect(canvasCalls.fitPage).toHaveBeenCalledOnce()
   })
 
   it('executes former context placeholders through real stores and typed controllers', async () => {

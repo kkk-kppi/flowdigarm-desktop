@@ -124,6 +124,7 @@
             :aria-pressed="draft.defaultArrow === 'none'"
             @click="draft.defaultArrow = 'none'"
           >
+            <AppIcon name="minus" :size="14" />
             无
           </button>
           <button
@@ -134,6 +135,7 @@
             :aria-pressed="draft.defaultArrow === 'single'"
             @click="draft.defaultArrow = 'single'"
           >
+            <AppIcon name="arrowRight" :size="14" />
             单向
           </button>
           <button
@@ -144,6 +146,7 @@
             :aria-pressed="draft.defaultArrow === 'double'"
             @click="draft.defaultArrow = 'double'"
           >
+            <AppIcon name="arrowLeftRight" :size="14" />
             双向
           </button>
         </div>
@@ -184,6 +187,7 @@
 // 「应用」把草稿与页面原值打包为一个 UpdatePageCommand 执行（无变化不执行）；
 // 「重置」恢复显示为页面当前值（不产生命令）。单位换算一律经 formatMeasure/unitToPt。
 import { computed, reactive, ref, watch } from 'vue'
+import AppIcon from '@/ui/icons/AppIcon.vue'
 import QuickHelpButton from '@/ui/help/QuickHelpButton.vue'
 import type { ConnectorKind, Orientation, PageUnit } from '@/domain/diagram'
 import { paperSizeFor, type PaperPreset } from '@/domain/paper-presets'
@@ -413,6 +417,9 @@ function applySettings(): void {
 }
 
 .button-group button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
   padding: 3px 10px;
   border: 1px solid var(--color-border);

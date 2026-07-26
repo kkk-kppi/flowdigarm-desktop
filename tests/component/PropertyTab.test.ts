@@ -286,6 +286,58 @@ describe('PropertyTab 单节点', () => {
     expect(store.document.pages[0].nodes[0].text?.style.bold).toBe(true)
     expect(store.undoLabel).toBe('文本样式')
   })
+
+  it('为文本格式与对齐控件显示语义图标和中文无障碍名称', async () => {
+    const { wrapper, selection } = mountTab()
+    await select(wrapper, selection, ['node-1'])
+
+    const iconButtons = [
+      ['btn-bold', 'bold', '加粗'],
+      ['btn-italic', 'italic', '斜体'],
+      ['btn-underline', 'underline', '下划线'],
+      ['btn-strikethrough', 'strikethrough', '删除线'],
+      ['align-left', 'alignLeft', '左对齐'],
+      ['align-center', 'alignCenter', '居中对齐'],
+      ['align-right', 'alignRight', '右对齐'],
+      ['valign-top', 'alignTop', '顶端对齐'],
+      ['valign-middle', 'alignMiddle', '垂直居中'],
+      ['valign-bottom', 'alignBottom', '底端对齐'],
+    ] as const
+
+    for (const [testId, icon, ariaLabel] of iconButtons) {
+      const button = wrapper.get(`[data-testid="${testId}"]`)
+      expect(button.find(`[data-icon="${icon}"]`).exists()).toBe(true)
+      expect(button.attributes('aria-label')).toBe(ariaLabel)
+    }
+
+    const controlIcons = [
+      ['font-family', 'font'],
+      ['font-size', 'fontSize'],
+      ['text-color', 'textColor'],
+      ['text-background', 'fillColor'],
+    ] as const
+    for (const [testId, icon] of controlIcons) {
+      const control = wrapper.get(`[data-testid="${testId}"]`).element
+      expect(control.parentElement?.querySelector(`[data-icon="${icon}"]`)).not.toBeNull()
+    }
+  })
+
+  it('为每个展开与折叠的区段标题显示对应箭头', async () => {
+    const { wrapper, selection } = mountTab()
+    await select(wrapper, selection, ['node-1'])
+
+    for (const header of wrapper.findAll('.section-header')) {
+      expect(header.find('[data-icon="chevronDown"]').exists()).toBe(true)
+      await header.trigger('click')
+      expect(header.find('[data-icon="chevronRight"]').exists()).toBe(true)
+    }
+
+    await select(wrapper, selection, ['edge-1'])
+    const edgeHeader = wrapper.get('[data-testid="section-edge"] .section-header')
+    expect(edgeHeader.find('[data-icon="chevronDown"]').exists()).toBe(true)
+    await edgeHeader.trigger('click')
+    expect(edgeHeader.find('[data-icon="chevronRight"]').exists()).toBe(true)
+  })
 })
 
 describe('PropertyTab 多选聚合', () => {

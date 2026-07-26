@@ -10,7 +10,7 @@
       <!-- 节点信息（单节点） -->
       <section v-if="singleNode" class="prop-section" data-testid="section-node-info">
         <button type="button" class="section-header" :aria-expanded="expanded.info" @click="expanded.info = !expanded.info">
-          {{ expanded.info ? '▾' : '▸' }} 节点信息
+          <AppIcon :name="expanded.info ? 'chevronDown' : 'chevronRight'" :size="12" /> 节点信息
         </button>
         <div v-if="expanded.info" class="section-body">
           <div class="prop-row">
@@ -49,7 +49,7 @@
       <!-- 几何（单节点） -->
       <section v-if="singleNode" class="prop-section" data-testid="section-geometry">
         <button type="button" class="section-header" :aria-expanded="expanded.geometry" @click="expanded.geometry = !expanded.geometry">
-          {{ expanded.geometry ? '▾' : '▸' }} 几何
+          <AppIcon :name="expanded.geometry ? 'chevronDown' : 'chevronRight'" :size="12" /> 几何
         </button>
         <div v-if="expanded.geometry" class="section-body">
           <label v-for="field in geometryFields" :key="field.key" class="prop-row">
@@ -73,7 +73,7 @@
           :aria-expanded="expanded.businessData"
           @click="expanded.businessData = !expanded.businessData"
         >
-          {{ expanded.businessData ? '▾' : '▸' }} 业务数据
+          <AppIcon :name="expanded.businessData ? 'chevronDown' : 'chevronRight'" :size="12" /> 业务数据
         </button>
         <div v-if="expanded.businessData" class="section-body">
           <textarea
@@ -122,7 +122,7 @@
       <!-- 样式（节点） -->
       <section v-if="selectedNodes.length > 0" class="prop-section" data-testid="section-style">
         <button type="button" class="section-header" :aria-expanded="expanded.style" @click="expanded.style = !expanded.style">
-          {{ expanded.style ? '▾' : '▸' }} 样式
+          <AppIcon :name="expanded.style ? 'chevronDown' : 'chevronRight'" :size="12" /> 样式
         </button>
         <div v-if="expanded.style" class="section-body">
           <div class="prop-row">
@@ -252,7 +252,7 @@
       <!-- 文本（节点 + 混合选择时的边标签） -->
       <section v-if="selectedNodes.length > 0" class="prop-section" data-testid="section-text">
         <button type="button" class="section-header" :aria-expanded="expanded.text" @click="expanded.text = !expanded.text">
-          {{ expanded.text ? '▾' : '▸' }} 文本
+          <AppIcon :name="expanded.text ? 'chevronDown' : 'chevronRight'" :size="12" /> 文本
         </button>
         <div v-if="expanded.text" class="section-body">
           <label v-if="singleNode" class="prop-row prop-row-top">
@@ -267,6 +267,7 @@
           </label>
           <label class="prop-row">
             <span class="prop-label">字体</span>
+            <AppIcon name="font" :size="14" />
             <select
               data-testid="font-family"
               title="字体"
@@ -280,6 +281,7 @@
           </label>
           <label class="prop-row">
             <span class="prop-label">字号</span>
+            <AppIcon name="fontSize" :size="14" />
             <select
               data-testid="font-size"
               title="字号"
@@ -300,17 +302,19 @@
                 type="button"
                 :data-testid="`btn-${btn.key}`"
                 :title="btn.title"
+                :aria-label="btn.title"
                 :class="{ active: isTrue(textAgg.style[btn.key]), indeterminate: textAgg.style[btn.key].kind === 'mixed' }"
                 :aria-pressed="boolPressed(textAgg.style[btn.key])"
                 :disabled="textAgg.style[btn.key].kind === 'none'"
                 @click="toggleStyleBool(btn.key)"
               >
-                {{ btn.label }}
+                <AppIcon :name="btn.icon" />
               </button>
             </div>
           </div>
           <div class="prop-row">
             <span class="prop-label">字体颜色</span>
+            <AppIcon name="textColor" :size="14" />
             <input
               type="color"
               data-testid="text-color"
@@ -323,6 +327,7 @@
           </div>
           <div class="prop-row">
             <span class="prop-label">字体背景色</span>
+            <AppIcon name="fillColor" :size="14" />
             <input
               type="color"
               data-testid="text-background"
@@ -342,12 +347,13 @@
                 type="button"
                 :data-testid="`align-${opt.value}`"
                 :title="opt.title"
+                :aria-label="opt.title"
                 :class="{ active: textAgg.block.horizontalAlign.kind === 'value' && textAgg.block.horizontalAlign.value === opt.value, indeterminate: textAgg.block.horizontalAlign.kind === 'mixed' }"
                 :aria-pressed="alignPressed(textAgg.block.horizontalAlign, opt.value)"
                 :disabled="textAgg.block.horizontalAlign.kind === 'none'"
                 @click="writeTextPatch({ block: { horizontalAlign: opt.value } })"
               >
-                {{ opt.label }}
+                <AppIcon :name="opt.icon" />
               </button>
             </div>
           </div>
@@ -360,12 +366,13 @@
                 type="button"
                 :data-testid="`valign-${opt.value}`"
                 :title="opt.title"
+                :aria-label="opt.title"
                 :class="{ active: textAgg.block.verticalAlign.kind === 'value' && textAgg.block.verticalAlign.value === opt.value, indeterminate: textAgg.block.verticalAlign.kind === 'mixed' }"
                 :aria-pressed="alignPressed(textAgg.block.verticalAlign, opt.value)"
                 :disabled="textAgg.block.verticalAlign.kind === 'none'"
                 @click="writeTextPatch({ block: { verticalAlign: opt.value } })"
               >
-                {{ opt.label }}
+                <AppIcon :name="opt.icon" />
               </button>
             </div>
           </div>
@@ -417,7 +424,7 @@
       <!-- 边属性 -->
       <section v-if="selectedEdges.length > 0" class="prop-section" data-testid="section-edge">
         <button type="button" class="section-header" :aria-expanded="expanded.edge" @click="expanded.edge = !expanded.edge">
-          {{ expanded.edge ? '▾' : '▸' }} 边属性
+          <AppIcon :name="expanded.edge ? 'chevronDown' : 'chevronRight'" :size="12" /> 边属性
         </button>
         <div v-if="expanded.edge" class="section-body">
           <div class="prop-row">
@@ -544,6 +551,8 @@
 // 任何控件写入 = 全部选中目标一条命令（before 逐目标从文档实读）。
 // 颜色控件用 @change（取色器关闭/确认时一次提交一条记录；拖动过程的 input 事件不入栈）。
 import { computed, nextTick, reactive, ref, watch } from 'vue'
+import AppIcon from '@/ui/icons/AppIcon.vue'
+import type { IconName } from '@/ui/icons/icon-registry'
 import QuickHelpButton from '@/ui/help/QuickHelpButton.vue'
 import {
   type ConnectorKind,
@@ -742,22 +751,22 @@ function numberCommit(event: Event, write: (value: number) => void): void {
 
 // ---------- 静态选项 ----------
 
-const styleButtons: { key: 'bold' | 'italic' | 'underline' | 'strikethrough'; label: string; title: string }[] = [
-  { key: 'bold', label: 'B', title: '加粗' },
-  { key: 'italic', label: 'I', title: '斜体' },
-  { key: 'underline', label: 'U', title: '下划线' },
-  { key: 'strikethrough', label: 'S', title: '删除线' },
+const styleButtons: { key: 'bold' | 'italic' | 'underline' | 'strikethrough'; icon: IconName; title: string }[] = [
+  { key: 'bold', icon: 'bold', title: '加粗' },
+  { key: 'italic', icon: 'italic', title: '斜体' },
+  { key: 'underline', icon: 'underline', title: '下划线' },
+  { key: 'strikethrough', icon: 'strikethrough', title: '删除线' },
 ]
 
-const horizontalOptions: { value: TextBlock['horizontalAlign']; label: string; title: string }[] = [
-  { value: 'left', label: '左', title: '左对齐' },
-  { value: 'center', label: '中', title: '居中对齐' },
-  { value: 'right', label: '右', title: '右对齐' },
+const horizontalOptions: { value: TextBlock['horizontalAlign']; icon: IconName; title: string }[] = [
+  { value: 'left', icon: 'alignLeft', title: '左对齐' },
+  { value: 'center', icon: 'alignCenter', title: '居中对齐' },
+  { value: 'right', icon: 'alignRight', title: '右对齐' },
 ]
-const verticalOptions: { value: TextBlock['verticalAlign']; label: string; title: string }[] = [
-  { value: 'top', label: '上', title: '顶端对齐' },
-  { value: 'middle', label: '中', title: '垂直居中' },
-  { value: 'bottom', label: '下', title: '底端对齐' },
+const verticalOptions: { value: TextBlock['verticalAlign']; icon: IconName; title: string }[] = [
+  { value: 'top', icon: 'alignTop', title: '顶端对齐' },
+  { value: 'middle', icon: 'alignMiddle', title: '垂直居中' },
+  { value: 'bottom', icon: 'alignBottom', title: '底端对齐' },
 ]
 const directionOptions: { value: TextBlock['direction']; label: string; title: string }[] = [
   { value: 'horizontal', label: '横排', title: '横排文本' },
@@ -924,6 +933,9 @@ function commitLink(kind: 'node' | 'edge', event: Event): void {
 }
 
 .section-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   width: 100%;
   border: none;
   background: var(--color-bg);

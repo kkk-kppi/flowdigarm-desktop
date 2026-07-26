@@ -111,6 +111,13 @@ describe('PageSetupTab', () => {
     expect(store.undoLabel).toBe('页面设置')
   })
 
+  it('为默认箭头选项显示语义图标', () => {
+    const { wrapper } = mountTab()
+    expect(wrapper.find('[data-testid="arrow-none"] [data-icon="minus"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="arrow-single"] [data-icon="arrowRight"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="arrow-double"] [data-icon="arrowLeftRight"]').exists()).toBe(true)
+  })
+
   it('背景页下拉仅列出背景类型页面；选择后「应用」写入引用', async () => {
     const document: DiagramDocument = {
       ...createEmptyDocument(),
