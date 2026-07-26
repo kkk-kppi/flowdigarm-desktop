@@ -146,6 +146,11 @@ describe('ElementLibrary 常用区', () => {
       '文档',
       '数据流',
     ])
+
+    await topHeader.trigger('click')
+    expect(topHeader.attributes('aria-expanded')).toBe('false')
+    expect(topHeader.find('[data-icon="chevronRight"]').exists()).toBe(true)
+    expect(wrapper.findAll('[data-testid="top-shape-cell"]')).toHaveLength(0)
   })
 
   it('使用记录驱动排序（次数降序）；与分类格子同一创建交互', async () => {
