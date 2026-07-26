@@ -29,6 +29,6 @@ defineEmits<{ minimize: []; maximize: []; close: [] }>()
 .title { flex: 1; font-size: 12px; text-align: center; }
 .window-actions { display: flex; align-self: stretch; }
 .window-actions button { display: grid; width: 44px; padding: 0; place-items: center; border: 0; background: transparent; color: inherit; cursor: pointer; }
-.window-actions button:hover, .window-actions button:focus-visible { background: rgb(255 255 255 / 12%); outline: 2px solid #9dc1ff; outline-offset: -2px; }
+.window-actions button:hover, .window-actions button:focus-visible { background: rgb(255 255 255 / 12%); }
 .window-actions button:last-child:hover { background: #c42b1c; }
 </style>
