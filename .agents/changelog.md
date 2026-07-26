@@ -13,3 +13,4 @@
 2026-07-25 | create | `docs/superpowers/plans/2026-07-25-application-icon-system.md` | 将批准的图标系统设计拆分为 8 个 TDD 实施与验证任务
 2026-07-26 | update | application icon system and `.agents/memory/outcomes.md` | 完成类型化本地 SVG Mask 图标系统（含图层管理关闭按钮）、复合控件禁用/强制颜色传播、覆盖 Vue/TS/TSX/JS/JSX/CSS/根 HTML 的资源架构守卫及无障碍/宽度矩阵覆盖；`pnpm test` 116 个文件/977 项、`pnpm build`（1206 个模块）、Chromium E2E 9 项及 `git diff --check` 通过
 2026-07-26 | create | `docs/superpowers/specs/2026-07-26-element-library-collapse-design.md` | 记录图元库帮助按钮对齐及折叠后展开按钮可达性修复设计
+2026-07-26 | create | `docs/superpowers/plans/2026-07-26-element-library-collapse-fix.md` | 将图元库折叠头部修复拆分为组件 TDD、浏览器边界验证和完整回归步骤
