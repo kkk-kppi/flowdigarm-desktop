@@ -113,15 +113,22 @@ for (const width of [960, 1024, 1280, 1440]) {
     const layout = await toolbar.evaluate((element) => ({
       scrollWidth: element.scrollWidth,
       clientWidth: element.clientWidth,
+      scrollHeight: element.scrollHeight,
+      clientHeight: element.clientHeight,
       height: element.getBoundingClientRect().height,
+      flexWrap: getComputedStyle(element).flexWrap,
       clipped: [...element.querySelectorAll('button, input, select')].filter((control) => {
         const controlBox = control.getBoundingClientRect()
         const toolbarBox = element.getBoundingClientRect()
-        return controlBox.left < toolbarBox.left || controlBox.right > toolbarBox.right
+        return controlBox.left < toolbarBox.left
+          || controlBox.right > toolbarBox.right
+          || controlBox.top < toolbarBox.top
+          || controlBox.bottom > toolbarBox.bottom
       }).length,
     }))
-    expect(layout).toMatchObject({ height: 48, clipped: 0 })
+    expect(layout).toMatchObject({ height: 48, flexWrap: 'nowrap', clipped: 0 })
     expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth)
+    expect(layout.scrollHeight).toBeLessThanOrEqual(layout.clientHeight)
   })
 }
 
