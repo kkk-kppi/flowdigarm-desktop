@@ -25,7 +25,7 @@ defineEmits<{ minimize: []; maximize: []; close: [] }>()
 
 <style scoped>
 .title-bar { display: flex; align-items: center; height: var(--titlebar-h); padding-left: 9px; background: #263247; color: #f8fafc; user-select: none; }
-.title-brand-icon { margin-right: 8px; color: #9dc1ff; }
+.title-brand-icon { color: #9dc1ff; }
 .title { flex: 1; font-size: 12px; text-align: center; }
 .window-actions { display: flex; align-self: stretch; }
 .window-actions button { display: grid; width: 44px; padding: 0; place-items: center; border: 0; background: transparent; color: inherit; cursor: pointer; }
