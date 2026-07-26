@@ -111,11 +111,26 @@ describe('PageSetupTab', () => {
     expect(store.undoLabel).toBe('页面设置')
   })
 
-  it('为默认箭头选项显示语义图标', () => {
+  it('以紧凑纯图标按钮显示默认箭头语义、名称和按下状态', async () => {
     const { wrapper } = mountTab()
-    expect(wrapper.find('[data-testid="arrow-none"] [data-icon="minus"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="arrow-single"] [data-icon="arrowRight"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="arrow-double"] [data-icon="arrowLeftRight"]').exists()).toBe(true)
+    const options = [
+      ['arrow-none', 'minus', '无箭头', 'false'],
+      ['arrow-single', 'arrowRight', '单向箭头', 'true'],
+      ['arrow-double', 'arrowLeftRight', '双向箭头', 'false'],
+    ] as const
+
+    for (const [testId, icon, label, pressed] of options) {
+      const button = wrapper.get(`[data-testid="${testId}"]`)
+      expect(button.find(`[data-icon="${icon}"]`).exists()).toBe(true)
+      expect(button.attributes('aria-label')).toBe(label)
+      expect(button.attributes('title')).toContain(label)
+      expect(button.attributes('aria-pressed')).toBe(pressed)
+      expect(button.text()).toBe('')
+    }
+
+    await wrapper.get('[data-testid="arrow-double"]').trigger('click')
+    expect(wrapper.get('[data-testid="arrow-single"]').attributes('aria-pressed')).toBe('false')
+    expect(wrapper.get('[data-testid="arrow-double"]').attributes('aria-pressed')).toBe('true')
   })
 
   it('背景页下拉仅列出背景类型页面；选择后「应用」写入引用', async () => {

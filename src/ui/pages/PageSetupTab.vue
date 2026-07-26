@@ -119,35 +119,35 @@
           <button
             type="button"
             data-testid="arrow-none"
+            aria-label="无箭头"
             title="无箭头"
             :class="{ active: draft.defaultArrow === 'none' }"
             :aria-pressed="draft.defaultArrow === 'none'"
             @click="draft.defaultArrow = 'none'"
           >
             <AppIcon name="minus" :size="14" />
-            无
           </button>
           <button
             type="button"
             data-testid="arrow-single"
+            aria-label="单向箭头"
             title="单向箭头"
             :class="{ active: draft.defaultArrow === 'single' }"
             :aria-pressed="draft.defaultArrow === 'single'"
             @click="draft.defaultArrow = 'single'"
           >
             <AppIcon name="arrowRight" :size="14" />
-            单向
           </button>
           <button
             type="button"
             data-testid="arrow-double"
+            aria-label="双向箭头"
             title="双向箭头"
             :class="{ active: draft.defaultArrow === 'double' }"
             :aria-pressed="draft.defaultArrow === 'double'"
             @click="draft.defaultArrow = 'double'"
           >
             <AppIcon name="arrowLeftRight" :size="14" />
-            双向
           </button>
         </div>
       </div>
