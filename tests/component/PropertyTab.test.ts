@@ -180,6 +180,19 @@ describe('PropertyTab 单节点', () => {
     expect(wrapper.find('[data-testid="node-id"]').text()).toBe('node-1')
   })
 
+  it('lays out all geometry fields in the geometry grid and keeps extra properties', async () => {
+    const { wrapper, selection } = mountTab()
+    await select(wrapper, selection, ['node-1'])
+
+    const grid = wrapper.get('[data-testid="geometry-grid"]')
+    expect(grid.findAll('.prop-row')).toHaveLength(5)
+    expect(grid.findAll<HTMLInputElement>('input').map((input) => input.attributes('data-testid'))).toEqual([
+      'geo-x', 'geo-y', 'geo-width', 'geo-height', 'geo-angle',
+    ])
+    expect(wrapper.find('[data-testid="node-link"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="business-data-json"]').exists()).toBe(true)
+  })
+
   it('几何按页单位显示（mm）：X=3.5、宽=28.2', async () => {
     const { wrapper, selection } = mountTab()
     await select(wrapper, selection, ['node-1'])

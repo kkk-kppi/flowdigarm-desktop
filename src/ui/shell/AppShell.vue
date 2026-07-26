@@ -17,10 +17,17 @@
         />
         <MenuBar :menus="menus" @execute="onMenuExecute" @open-change="menuOpen = $event" />
         <CompactToolbar />
-        <PageTabs />
         <div class="shell-main" data-testid="shell-main">
           <ElementLibrary @create-request="onCreateRequest" @more-shapes="onMoreShapes" />
-          <CanvasArea ref="canvasAreaRef" class="shell-canvas" :menu-controller="menuController" @viewport-change="onViewportChange" />
+          <div class="canvas-column" data-testid="canvas-column">
+            <PageTabs />
+            <CanvasArea
+              ref="canvasAreaRef"
+              class="shell-canvas"
+              :menu-controller="menuController"
+              @viewport-change="onViewportChange"
+            />
+          </div>
           <RightPanel ref="rightPanelRef">
             <template #find>
               <FindReplaceTab
@@ -566,9 +573,18 @@ onMounted(async () => {
   min-height: 0;
 }
 
+.canvas-column {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
 .shell-canvas {
   flex: 1;
   min-width: 0;
+  min-height: 0;
 }
 
 .layer-wrap { position: relative; display: flex; height: 100%; }

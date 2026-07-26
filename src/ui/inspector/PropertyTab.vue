@@ -51,7 +51,7 @@
         <button type="button" class="section-header" :aria-expanded="expanded.geometry" @click="expanded.geometry = !expanded.geometry">
           <AppIcon :name="expanded.geometry ? 'chevronDown' : 'chevronRight'" :size="12" /> 几何
         </button>
-        <div v-if="expanded.geometry" class="section-body">
+        <div v-if="expanded.geometry" class="section-body geometry-grid" data-testid="geometry-grid">
           <label v-for="field in geometryFields" :key="field.key" class="prop-row">
             <span class="prop-label">{{ field.label }}{{ field.angle ? '' : `（${pageUnit}）` }}</span>
             <input
@@ -939,28 +939,40 @@ function commitLink(kind: 'node' | 'edge', event: Event): void {
 }
 
 .prop-section {
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  overflow: hidden;
+  border: 0;
+  border-top: 1px solid var(--color-border);
 }
 
 .section-header {
-  display: flex;
-  align-items: center;
-  gap: 4px;
   width: 100%;
+  padding: 8px 0;
   border: none;
-  background: var(--color-bg);
-  padding: 6px 10px;
+  background: transparent;
+  color: var(--color-text-secondary);
   font-size: 12px;
   font-weight: 600;
   text-align: left;
   cursor: pointer;
-  color: var(--color-text);
 }
 
 .section-body {
-  padding: 4px 10px 10px;
+  padding: 0 0 10px;
+}
+
+.geometry-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 12px;
+  row-gap: 8px;
+}
+
+.geometry-grid .prop-row {
+  min-width: 0;
+  margin-top: 0;
+}
+
+.geometry-grid .prop-label {
+  width: auto;
 }
 
 .prop-row {

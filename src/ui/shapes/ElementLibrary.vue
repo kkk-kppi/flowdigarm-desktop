@@ -341,7 +341,7 @@ onBeforeUnmount(() => clearPendingDrag?.())
 .library-body {
   flex: 1;
   overflow-y: auto;
-  padding: 0 8px;
+  padding: 0;
 }
 
 .category-header {
@@ -349,12 +349,12 @@ onBeforeUnmount(() => clearPendingDrag?.())
   align-items: center;
   gap: 4px;
   width: 100%;
+  padding: 6px 8px;
   border: none;
-  background: none;
+  background: #ebebeb;
   cursor: pointer;
   font-size: 12px;
   font-weight: 600;
-  padding: 6px 0;
   text-align: left;
 }
 
@@ -366,7 +366,7 @@ onBeforeUnmount(() => clearPendingDrag?.())
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
-  padding-bottom: 8px;
+  padding: 8px 8px;
 }
 
 .shape-cell {
@@ -406,7 +406,7 @@ onBeforeUnmount(() => clearPendingDrag?.())
 }
 
 .empty-hint {
-  margin: 12px 0;
+  margin: 12px 8px;
   font-size: 12px;
   color: #999999;
   text-align: center;

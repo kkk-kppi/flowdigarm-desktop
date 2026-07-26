@@ -17,3 +17,7 @@
 2026-07-26 | update | Element Library collapse header and `.agents/memory/outcomes.md` | 标题与帮助按钮改为仅展开时渲染，48px 折叠头部居中保留展开按钮；组件 11 项、Chromium E2E 9 项、完整 Vitest 116 个文件/977 项及生产构建（1206 个模块）通过
 2026-07-26 | update | `src/ui/shell/TitleBar.vue`, `tests/component/DesktopShellParts.test.ts`, `e2e/menus-accessibility.spec.ts` | 隔离品牌图标 scoped 样式，消除三个窗口图标 4px 左偏；组件测试、浏览器中心点断言、完整 Vitest 116 个文件/978 项、Chromium E2E 9 项及生产构建通过
 2026-07-26 | update | `.agents/memory/project-overview.md`, `.agents/memory/outcomes.md` | 记录压缩恢复后必须校验目标工作树的 standing correction，以及本轮错误工作区写入的纠正结果
+2026-07-26 | create | `docs/superpowers/specs/2026-07-26-editor-layout-prototype-alignment-design.md` | 记录页签层级、重复缩放控件、图元分类标题和属性面板布局的原型对齐设计
+2026-07-26 | create | `docs/superpowers/plans/2026-07-26-editor-layout-prototype-alignment.md` | 将批准的编辑器布局原型对齐设计拆分为外壳页签、图元分类、属性面板和浏览器回归验证任务
+2026-07-26 | update | editor layout prototype alignment, verification, and `.agents/memory/outcomes.md` | 完成页签归入画布列并移除重复缩放、图元分类全宽灰底、属性分区平直边框、几何字段两列及顺序验证，并覆盖多页窄窗口滚动和删除确认态；完整 Vitest 116 个文件/977 项、生产构建 1206 个模块、完整 Chromium 25 项及 `git diff --check` 通过
+2026-07-26 | update | `src/ui/pages/PageTabs.vue`, `e2e/editor-core.spec.ts`, `.agents/memory/outcomes.md` | 修复删除确认层固定在页签栏最右侧的问题；按点击页签定位并做左右边界夹取，滚动或缩放时关闭；完整 Vitest 116 个文件/977 项、构建 1206 个模块、Chromium 26 项通过

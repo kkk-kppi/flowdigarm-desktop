@@ -1,66 +1,47 @@
 <template>
-  <div class="page-tabs" data-testid="page-tabs">
+  <div ref="pageTabsRoot" class="page-tabs" data-testid="page-tabs">
     <div
-      v-for="page in pages"
-      :key="page.id"
-      class="page-tab"
-      :class="{ active: page.id === documentStore.activePageId }"
-      data-testid="page-tab"
-      @click="switchPage(page.id)"
-      @dblclick="startRename(page)"
+      class="page-tab-list"
+      data-testid="page-tab-list"
+      aria-label="页面标签"
+      tabindex="0"
+      @scroll="cancelDelete"
     >
-      <span v-if="renamingId !== page.id" class="page-tab-name" :title="page.name">
-        {{ page.name }}
-      </span>
-      <input
-        v-else
-        ref="renameInputRef"
-        v-model="renameDraft"
-        class="page-tab-rename"
-        data-testid="rename-input"
-        aria-label="重命名页面"
-        @keydown.enter="commitRename(page)"
-        @keydown.esc="cancelRename"
-        @blur="commitRename(page)"
-        @click.stop
-        @dblclick.stop
-      />
-      <button
-        v-if="pages.length > 1 && renamingId !== page.id"
-        type="button"
-        class="page-tab-close"
-        data-testid="close-tab"
-        aria-label="关闭页面"
-        title="删除此页"
-        @click.stop="askDelete(page.id)"
-      >
-        <AppIcon name="close" :size="12" />
-      </button>
       <div
-        v-if="confirmingDeleteId === page.id"
-        class="delete-confirm"
-        data-testid="delete-confirm"
-        @click.stop
+        v-for="page in pages"
+        :key="page.id"
+        class="page-tab"
+        :class="{ active: page.id === documentStore.activePageId }"
+        data-testid="page-tab"
+        @click="switchPage(page.id)"
+        @dblclick="startRename(page)"
       >
-        <span class="delete-confirm-text">删除此页？</span>
-        <span v-if="deleteError" class="delete-confirm-error" role="alert">{{ deleteError }}</span>
+        <span v-if="renamingId !== page.id" class="page-tab-name" :title="page.name">
+          {{ page.name }}
+        </span>
+        <input
+          v-else
+          ref="renameInputRef"
+          v-model="renameDraft"
+          class="page-tab-rename"
+          data-testid="rename-input"
+          aria-label="重命名页面"
+          @keydown.enter="commitRename(page)"
+          @keydown.esc="cancelRename"
+          @blur="commitRename(page)"
+          @click.stop
+          @dblclick.stop
+        />
         <button
+          v-if="pages.length > 1 && renamingId !== page.id"
           type="button"
-          data-testid="confirm-delete"
-          aria-label="确定删除"
-          title="确定"
-          @click="confirmDelete(page.id)"
+          class="page-tab-close"
+          data-testid="close-tab"
+          aria-label="关闭页面"
+          title="删除此页"
+          @click.stop="askDelete(page.id, $event)"
         >
-          确定
-        </button>
-        <button
-          type="button"
-          data-testid="cancel-delete"
-          aria-label="取消删除"
-          title="取消"
-          @click="cancelDelete"
-        >
-          取消
+          <AppIcon name="close" :size="12" />
         </button>
       </div>
     </div>
@@ -73,27 +54,42 @@
     >
       <AppIcon name="add" :size="14" />
     </button>
-    <div class="zoom-controls">
-      <input
-        type="range"
-        class="zoom-slider"
-        data-testid="zoom-slider"
-        min="10"
-        max="400"
-        :value="zoomPercent"
-        aria-label="缩放滑块"
-        title="缩放"
-        @input="onZoomInput"
-      />
-      <span class="zoom-percent" data-testid="zoom-percent">{{ zoomPercent }}%</span>
+    <div
+      v-if="confirmingDeleteId"
+      ref="deleteConfirmRef"
+      class="delete-confirm"
+      data-testid="delete-confirm"
+      :style="{ left: `${deleteConfirmLeft}px` }"
+      @click.stop
+    >
+      <span class="delete-confirm-text">删除此页？</span>
+      <span v-if="deleteError" class="delete-confirm-error" role="alert">{{ deleteError }}</span>
+      <button
+        type="button"
+        data-testid="confirm-delete"
+        aria-label="确定删除"
+        title="确定"
+        @click="confirmDelete(confirmingDeleteId)"
+      >
+        确定
+      </button>
+      <button
+        type="button"
+        data-testid="cancel-delete"
+        aria-label="取消删除"
+        title="取消"
+        @click="cancelDelete"
+      >
+        取消
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-// 页面标签栏（32px）：页签切换/双击行内重命名/内联确认删除/新建页/当前页缩放控件。
-// 命令（新建/删除/重命名）经 document-store 执行；切换页与缩放为视图行为，不产生命令。
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+// 页面标签栏（32px）：页签切换/双击行内重命名/内联确认删除/新建页。
+// 命令（新建/删除/重命名）经 document-store 执行；切换页为视图行为，不产生命令。
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { DiagramPage } from '@/domain/diagram'
 import { PageTabsController } from '@/application/pages/page-tabs-controller'
 import { useDocumentStore } from '@/stores/document-store'
@@ -108,6 +104,9 @@ const pageTabsController = new PageTabsController({
 })
 
 const pages = computed(() => documentStore.document.pages)
+const pageTabsRoot = ref<HTMLElement | null>(null)
+const deleteConfirmRef = ref<HTMLElement | null>(null)
+const deleteConfirmLeft = ref(4)
 
 // ---- 切换页（视图行为，不产生命令） ----
 function switchPage(pageId: string): void {
@@ -153,15 +152,27 @@ function cancelRename(): void {
 const confirmingDeleteId = ref<string | null>(null)
 const deleteError = ref('')
 
-function askDelete(pageId: string): void {
+async function askDelete(pageId: string, event: MouseEvent): Promise<void> {
+  const root = pageTabsRoot.value
+  const tab = (event.currentTarget as HTMLElement).closest<HTMLElement>('.page-tab')
+  if (!root || !tab) return
+  const rootBox = root.getBoundingClientRect()
+  const tabBox = tab.getBoundingClientRect()
   confirmingDeleteId.value = pageId
   deleteError.value = ''
+  await nextTick()
+  const confirmWidth = deleteConfirmRef.value?.offsetWidth ?? 0
+  const desiredLeft = tabBox.left - rootBox.left
+  deleteConfirmLeft.value = Math.max(4, Math.min(desiredLeft, root.clientWidth - confirmWidth - 4))
 }
 
 function cancelDelete(): void {
   confirmingDeleteId.value = null
   deleteError.value = ''
 }
+
+onMounted(() => window.addEventListener('resize', cancelDelete))
+onBeforeUnmount(() => window.removeEventListener('resize', cancelDelete))
 
 function confirmDelete(pageId: string): void {
   try {
@@ -176,36 +187,6 @@ function confirmDelete(pageId: string): void {
 function addPage(): void {
   pageTabsController.add()
 }
-
-// ---- 缩放控件（绑定当前页 ViewportController，视图行为不入历史） ----
-const zoomPercent = ref(100)
-let unsubscribeViewport: (() => void) | null = null
-
-watch(
-  () => documentStore.activePageId,
-  (pageId) => {
-    unsubscribeViewport?.()
-    const controller = documentStore.pageManager.controllerFor(pageId)
-    zoomPercent.value = Math.round(controller.state.zoom * 100)
-    unsubscribeViewport = controller.subscribe((state) => {
-      zoomPercent.value = Math.round(state.zoom * 100)
-    })
-  },
-  { immediate: true },
-)
-
-onBeforeUnmount(() => {
-  unsubscribeViewport?.()
-  unsubscribeViewport = null
-})
-
-function onZoomInput(event: Event): void {
-  const value = Number((event.target as HTMLInputElement).value)
-  if (!Number.isFinite(value)) {
-    return
-  }
-  documentStore.pageManager.controllerFor(documentStore.activePageId).setZoom(value / 100)
-}
 </script>
 
 <style scoped>
@@ -219,6 +200,20 @@ function onZoomInput(event: Event): void {
   font-size: 12px;
   color: var(--color-text);
   user-select: none;
+  min-width: 0;
+}
+
+.page-tab-list {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.page-tab-list::-webkit-scrollbar {
+  display: none;
 }
 
 .page-tab {
@@ -230,6 +225,7 @@ function onZoomInput(event: Event): void {
   border-right: 1px solid var(--color-border);
   cursor: default;
   color: var(--color-text-secondary);
+  flex: 0 0 auto;
 }
 
 .page-tab.active {
@@ -276,7 +272,6 @@ function onZoomInput(event: Event): void {
 .delete-confirm {
   position: absolute;
   top: calc(100% + 4px);
-  left: 0;
   z-index: 10;
   display: flex;
   align-items: center;
@@ -308,11 +303,13 @@ function onZoomInput(event: Event): void {
 }
 
 .page-tab-add {
+  flex: 0 0 auto;
   align-self: center;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   margin-left: 4px;
+  margin-right: 4px;
   width: 22px;
   height: 22px;
   border: 1px solid var(--color-border);
@@ -327,23 +324,5 @@ function onZoomInput(event: Event): void {
 .page-tab-add:hover {
   border-color: var(--color-primary);
   color: var(--color-primary);
-}
-
-.zoom-controls {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 10px;
-}
-
-.zoom-slider {
-  width: 120px;
-}
-
-.zoom-percent {
-  min-width: 40px;
-  text-align: right;
-  color: var(--color-text-secondary);
 }
 </style>

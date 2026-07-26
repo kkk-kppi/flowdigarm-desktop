@@ -128,18 +128,35 @@ function mountShellWithServices(services: EditorServices, attachToBody = false) 
 }
 
 describe('AppShell 组装', () => {
-  it('按序渲染标题栏/七菜单/紧凑工具栏/页面标签/主区/状态栏', () => {
+  it('renders sidebars beside a central page-tabs and canvas column', () => {
     const { wrapper } = mountShell()
-    expect(wrapper.find('[data-testid="editor-shell"]').exists()).toBe(true)
-    const order = [
+    const background = wrapper.get('[data-testid="shell-background"]')
+    const topLevel = background.element.children
+
+    expect(Array.from(topLevel).map((element) => element.getAttribute('data-testid'))).toEqual([
       'titlebar',
       'menubar',
       'compact-toolbar',
-      'page-tabs',
       'shell-main',
       'statusbar',
-    ].map((testid) => wrapper.find(`[data-testid="${testid}"]`).exists())
-    expect(order).toEqual([true, true, true, true, true, true])
+    ])
+
+    const main = wrapper.get('[data-testid="shell-main"]')
+    const canvasColumn = main.get('[data-testid="canvas-column"]')
+    const mainChildren = Array.from(main.element.children)
+    expect(mainChildren).toEqual([
+      main.get('[data-testid="element-library"]').element,
+      canvasColumn.element,
+      main.get('.right-panel-wrap').element,
+    ])
+    expect(mainChildren[2].querySelector('[data-testid="right-panel"]')).not.toBeNull()
+
+    const canvasChildren = Array.from(canvasColumn.element.children)
+    expect(canvasChildren).toEqual([
+      canvasColumn.get('[data-testid="page-tabs"]').element,
+      canvasColumn.get('.shell-canvas').element,
+    ])
+    expect(canvasChildren[1].querySelector('[data-testid="canvas-area-stub"]')).not.toBeNull()
   })
 
   it('标题栏显示应用名与文档名', () => {
@@ -147,14 +164,6 @@ describe('AppShell 组装', () => {
     const titlebar = wrapper.find('[data-testid="titlebar"]')
     expect(titlebar.text()).toContain('流程图编辑器')
     expect(titlebar.text()).toContain(store.document.name)
-  })
-
-  it('主区包含图元库、画布区与右侧面板', () => {
-    const { wrapper } = mountShell()
-    const main = wrapper.find('[data-testid="shell-main"]')
-    expect(main.find('[data-testid="element-library"]').exists()).toBe(true)
-    expect(main.find('[data-testid="canvas-area-stub"]').exists()).toBe(true)
-    expect(main.find('[data-testid="right-panel"]').exists()).toBe(true)
   })
 
   it('状态栏占位显示简单文本', () => {

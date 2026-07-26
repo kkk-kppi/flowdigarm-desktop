@@ -1,5 +1,6 @@
 import { mkdir, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import type { Locator } from '@playwright/test'
 import {
   captureX6CellBeforeRebuild,
   expect,
@@ -12,6 +13,143 @@ import {
 } from './fixtures'
 
 test.beforeEach(async ({ page }) => openCleanEditor(page))
+
+async function layoutBox(locator: Locator) {
+  await expect(locator).toBeVisible()
+  const box = await locator.boundingBox()
+  if (!box) {
+    throw new Error(`Expected a non-null layout box for ${locator}`)
+  }
+  return box
+}
+
+test('matches the confirmed prototype shell and panel layout', async ({ page }) => {
+  const library = page.getByTestId('element-library')
+  const canvasColumn = page.getByTestId('canvas-column')
+  const pageTabs = page.getByTestId('page-tabs')
+  const rightPanel = page.getByTestId('right-panel')
+
+  const [libraryBox, columnBox, tabsBox, panelBox] = await Promise.all([
+    layoutBox(library),
+    layoutBox(canvasColumn),
+    layoutBox(pageTabs),
+    layoutBox(rightPanel),
+  ])
+  expect(Math.abs(tabsBox.x - columnBox.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(tabsBox.width - columnBox.width)).toBeLessThanOrEqual(1)
+  expect(Math.abs(libraryBox.y - tabsBox.y)).toBeLessThanOrEqual(1)
+  expect(Math.abs(panelBox.y - tabsBox.y)).toBeLessThanOrEqual(1)
+  await expect(page.getByTestId('zoom-slider')).toHaveCount(0)
+  await expect(page.getByTestId('status-zoom')).toBeVisible()
+
+  const category = page.getByTestId('category-basic-header')
+  const categoryBox = await layoutBox(category)
+  expect(Math.abs(categoryBox.x - libraryBox.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(categoryBox.width - libraryBox.width)).toBeLessThanOrEqual(2)
+  expect(await category.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe('rgb(235, 235, 235)')
+
+  await page.getByRole('button', { name: '矩形', exact: true }).first().dblclick()
+  const state = await snapshot(page)
+  await x6Cell(page, state.document.pages[0].nodes[0].id).click({ force: true })
+  const section = page.getByTestId('section-geometry')
+  expect(await section.evaluate((element) => getComputedStyle(element).borderRadius)).toBe('0px')
+
+  const [xBox, yBox, widthBox, heightBox] = await Promise.all([
+    layoutBox(page.getByTestId('geo-x')),
+    layoutBox(page.getByTestId('geo-y')),
+    layoutBox(page.getByTestId('geo-width')),
+    layoutBox(page.getByTestId('geo-height')),
+  ])
+  expect(Math.abs(xBox.y - yBox.y)).toBeLessThanOrEqual(1)
+  expect(Math.abs(widthBox.y - heightBox.y)).toBeLessThanOrEqual(1)
+  expect(widthBox.y).toBeGreaterThan(xBox.y)
+})
+
+test('positions delete confirmation beneath the clicked page tab', async ({ page }) => {
+  const addPage = page.getByRole('button', { name: '新建页面' })
+  await addPage.click()
+  await addPage.click()
+
+  const secondTab = page.getByTestId('page-tab').nth(1)
+  const secondTabBox = await layoutBox(secondTab)
+  await secondTab.getByTestId('close-tab').click()
+  const confirmBox = await layoutBox(page.getByTestId('delete-confirm'))
+
+  expect(Math.abs(confirmBox.x - secondTabBox.x)).toBeLessThanOrEqual(2)
+  expect(Math.abs(confirmBox.y - (secondTabBox.y + secondTabBox.height + 4))).toBeLessThanOrEqual(1)
+  await page.setViewportSize({ width: 1200, height: 720 })
+  await expect(page.getByTestId('delete-confirm')).toHaveCount(0)
+})
+
+test('keeps overflowing page tabs scrollable and the add-page button reachable', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 720 })
+  const state = await snapshot(page)
+  state.document.pages = Array.from({ length: 12 }, (_, index) => ({
+    ...state.document.pages[0],
+    id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+    name: `页面 ${index + 1}`,
+    nodes: [],
+    edges: [],
+  }))
+  await page.evaluate((document) => window.__FLOW_E2E__!.injectDocument(document), state.document)
+
+  const pageTabs = page.getByTestId('page-tabs')
+  const tabList = page.getByTestId('page-tab-list')
+  const addPage = page.getByRole('button', { name: '新建页面' })
+  await expect(page.getByTestId('page-tab')).toHaveCount(12)
+  expect(await tabList.evaluate((element) => element.scrollWidth)).toBeGreaterThan(
+    await tabList.evaluate((element) => element.clientWidth),
+  )
+
+  const [pageTabsBox, addPageBox] = await Promise.all([layoutBox(pageTabs), layoutBox(addPage)])
+  expect(addPageBox.x + addPageBox.width).toBeLessThanOrEqual(pageTabsBox.x + pageTabsBox.width)
+
+  await page.getByTestId('close-tab').first().click()
+  await expect(page.getByTestId('delete-confirm')).toHaveCount(1)
+  await expect(page.getByTestId('confirm-delete')).toHaveCount(1)
+  await expect(page.getByTestId('cancel-delete')).toHaveCount(1)
+  expect(await tabList.evaluate((element) => getComputedStyle(element).overflowX)).toBe('auto')
+  expect(await tabList.evaluate((element) => element.scrollWidth)).toBeGreaterThan(
+    await tabList.evaluate((element) => element.clientWidth),
+  )
+  await expect(addPage).toBeVisible()
+  await addPage.click()
+  await expect(page.getByTestId('page-tab')).toHaveCount(13)
+  await page.getByTestId('cancel-delete').click()
+  await expect(page.getByTestId('delete-confirm')).toHaveCount(0)
+
+  const lastTab = page.getByTestId('page-tab').last()
+  await lastTab.scrollIntoViewIfNeeded()
+  const clickedLastTabBox = await layoutBox(lastTab)
+  await lastTab.getByTestId('close-tab').click()
+  const [confirmBox, currentTabsBox] = await Promise.all([
+    layoutBox(page.getByTestId('delete-confirm')),
+    layoutBox(pageTabs),
+  ])
+  expect(clickedLastTabBox.x + confirmBox.width).toBeGreaterThan(
+    currentTabsBox.x + currentTabsBox.width - 4,
+  )
+  expect(confirmBox.x).toBeGreaterThanOrEqual(currentTabsBox.x + 4)
+  expect(Math.abs(
+    confirmBox.x + confirmBox.width - (currentTabsBox.x + currentTabsBox.width - 4),
+  )).toBeLessThanOrEqual(1)
+  await tabList.evaluate((element) => { element.scrollLeft = 0 })
+  await expect(page.getByTestId('delete-confirm')).toHaveCount(0)
+
+  await page.getByTestId('close-tab').first().click()
+  const leftConfirmBox = await layoutBox(page.getByTestId('delete-confirm'))
+  expect(Math.abs(leftConfirmBox.x - (currentTabsBox.x + 4))).toBeLessThanOrEqual(1)
+  await page.getByTestId('confirm-delete').click()
+  await expect(page.getByTestId('page-tab')).toHaveCount(12)
+  expect((await snapshot(page)).document.pages.some(({ id }) => id.endsWith('000000000001'))).toBe(false)
+
+  await tabList.evaluate((element) => { element.scrollLeft = element.scrollWidth })
+  const [tabListBox, lastTabBox] = await Promise.all([
+    layoutBox(tabList),
+    layoutBox(page.getByTestId('page-tab').last()),
+  ])
+  expect(lastTabBox.x + lastTabBox.width).toBeLessThanOrEqual(tabListBox.x + tabListBox.width + 1)
+})
 
 test('creates, edits, formats, persists, recovers, and exports through real UI paths', async ({ page }) => {
   test.setTimeout(120_000)
@@ -73,13 +211,13 @@ test('creates, edits, formats, persists, recovers, and exports through real UI p
   expect((await snapshot(page)).document.pages[0].nodes.find(({ id }) => id === firstId)?.text?.value).toBe('中文流程节点')
 
   const boldCell = await captureX6CellBeforeRebuild(page, firstId)
-  await page.getByRole('button', { name: '加粗' }).click()
+  await page.getByTestId('tb-bold').click()
   await waitForRebuiltX6Cell(page, firstId, boldCell)
   state = await snapshot(page)
   await x6Cell(page, secondId).click({ force: true, modifiers: ['Shift'] })
-  await expect(page.getByRole('button', { name: '加粗' })).toHaveClass(/indeterminate/)
+  await expect(page.getByTestId('tb-bold')).toHaveClass(/indeterminate/)
   const batchBoldCell = await captureX6CellBeforeRebuild(page, firstId)
-  await page.getByRole('button', { name: '加粗' }).click()
+  await page.getByTestId('tb-bold').click()
   await waitForRebuiltX6Cell(page, firstId, batchBoldCell)
   state = await snapshot(page)
   expect(state.document.pages[0].nodes.every((node) => node.text?.style.bold)).toBe(true)
@@ -95,7 +233,7 @@ test('creates, edits, formats, persists, recovers, and exports through real UI p
 
   await x6Cell(page, firstId).click({ force: true })
   const italicCell = await captureX6CellBeforeRebuild(page, firstId)
-  await page.getByRole('button', { name: '斜体' }).click()
+  await page.getByTestId('tb-italic').click()
   await waitForRebuiltX6Cell(page, firstId, italicCell)
   state = await snapshot(page)
   await page.getByTestId('tb-format-painter').click()
@@ -109,7 +247,7 @@ test('creates, edits, formats, persists, recovers, and exports through real UI p
 
   await x6Cell(page, firstId).click({ force: true })
   const underlineCell = await captureX6CellBeforeRebuild(page, firstId)
-  await page.getByRole('button', { name: '下划线' }).click()
+  await page.getByTestId('tb-underline').click()
   await waitForRebuiltX6Cell(page, firstId, underlineCell)
   state = await snapshot(page)
   await page.getByTestId('tb-format-painter').dblclick()

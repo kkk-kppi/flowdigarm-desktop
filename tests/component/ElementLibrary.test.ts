@@ -42,6 +42,9 @@ describe('ElementLibrary', () => {
     const wrapper = 挂载()
     expect(wrapper.text()).toContain('基本形状')
     expect(wrapper.text()).toContain('流程图')
+    const headers = wrapper.findAll('.category-header')
+    expect(headers).toHaveLength(3)
+    expect(wrapper.findAll('.category-grid')).toHaveLength(3)
     expect(wrapper.findAll('[data-testid="shape-cell"]')).toHaveLength(12)
     expect(wrapper.find('[data-testid="category-basic-header"] [data-icon="chevronDown"]').exists()).toBe(true)
 

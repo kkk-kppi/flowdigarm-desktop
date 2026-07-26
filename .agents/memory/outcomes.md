@@ -65,3 +65,13 @@
 - **validation**: 浏览器断言修复前实测按钮与图标中心相差 4px、修复后重合；根工作区状态干净且无暂存差异；目标工作树聚焦组件测试 5 项、Chromium 聚焦测试 1 项通过，`pnpm test` 116 个文件/978 项、完整 Chromium E2E 9 项通过，`pnpm build` 退出 0、转换 1206 个模块（仅保留已知的大 chunk 警告）。
 - **correction or failure**: 压缩后未按摘要校验活动工作树，错误地使用了进程默认根目录；首次修复只检查 CSS 声明，误把原生按钮内边距当作根因，没有验证实际图标边界。
 - **next action**: 每次压缩恢复后先执行目标工作树的 `git branch --show-current` 和 `git status --short`，再读取或编辑文件。
+
+## 2026-07-26 | 编辑器布局原型对齐验证
+
+- **date**: 2026-07-26
+- **capability**: subagent-driven-development + systematic-debugging + verification-before-completion
+- **result**: corrected
+- **artifact**: 编辑器外壳、图元分类、属性面板、`e2e/editor-core.spec.ts` 及聚焦组件测试
+- **action**: 在 Chromium 中验证页签/三栏边界、唯一状态栏缩放、分类标题背景、平直属性分区和两列几何布局；补充几何字段顺序断言、多页窄窗口滚动及删除确认态下新增按钮可达性，并将核心流程中非唯一的字形按钮定位器限定到工具栏测试 ID。用户反馈后将删除确认层改为按被点击页签动态定位，并在左右边界夹取；页签滚动或窗口缩放时关闭失效确认层。
+- **validation**: 删除确认定位测试先复现 525.4px 错位再通过；完整 Vitest 116 个文件/977 项、生产构建 1206 个模块及完整 Chromium 26 项通过；`git diff --check` 退出 0，仅输出工作区 LF/CRLF 转换警告。
+- **correction or failure**: 首次完整 Chromium 运行通过 23 项、失败 1 项；根因为既有核心流程按“加粗”等非唯一可访问名称同时匹配工具栏和属性面板控件。随后用户发现确认层为保留滚动而移出页签后被固定到最右侧，原浏览器测试只验证可见性和滚动，未验证与点击页签的空间关系；已增加页面 2 锚定、4px 下距、左右夹取及滚动/缩放失效覆盖。

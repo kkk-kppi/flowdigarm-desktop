@@ -1,5 +1,5 @@
 // tests/component/PageTabs.test.ts
-// 页面标签栏：页签切换/行内重命名/内联确认删除/新建页/缩放控件。
+// 页面标签栏：页签切换/行内重命名/内联确认删除/新建页。
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import PageTabs from '@/ui/pages/PageTabs.vue'
@@ -128,22 +128,9 @@ describe('PageTabs', () => {
     expect(store.undoLabel).toBe('新建页面')
   })
 
-  it('缩放滑块调整当前页视口缩放并显示百分比', async () => {
-    const { wrapper, store } = mountTabs()
-    expect(wrapper.find('[data-testid="zoom-percent"]').text()).toBe('100%')
-    const slider = wrapper.find('[data-testid="zoom-slider"]')
-    expect(slider.attributes('min')).toBe('10')
-    expect(slider.attributes('max')).toBe('400')
-    await slider.setValue('200')
-    const controller = store.pageManager.controllerFor(store.activePageId)
-    expect(controller.state.zoom).toBe(2)
-    expect(wrapper.find('[data-testid="zoom-percent"]').text()).toBe('200%')
-  })
-
-  it('切换页后缩放控件绑定新页的视口状态', async () => {
-    const { wrapper, store } = mountTabs()
-    store.pageManager.controllerFor('page-b').setZoom(1.5)
-    await wrapper.findAll('[data-testid="page-tab"]')[1].trigger('click')
-    expect(wrapper.find('[data-testid="zoom-percent"]').text()).toBe('150%')
+  it('does not render duplicate zoom controls', () => {
+    const { wrapper } = mountTabs()
+    expect(wrapper.find('[data-testid="zoom-slider"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="zoom-percent"]').exists()).toBe(false)
   })
 })
