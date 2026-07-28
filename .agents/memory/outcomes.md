@@ -84,3 +84,21 @@
 - **artifact**: `src/ui/shell/MenuBar.vue`、`tests/component/MenuBar.test.ts`、`tests/component/DesktopShellParts.test.ts`
 - **action**: 先以组件断言复现编辑菜单错误保留 8 个空 `.check` 元素，再用 `checked !== undefined` 判断当前顶层菜单是否需要统一勾选列，并保持既有勾选图标与样式不变。
 - **validation**: RED 为组件测试 5 项中 1 项按预期失败（期望 0、实际 8）；GREEN 聚焦 Vitest 2 个文件/9 项通过。经用户确认同步当前已提交标题空格行为的陈旧断言后，完整 Vitest 116 个文件/977 项、Chromium 菜单 9 项通过；`pnpm build` 退出 0、转换 1206 个模块，`git diff --check` 退出 0。
+
+## 2026-07-28 | 自适应窗口尺寸与状态恢复
+
+- **date**: 2026-07-28
+- **capability**: brainstorming + subagent-driven-development + test-driven-development + code-review + verification-before-completion
+- **result**: helped
+- **artifact**: `src-tauri/src/window_state.rs`、Tauri 启动接线、窗口配置、交互/功能文档及设计与实施计划
+- **action**: 首次按主显示器工作区与 16:10 上限自适应居中，后续经 SQLite 恢复物理位置、逻辑普通尺寸和最大化状态；补齐混合 DPI 归属、显示器断连回退、最大化边界保护、单线程防抖保存和有界关闭刷新。逐任务及整体审查发现并修复多显示器候选过滤、部分 placement 失败、模式查询失败和最大化副作用等边界。
+- **validation**: 控制器最终 fresh 验证通过 Cargo fmt、Rust library 66 项、export 8 项、image 4 项、Vitest 116 个文件/977 项、生产构建 1206 个模块及 `git diff --check`；最终整体审查无 Critical/Important/Minor，结论 Ready to merge: Yes。真实 Windows/macOS、混合 DPI、带鱼屏、断连显示器和脏文档关闭仍未人工覆盖。
+
+## 2026-07-28 | 应用启动居中首选项
+
+- **date**: 2026-07-28
+- **capability**: brainstorming + subagent-driven-development + test-driven-development + code-review + verification-before-completion
+- **result**: helped
+- **artifact**: 前端首选项模型与窗口设置界面、`src-tauri/src/window_state.rs`、共享 SQLite 设置键、交互/功能文档及设计与实施计划
+- **action**: 增加默认关闭、下次启动生效的“应用启动居中”设置；开启时保持上次普通窗口大小和最大化状态，并在上次显示器工作区居中。补齐非法值与读取失败降级、共享键字面量回归测试，以及非直观首选项始终可见的内联说明和 `aria-describedby` 关联。
+- **validation**: 最终 fresh 验证通过 Cargo fmt、Rust library 71 项、export 8 项、image 4 项、Vitest 116 个文件/979 项、生产构建 1206 个模块、Chromium 1463x752 与 520x800 边界检查及 `git diff --check`；最终整体审查无 Critical/Important/Minor，结论 Ready to merge: Yes。真实 Tauri 重启、物理多显示器、跨 DPI、macOS、真实 SQLite 读取和原生窗口移动仍未人工覆盖。

@@ -10,6 +10,8 @@
 - 失败反馈：删除最后一页提示「至少保留一个页面。」；删除被引用背景页提示「该页面被引用为背景页，无法删除。」；空白页名提示「页面名称不能为空。」；背景引用非法提示「背景页设置无效。」；非法文件显示具体中文校验错误且不替换当前文档；失效最近文件提示「最近文件不可用，已从列表移除。」；保存失败提示「无法保存，原文件未被覆盖。」；损坏恢复数据提示「恢复数据已损坏，已忽略。」。页面无图元时「自动调整大小」禁用并提示「页面无图元」。
 - 撤销边界：新建/删除/重命名页面各一条记录；页面设置一次"应用"一条记录（无变化不产生）；"自动调整大小"一条记录；切换页与分页符等视图开关不产生命令、不进入撤销历史。
 - 数据字段：图文件只保存 `DiagramDocument`；SQLite `flowchart-editor.db` 只保存 7 张本机元数据表：迁移版本、设置、最近文件、恢复快照、形状统计、窗口状态和用户模板。最近文件含 path/documentId/name/lastOpenedAt/pinned，恢复快照含 documentId/name/json/sourcePath/updatedAt，时间为 Unix 毫秒 UTC。应用契约见 `src/application/persistence/persistence-ports.ts`，SQLite 不保存用户图文件主体。
+- 启动居中首选项：前端与 Rust 共享 SQLite `app_settings` 键 `window.centerOnStartup`。键缺失、读取失败或值无效时按关闭处理；开启时仅改变恢复位置，继续保存真实窗口坐标。
+- 窗口状态：Rust/Tauri 在 WebView 显示前从 SQLite `window_state` 恢复普通位置、逻辑尺寸和最大化状态；无有效状态时按主显示器可用工作区自适应居中。移动和缩放事件经防抖写回，数据库或显示器查询失败时使用安全默认窗口，不阻止编辑和关闭。
 - 自动化测试位置：文件用例与自动恢复在 `tests/unit/editor/persistence/*`，保存点在 `tests/unit/stores/document-store.test.ts`，形状统计降级在 `tests/unit/editor/shapes/shape-usage-repository.test.ts`；Rust 原子文件、SQLite、迁移和 command 校验测试与实现同模块位于 `src-tauri/src/{persistence,commands}`。
 
 ## 2. 画布与视图（工作区/标尺/缩放/网格/状态栏）

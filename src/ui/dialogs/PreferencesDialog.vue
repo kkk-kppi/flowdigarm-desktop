@@ -16,6 +16,23 @@
           <label><input v-model="draft.showPageBreaks" data-testid="preference-show-page-breaks" type="checkbox"> 分页符</label>
           <label><input v-model="draft.snapToGrid" data-testid="preference-snap-to-grid" type="checkbox"> 网格吸附</label>
         </fieldset>
+        <fieldset class="window-preferences">
+          <legend>窗口</legend>
+          <label class="described-option">
+            <input
+              v-model="draft.centerOnStartup"
+              data-testid="preference-center-on-startup"
+              type="checkbox"
+              aria-describedby="preference-center-on-startup-description"
+            >
+            <span class="setting-copy">
+              <span>应用启动居中</span>
+              <small id="preference-center-on-startup-description" class="setting-description">
+                下次打开应用时，窗口会显示在上次使用的屏幕中央。窗口大小和最大化状态保持不变。
+              </small>
+            </span>
+          </label>
+        </fieldset>
         <label>默认缩放
           <input v-model.number="draft.defaultZoom" data-testid="preference-default-zoom" type="number" min="0.1" max="8" step="0.1">
         </label>
@@ -101,6 +118,11 @@ h2 { margin: 0 0 16px; font-size: 18px; }
 label { display: grid; gap: 5px; font-size: 13px; }
 fieldset { grid-column: 1 / -1; display: flex; gap: 18px; border: 1px solid var(--color-border); }
 fieldset label { display: flex; align-items: center; gap: 5px; }
+.window-preferences { display: block; }
+fieldset .described-option { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 8px; }
+.described-option input { margin-top: 2px; }
+.setting-copy { display: grid; gap: 3px; }
+.setting-description { color: var(--color-text-secondary); font-size: 12px; font-weight: 400; line-height: 1.5; }
 input:not([type='checkbox']), select { min-height: 32px; padding: 4px 7px; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-panel); color: var(--color-text); }
 .actions { display: flex; gap: 8px; margin-top: 22px; }
 .spacer { flex: 1; }

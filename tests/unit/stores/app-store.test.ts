@@ -23,17 +23,21 @@ describe('app-store 视图设置', () => {
     expect(store.pngDpi).toBe(150)
   })
 
-  it('一次应用十一项首选项', () => {
+  it('默认值包含关闭的应用启动居中', () => {
+    expect(useAppStore().centerOnStartup).toBe(false)
+  })
+
+  it('一次应用十二项首选项', () => {
     const store = useAppStore()
     store.applyPreferences({
       theme: 'light', showRulers: false, showGrid: true, showGuides: false,
       showPageBreaks: true, snapToGrid: false, defaultZoom: 2, defaultPageUnit: 'in',
-      defaultConnector: 'straight', recentLimit: 20, pngDpi: 300,
+      defaultConnector: 'straight', recentLimit: 20, pngDpi: 300, centerOnStartup: true,
     })
     expect(store.$state).toMatchObject({
       theme: 'light', showRulers: false, showGrid: true, showGuides: false,
       showPageBreaks: true, snapToGrid: false, defaultZoom: 2, defaultPageUnit: 'in',
-      defaultConnector: 'straight', recentLimit: 20, pngDpi: 300,
+      defaultConnector: 'straight', recentLimit: 20, pngDpi: 300, centerOnStartup: true,
     })
   })
 

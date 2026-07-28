@@ -13,6 +13,7 @@ export interface EditorPreferences {
   defaultConnector: ConnectorKind
   recentLimit: number
   pngDpi: number
+  centerOnStartup: boolean
 }
 
 export const DEFAULT_EDITOR_PREFERENCES: EditorPreferences = {
@@ -27,6 +28,7 @@ export const DEFAULT_EDITOR_PREFERENCES: EditorPreferences = {
   defaultConnector: 'orthogonal',
   recentLimit: 50,
   pngDpi: 150,
+  centerOnStartup: false,
 }
 
 export interface SettingsStore {
@@ -57,6 +59,7 @@ const settingKeys: Array<[keyof EditorPreferences, string]> = [
   ['defaultConnector', 'editor.defaultConnector'],
   ['recentLimit', 'editor.recentLimit'],
   ['pngDpi', 'export.pngDpi'],
+  ['centerOnStartup', 'window.centerOnStartup'],
 ]
 
 export class SettingsController {
@@ -95,7 +98,7 @@ export class SettingsController {
       settingKeys.map(([property, key]) => this.repository.set(key, validated[property])),
     )
     if (writes.some((result) => result.status === 'rejected')) {
-      this.store.setNotice('设置保存失败，本次运行仍会生效。')
+      this.store.setNotice('设置保存失败。本次更改可能已在当前运行生效，但不会在下次启动时保留。')
     }
   }
 
@@ -152,6 +155,10 @@ function validateSettings(values: Record<string, unknown>): EditorPreferences {
       ?? DEFAULT_EDITOR_PREFERENCES.defaultConnector,
     recentLimit: integerOr(values['editor.recentLimit'], 1, 100, DEFAULT_EDITOR_PREFERENCES.recentLimit),
     pngDpi: integerOr(values['export.pngDpi'], 72, 600, DEFAULT_EDITOR_PREFERENCES.pngDpi),
+    centerOnStartup: booleanOr(
+      values['window.centerOnStartup'],
+      DEFAULT_EDITOR_PREFERENCES.centerOnStartup,
+    ),
   }
 }
 

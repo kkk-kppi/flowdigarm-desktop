@@ -24,3 +24,11 @@
 2026-07-26 | create | `docs/superpowers/specs/2026-07-26-menu-conditional-check-column-design.md` | 记录仅在当前菜单包含可勾选项时保留统一勾选列的设计
 2026-07-26 | create | `docs/superpowers/plans/2026-07-26-menu-conditional-check-column.md` | 将菜单条件勾选列设计拆分为组件 TDD、菜单 Chromium 与完整回归验证步骤
 2026-07-27 | update | `src/ui/shell/MenuBar.vue`, `tests/component/MenuBar.test.ts`, `tests/component/DesktopShellParts.test.ts`, `.agents/memory/outcomes.md` | 菜单仅在含可勾选项时保留勾选列，并同步已提交标题空格行为的陈旧断言；完整 Vitest 116 个文件/977 项、Chromium 菜单 9 项、构建 1206 个模块及 `git diff --check` 通过
+2026-07-27 | create | `docs/superpowers/specs/2026-07-27-adaptive-window-state-design.md` | 记录按工作区自适应首次窗口、限制超宽屏初始宽高比以及恢复普通位置、尺寸和最大化状态的批准设计
+2026-07-27 | create | `docs/superpowers/plans/2026-07-27-adaptive-window-state.md` | 将批准的窗口设计拆分为几何算法、状态跟踪与防抖持久化、Tauri 生命周期接线及完整验证任务
+2026-07-28 | update | adaptive window state implementation, documentation, and verification | 完成自适应首次窗口与普通窗口状态恢复/持久化，并同步交互和功能文档；Cargo 格式检查、Rust library 66 项/export 8 项/image 4 项、Vitest 116 个文件/977 项、生产构建 1206 个模块及 `git diff --check` 通过；Windows live smoke、macOS、带鱼屏、断连显示器、跨 DPI 及脏文档关闭场景均未人工观察
+2026-07-28 | update | `.agents/memory/outcomes.md` | 记录自适应窗口状态设计、子代理 TDD 实施、审查修复与最终验证结果
+2026-07-28 | create | `docs/superpowers/specs/2026-07-28-center-window-on-startup-preference-design.md` | 记录“应用启动居中”开关、下次启动生效说明、上次显示器居中语义及非直观首选项内联说明约定
+2026-07-28 | create | `docs/superpowers/plans/2026-07-28-center-window-on-startup-preference.md` | 将“应用启动居中”拆分为首选项模型、用户说明界面、Rust 启动读取与居中恢复及完整验证任务
+2026-07-28 | update | “应用启动居中”实现、文档与验证 | 同步共享键、下次启动生效语义及非直观首选项内联说明；Cargo 格式检查、Rust library 71 项/export 8 项/image 4 项、Vitest 116 个文件/979 项、生产构建 1206 个模块、Chromium 1463x752 与 520x800 说明边界检查及 `git diff --check` 通过；真实应用重启、物理多显示器、跨 DPI 与 macOS 场景未人工观察
+2026-07-28 | update | `.agents/memory/outcomes.md` | 记录“应用启动居中”设计、子代理 TDD 实施、审查加固、浏览器边界检查与最终验证结果

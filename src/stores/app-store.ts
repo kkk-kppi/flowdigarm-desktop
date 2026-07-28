@@ -19,6 +19,7 @@ interface AppViewSettings {
   defaultConnector: ConnectorKind
   recentLimit: number
   pngDpi: number
+  centerOnStartup: boolean
   /** 右侧面板折叠（视图状态，不入撤销历史）。 */
   rightPanelCollapsed: boolean
   rightPanelMode: 'properties' | 'find'
@@ -40,6 +41,7 @@ export const useAppStore = defineStore('app', {
     defaultConnector: 'orthogonal',
     recentLimit: 50,
     pngDpi: 150,
+    centerOnStartup: false,
     rightPanelCollapsed: false,
     rightPanelMode: 'properties',
     layerManagerOpen: false,

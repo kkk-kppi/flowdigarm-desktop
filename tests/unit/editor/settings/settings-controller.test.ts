@@ -52,7 +52,7 @@ describe('SettingsController', () => {
     expect(css).toContain("[data-reduced-motion='reduce']")
   })
 
-  it('loads all eleven valid persisted settings into runtime state', async () => {
+  it('loads all twelve valid persisted settings into runtime state', async () => {
     const target = store()
     const values = {
       'theme.mode': 'dark',
@@ -66,6 +66,7 @@ describe('SettingsController', () => {
       'editor.defaultConnector': 'curved',
       'editor.recentLimit': 12,
       'export.pngDpi': 300,
+      'window.centerOnStartup': true,
     }
     const controller = new SettingsController(target, repository(values), environment())
 
@@ -74,8 +75,18 @@ describe('SettingsController', () => {
     expect(target.settings).toEqual({
       theme: 'dark', showRulers: false, showGrid: true, showGuides: false,
       showPageBreaks: true, snapToGrid: false, defaultZoom: 1.5, defaultPageUnit: 'cm',
-      defaultConnector: 'curved', recentLimit: 12, pngDpi: 300,
+      defaultConnector: 'curved', recentLimit: 12, pngDpi: 300, centerOnStartup: true,
     })
+  })
+
+  it('defaults startup centering to off when the stored value is missing or not boolean', async () => {
+    const missing = store()
+    await new SettingsController(missing, repository(), environment()).load()
+    expect(missing.settings.centerOnStartup).toBe(false)
+
+    const invalid = store()
+    await new SettingsController(invalid, repository({ 'window.centerOnStartup': 'yes' }), environment()).load()
+    expect(invalid.settings.centerOnStartup).toBe(false)
   })
 
   it('falls back per field for missing or invalid persisted values', async () => {
@@ -115,13 +126,22 @@ describe('SettingsController', () => {
       if (key === 'editor.showGrid') throw new Error('db')
     }
     const controller = new SettingsController(target, persisted, environment())
-    const next: EditorPreferences = { ...DEFAULT_EDITOR_PREFERENCES, theme: 'dark', showGrid: true, pngDpi: 600 }
+    const next: EditorPreferences = {
+      ...DEFAULT_EDITOR_PREFERENCES,
+      theme: 'dark',
+      showGrid: true,
+      pngDpi: 600,
+      centerOnStartup: true,
+    }
 
     await controller.apply(next)
 
     expect(target.settings).toEqual(next)
-    expect(persisted.writes).toHaveLength(11)
-    expect(target.notices).toEqual(['设置保存失败，本次运行仍会生效。'])
+    expect(persisted.writes).toHaveLength(12)
+    expect(persisted.writes).toContainEqual(['window.centerOnStartup', true])
+    expect(target.notices).toEqual([
+      '设置保存失败。本次更改可能已在当前运行生效，但不会在下次启动时保留。',
+    ])
   })
 
   it('maps system theme, increased contrast, and reduced motion to root data attributes', async () => {

@@ -7,6 +7,7 @@ use persistence::sqlite_repository::PersistenceState;
 pub mod commands;
 pub mod persistence;
 pub mod security;
+mod window_state;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -26,6 +27,7 @@ pub fn run() {
                 eprintln!("本机数据库初始化失败，应用将以降级模式启动：{error}");
             }
             app.manage(state);
+            window_state::initialize_main_window(app);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

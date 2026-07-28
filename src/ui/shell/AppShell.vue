@@ -190,6 +190,7 @@ const currentPreferences = computed<EditorPreferences>(() => ({
   defaultConnector: appStore.defaultConnector,
   recentLimit: appStore.recentLimit,
   pngDpi: appStore.pngDpi,
+  centerOnStartup: appStore.centerOnStartup,
 }))
 
 const fileName = computed(() => {
